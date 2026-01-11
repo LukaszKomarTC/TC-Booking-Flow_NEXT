@@ -625,6 +625,38 @@ final class Sc_Event_Extras {
         jQuery(function($){
             var fid = <?php echo (int) $form_id; ?>;
 
+			// Admin-only optional logging (controlled by TC Booking Flow → Debug mode).
+			var tcBfAdminDebug = <?php echo ( current_user_can('manage_options') && \TC_BF\Admin\Settings::is_debug() ) ? 'true' : 'false'; ?>;
+			var tcBfAjax = {
+				url: <?php echo wp_json_encode( admin_url('admin-ajax.php') ); ?>,
+				nonce: <?php echo wp_json_encode( wp_create_nonce('tc_bf_log') ); ?>
+			};
+
+			function tcBfAdminLog(context, data, level){
+				try {
+					if (!tcBfAdminDebug) return;
+					if (!tcBfAjax || !tcBfAjax.url || !tcBfAjax.nonce) return;
+					var payload = new URLSearchParams();
+					payload.append('action', 'tc_bf_log');
+					payload.append('nonce', tcBfAjax.nonce);
+					payload.append('context', String(context || 'frontend'));
+					payload.append('level', String(level || 'info'));
+					payload.append('data', JSON.stringify(data || {}));
+
+					// Fire and forget: sendBeacon where available, fetch fallback.
+					if (navigator && typeof navigator.sendBeacon === 'function') {
+						navigator.sendBeacon(tcBfAjax.url, payload);
+					} else if (typeof fetch === 'function') {
+						fetch(tcBfAjax.url, {
+							method: 'POST',
+							credentials: 'same-origin',
+							headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+							body: payload.toString()
+						});
+					}
+				} catch(e) {}
+			}
+
             // Debug helper (admin only)
             function tcBfDebug(msg, obj){
                 try {
@@ -867,8 +899,32 @@ final class Sc_Event_Extras {
 							return; // do not mutate
 						}
 						if ($inp.val() !== restored) {
+							var beforeRaw = $inp.val();
 							$inp.val(restored);
 							changed = true;
+							// Optional admin debug: record the repair in plugin logs (Settings → TC Booking Flow).
+							if (tcBfAdminDebug) {
+								try {
+									console.info('[TCBF Stage3] Repaired base price mis-parse', {
+										formId: fid,
+										field: ($inp.attr('id')||''),
+										beforeRaw: beforeRaw,
+										afterRaw: restored,
+										beforeNum: cur,
+										intendedNum: intended,
+										ratio: ratio
+									});
+								} catch(e) {}
+								tcBfAdminLog('frontend_stage3_repair', {
+									form_id: fid,
+									field: ($inp.attr('id')||''),
+									before_raw: beforeRaw,
+									after_raw: restored,
+									before_num: cur,
+									intended_num: intended,
+									ratio: ratio
+								}, 'warning');
+							}
 						}
 					}
                 });
