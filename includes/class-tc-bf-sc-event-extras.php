@@ -792,11 +792,29 @@ final class Sc_Event_Extras {
             function tcBfScheduleRepair(){
                 if (tcBfRepairTimer) window.clearTimeout(tcBfRepairTimer);
                 tcBfRepairTimer = window.setTimeout(function(){
+                    var stage3Changed = false;
                     try { tcBfRepairRentalBikeChoices(); } catch(e) {}
                     // Stage 3 base-price repair (debounced together with bike-choice repair).
-                    try { tcBfRepairSingleProductBasePrices(); } catch(e) {}
+                    try { stage3Changed = !!tcBfRepairSingleProductBasePrices(); } catch(e) {}
+
+                    // Single recalculation point (avoid repeated calc loops).
+                    if (stage3Changed) {
+                        try {
+                            if (typeof window.gformCalculateTotalPrice === 'function') {
+                                window.gformCalculateTotalPrice(fid);
+                            }
+                        } catch(e) {}
+
+                        // If your booking-flow JS exposes a bike-field updater, call it too.
+                        try {
+                            if (typeof window.tcBfUpdateBikeFields === 'function') {
+                                window.tcBfUpdateBikeFields(fid);
+                            }
+                        } catch(e) {}
+                    }
                 }, 60);
             }
+
 
             /**
              * Stage 3: Protect Single Product base prices from GF locale re-parse bugs after hide/show.
@@ -931,20 +949,7 @@ final class Sc_Event_Extras {
 					}
                 });
 
-                if (changed) {
-                    try {
-                        if (typeof window.gformCalculateTotalPrice === 'function') {
-                            window.gformCalculateTotalPrice(fid);
-                        }
-                    } catch(e) {}
-
-                    // If your booking-flow JS exposes a bike-field updater, call it too.
-                    try {
-                        if (typeof window.tcBfUpdateBikeFields === 'function') {
-                            window.tcBfUpdateBikeFields(fid);
-                        }
-                    } catch(e) {}
-                }
+                                return changed;
             }
 
             // Cache intended values early (initial correct render).
@@ -1008,22 +1013,56 @@ final class Sc_Event_Extras {
                     onConditionalLogicDone(formId, 'gform_post_conditional_logic');
                 });
 
-                // Narrow triggers (drivers) instead of "all inputs/selects"
-                // Rental type selector
-                $(document).on('change' + ns, '#input_' + fid + '_106', function(){
-                    tcBfScheduleRepair();
-                });
-
-                // Availability / driver helper fields (if present)
+                // Input-change triggers (Phase 3)
+                // Prefer GF-native hook: gform_input_change (via gform.hooks) when available.
+                // Fallback to narrow DOM listeners if hooks are unavailable.
                 var driverIds = [50,55,56,170,171];
-                for (var i=0;i<driverIds.length;i++){
-                    (function(fieldId){
-                        $(document).on('change' + ns, '#input_' + fid + '_' + fieldId, function(){
-                            tcBfApplyDriverFlags();
-                            tcBfScheduleRepair();
-                        });
-                    })(driverIds[i]);
+
+                function isWatchedField(fieldId){
+                    fieldId = parseInt(fieldId, 10);
+                    if (fieldId === 106) return true; // rental selector
+                    for (var i=0;i<driverIds.length;i++){
+                        if (driverIds[i] === fieldId) return true;
+                    }
+                    return false;
                 }
+
+                var hasGfHooks = (window.gform && gform.hooks && typeof gform.hooks.addAction === 'function');
+
+                if (hasGfHooks) {
+                    // Signature varies by GF version; we read by argument positions:
+                    // (formId, fieldId, value, form) or similar.
+                    gform.hooks.addAction('gform_input_change', 'tc_bf_' + fid, function(){
+                        var formId = arguments[0];
+                        var fieldId = arguments[1];
+                        if (!isThisForm(formId)) return;
+                        if (!isWatchedField(fieldId)) return;
+
+                        fieldId = parseInt(fieldId, 10);
+                        if (fieldId !== 106) {
+                            tcBfApplyDriverFlags();
+                        }
+                        tcBfCacheIntendedSingleProductPrices();
+                        tcBfScheduleRepair();
+                    });
+                } else {
+                    // Fallback: narrow DOM listeners (avoid broad "all inputs/selects")
+                    $(document).on('change' + ns, '#input_' + fid + '_106', function(){
+                        tcBfCacheIntendedSingleProductPrices();
+                        tcBfScheduleRepair();
+                    });
+
+                    for (var i=0;i<driverIds.length;i++){
+                        (function(fieldId){
+                            $(document).on('change' + ns, '#input_' + fid + '_' + fieldId, function(){
+                                tcBfApplyDriverFlags();
+                                tcBfCacheIntendedSingleProductPrices();
+                                tcBfScheduleRepair();
+                            });
+                        })(driverIds[i]);
+                    }
+                }
+
             })();
 // Modalities tab show/hide
             try {
