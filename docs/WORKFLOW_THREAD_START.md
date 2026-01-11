@@ -7,7 +7,7 @@ Task/Issue:
 
 ## Rules (NON-NEGOTIABLE)
 - Always pull from: https://staging.lukaszkomar.com/dev/tc-booking-flow-next/latest.zip
-- Always confirm plugin version after pulling (header in tc-booking-flow-next.php)
+- Always confirm plugin version after pulling (header in tc-booking-flow-next/tc-booking-flow-next.php)
 - Never edit based on memory or old files
 
 ## File delivery rules
