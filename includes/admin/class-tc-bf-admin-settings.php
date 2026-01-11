@@ -12,6 +12,41 @@ final class Settings {
 	public static function init() : void {
 		add_action('admin_menu', [__CLASS__, 'menu']);
 		add_action('admin_init', [__CLASS__, 'register_settings']);
+		// AJAX logging endpoint for admin-only frontend diagnostics.
+		add_action('wp_ajax_tc_bf_log', [__CLASS__, 'ajax_log']);
+	}
+
+	/**
+	 * Admin-only AJAX log endpoint.
+	 *
+	 * Used by frontend diagnostics (e.g., Stage-3 repairs) when debug mode is enabled.
+	 */
+	public static function ajax_log() : void {
+		if ( ! current_user_can('manage_options') ) {
+			wp_send_json_error(['message' => 'forbidden'], 403);
+		}
+		if ( ! self::is_debug() ) {
+			wp_send_json_error(['message' => 'debug_off'], 400);
+		}
+		check_ajax_referer('tc_bf_log', 'nonce');
+
+		$context = isset($_POST['context']) ? sanitize_text_field((string) wp_unslash($_POST['context'])) : 'frontend';
+		$data_raw = isset($_POST['data']) ? (string) wp_unslash($_POST['data']) : '';
+		$level = isset($_POST['level']) ? sanitize_text_field((string) wp_unslash($_POST['level'])) : 'info';
+
+		$data = [];
+		if ( $data_raw !== '' ) {
+			$decoded = json_decode($data_raw, true);
+			if ( is_array($decoded) ) {
+				$data = $decoded;
+			} else {
+				$data = ['raw' => $data_raw];
+			}
+		}
+
+		// Route through the plugin logger (writes to WC logs + keeps last 50 in options page).
+		\TC_BF\Support\Logger::log($context, $data, $level);
+		wp_send_json_success(['ok' => true]);
 	}
 
 	public static function menu() : void {
