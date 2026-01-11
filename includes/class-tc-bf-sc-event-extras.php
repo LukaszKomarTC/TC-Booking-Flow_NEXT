@@ -793,7 +793,9 @@ final class Sc_Event_Extras {
                 if (tcBfRepairTimer) window.clearTimeout(tcBfRepairTimer);
                 tcBfRepairTimer = window.setTimeout(function(){
                     try { tcBfRepairRentalBikeChoices(); } catch(e) {}
-                }, 50);
+                    // Stage 3 base-price repair (debounced together with bike-choice repair).
+                    try { tcBfRepairSingleProductBasePrices(); } catch(e) {}
+                }, 60);
             }
 
             /**
@@ -951,30 +953,79 @@ final class Sc_Event_Extras {
             // Run once now (non-AJAX) and also after GF finishes rendering (AJAX-safe)
             tcBfApplyDriverFlags();
             tcBfScheduleRepair();
-            $(document).on('gform_post_render', function(e, formId){
-                if (parseInt(formId,10) !== fid) return;
-                tcBfApplyDriverFlags();
-                tcBfScheduleRepair();
-                tcBfCacheIntendedSingleProductPrices();
-            });
+            tcBfCacheIntendedSingleProductPrices();
 
-            // After GF conditional logic runs (covers section hide/show toggles)
-            $(document).on('gform_post_conditional_logic', function(e, formId){
-                if (parseInt(formId,10) !== fid) return;
-                tcBfScheduleRepair();
-                // Let GF finish its internal re-parse first, then repair mis-parsed base prices.
-                window.setTimeout(function(){
-                    try { tcBfRepairSingleProductBasePrices(); } catch(e) {}
-                }, 60);
-            });
+            // -----------------------------
+            // GF lifecycle bindings (Phase 1 & 2)
+            // - Bind once per formId
+            // - Prefer modern GF events, keep legacy fallbacks
+            // - Avoid broad change listeners; watch only known drivers
+            // -----------------------------
+            (function(){
+                window.tcBfGfBound = window.tcBfGfBound || {};
+                if (window.tcBfGfBound[fid]) {
+                    return;
+                }
+                window.tcBfGfBound[fid] = true;
 
-            // Also schedule repair after any input changes inside the form
-            // (safe fallback when third-party GF add-ons trigger logic without firing events).
-            $(document).on('change', '#gform_'+fid+' input, #gform_'+fid+' select', function(){
-                tcBfScheduleRepair();
-            });
+                var ns = '.tc_bf_' + fid;
 
-            // Modalities tab show/hide
+                function isThisForm(formId){
+                    return parseInt(formId, 10) === fid;
+                }
+
+                function onRendered(formId, source){
+                    if (!isThisForm(formId)) return;
+                    tcBfApplyDriverFlags();
+                    tcBfCacheIntendedSingleProductPrices();
+                    tcBfScheduleRepair();
+                }
+
+                function onConditionalLogicDone(formId, source){
+                    if (!isThisForm(formId)) return;
+                    // Let GF finish applying the DOM changes, then repair (debounced).
+                    tcBfScheduleRepair();
+                }
+
+                // De-dupe: remove any existing handlers for this form namespace
+                $(document).off(ns);
+
+                // Modern post-render (GF 2.9+)
+                $(document).on('gform/post_render' + ns, function(e, formId){
+                    onRendered(formId, 'gform/post_render');
+                });
+                // Legacy post-render fallback
+                $(document).on('gform_post_render' + ns, function(e, formId){
+                    onRendered(formId, 'gform_post_render');
+                });
+
+                // Modern conditional logic end (GF 2.9+)
+                $(document).on('gform/conditionalLogic/applyRules/end' + ns, function(e, formId){
+                    onConditionalLogicDone(formId, 'gform/conditionalLogic/applyRules/end');
+                });
+                // Legacy conditional logic fallback
+                $(document).on('gform_post_conditional_logic' + ns, function(e, formId){
+                    onConditionalLogicDone(formId, 'gform_post_conditional_logic');
+                });
+
+                // Narrow triggers (drivers) instead of "all inputs/selects"
+                // Rental type selector
+                $(document).on('change' + ns, '#input_' + fid + '_106', function(){
+                    tcBfScheduleRepair();
+                });
+
+                // Availability / driver helper fields (if present)
+                var driverIds = [50,55,56,170,171];
+                for (var i=0;i<driverIds.length;i++){
+                    (function(fieldId){
+                        $(document).on('change' + ns, '#input_' + fid + '_' + fieldId, function(){
+                            tcBfApplyDriverFlags();
+                            tcBfScheduleRepair();
+                        });
+                    })(driverIds[i]);
+                }
+            })();
+// Modalities tab show/hide
             try {
                 $(".modalidades li.vc_tta-tab, .modalidades .vc_tta-panel").hide();
                 var arr = <?php echo $js_array; ?>;
