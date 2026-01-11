@@ -1,217 +1,434 @@
-# TC Booking Flow — MASTER TRACKER (UPDATED)
+📘 TC Booking Flow — Project Control Document
 
-*Last updated: 2026-01-11*
+Single Source of Truth (SSOT)
+This document defines the architecture, execution history, and actionable backlog for the TC Booking Flow project.
 
----
+📌 Purpose
 
-## FOUNDATION — LOCKED SYSTEMS
+This document serves two distinct purposes:
 
-### GF Frontend Lifecycle & Price Integrity (LOCKED)
+Document the main execution roadmap (historical, frozen)
 
-**Status:** ✅ DONE / 🔒 LOCKED
+Collect and manage all issues, ideas, and improvements discovered during development (actionable)
 
-**Scope**
+🧭 How This Document Is Used
 
-* Gravity Forms frontend lifecycle hardening
-* Decimal-comma corruption detection and auto-repair (Stage-3)
-* Single-bind JS strategy (no duplicate handlers)
-* Debounced repairs + single recalculation point
-* Admin-only diagnostics with log-once-per-session behavior
+Section A — Main Execution Roadmap
 
-**Why this exists**
-Gravity Forms may internally re-render or re-parse product base prices during:
+Historical
 
-* conditional logic application
-* AJAX re-renders
-* calculation cycles
+Mostly frozen
 
-In decimal-comma locales this can result in silent corruption, e.g.:
+Explains what, why, and in what order
 
-```
-30,00 € → 3.000,00 €  (×100)
-```
+Not an issue tracker
 
-This layer guarantees **frontend price integrity** regardless of GF internal behavior.
+Section B — Issues & Ideas Backlog
 
-**Behavior guarantees**
+Actionable
 
-* Repairs run automatically and silently in production
-* Booking totals remain correct even if GF reintroduces corruption
-* Admin diagnostics log **at most one repair per field per session**
+Non-sequential
 
-**Do NOT**
+Each item handled in a separate chat / GitHub issue
 
-* Refactor or simplify this layer without verifying GF core behavior changes
-* Reintroduce broad `change` listeners or non-debounced handlers
+Evolves over time
 
-**Documentation**
+Chat threads are short-lived
 
-* `docs/gf-frontend-lifecycle.md`
+This document preserves project knowledge
 
----
+Legacy threads (e.g. TC Booking Flow Analysis, Booking Flow Issues) are historical only
 
-## COMPLETED TASKS
+SECTION A — MAIN EXECUTION ROADMAP (HISTORICAL)
 
-### Header / Event Display
+⚠️ This section is read-only.
+It documents how the system was built and is not worked through again.
 
-* **TCBF-026** Logo sizing meta not applied on frontend — ✅ DONE
-* **TCBF-027** Header date/details styling regression — ✅ DONE
-* **TCBF-028** Header date format bug — ✅ DONE
+TC Booking Flow — Main Work List
+1. Freeze baseline + rules of the system
 
-### Gravity Forms / Booking Flow
+Baseline version frozen (initial working state)
 
-* GF decimal-comma corruption resolved with Stage-3 auto-repair — ✅ DONE
-* GF lifecycle hardening (Phases 1–4b) — ✅ DONE
+Rule locked:
+Events decide → Forms collect → PHP calculates once → Woo enforces
 
----
+Status: ✅ Done
 
-## CURRENT MILESTONE
+2. Parity with legacy flow (GF → Cart → Order)
 
-### **TCBF-11 — Event Admin UX Consolidation** 🔜 NEXT
+GF44 population works on sc_event pages
 
-**Goal**
-Create a clear, unified admin experience for configuring events without requiring technical knowledge.
+Driver fields populate
 
-**Expected scope**
+Conditional logic triggers correctly
 
-* Consolidated event meta panel
-* Clear separation of:
+Add-to-cart works deterministically
 
-  * pricing
-  * rentals
-  * early booking rules
-  * header / display options
-* Reduced risk of misconfiguration
-* Improved clarity for non-technical admins
+Snapshot pricing stored on cart & order items
+Status: ✅ Done
 
----
+3. Rental UI lifecycle hardening (GF image choices toggle bug)
 
-## QUEUED / OPTIONAL IMPROVEMENTS
+Fix image choices disabling after rental toggle
 
-### Ledger & Diagnostics
+Implement gform_post_render + re-enable logic in plugin
 
-* Reduce `woo.cart.set_price_snapshot` log noise (log only on change)
-* Add source context to snapshots (cart load / totals calc / checkout)
+Remove last fragile JS dependency
+Status: ✅ Done
 
----
+4. Booking scopes separation (participation + rental)
 
----
+Participation booking (no resources)
 
-# docs/gf-frontend-lifecycle.md
+Rental booking (with resources)
 
-## Gravity Forms Frontend Lifecycle & Price Integrity
+Linked via order + metadata
 
-This document explains **why** the GF frontend repair system exists, **how** it works, and **what must not be changed**.
+Email / booking templates handle no resource safely
+Status: ✅ Done
+(Fatal Shopkeeper template issue fixed)
 
----
+5. Coupon + partner auto-apply mechanics
 
-## Problem Summary
+Partner coupon auto-apply (role / URL / session)
 
-On sites using **decimal comma locales**, Gravity Forms may intermittently re-parse product base prices during frontend lifecycle events.
+Coupon casing normalized
 
-### Observed corruption
+Endpoint visibility & permissions hardened
+Status: ✅ Done
 
-```
-Input shows:   30,00 €
-GF internal:   3.000,00 €
-Numeric value: 3000
-```
+6. Partner offline gateway cleanup
 
-This happens during:
+Offline gateway performs no calculations
 
-* conditional logic re-application
-* GF AJAX re-renders
-* calculation cycles
+Ledger is the single authority
 
-The corruption is **silent** and would otherwise result in incorrect booking totals.
+Offline channel still creates valid orders & bookings
+Status: ✅ Done
 
----
+7. Partner portal reporting (safe replication)
 
-## Design Principles
+Replace legacy inference logic
 
-1. **Correctness over elegance**
-2. **Never trust GF internal price state**
-3. **Repair instead of blocking**
-4. **Minimal logging in production**
+Use order ledger values
 
----
+Align with Woo gross/net settings
 
-## Lifecycle Overview
+Backward-compatible for older orders
+Status: ✅ Done
 
-### Trigger points
+8. Validation (moved into plugin)
 
-Stage-3 repair runs **only** after strong lifecycle events:
+Server-side price validation
 
-* `gform/post_render` (modern)
-* `gform_post_render` (fallback)
-* `gform/conditionalLogic/applyRules/end` (modern)
-* `gform_post_conditional_logic` (fallback)
+mismatch → block
 
-It does **not** run on every input change.
+missing / zero → self-heal
 
----
+Rental selection integrity check
+Status: ✅ Done
 
-## Stage-3 Repair Logic
+9. Early Booking Discount (EB) engine
 
-1. Read displayed base price
-2. Parse numeric value using locale-aware parser
-3. Compare against intended value (from event meta)
-4. Detect ratios:
+EB rules stored per event (recurrence-friendly)
 
-   * ×100
-   * ×1000
-5. Restore correct value if mismatch detected
+EB applied before partner discount
 
----
+Ledger fields persisted:
 
-## Logging Behavior
+eb_details
 
-* Repairs always execute
-* Logs are written **only once per field + intended value per page session**
-* Logs appear only when **Debug mode is enabled**
+base_after_eb
 
-### Log context
+commission_basis
+Status: ✅ Done
 
-```
-frontend_stage3_repair
-```
+10. Hardening + snippet migration (legacy → plugin)
+10.1 Parity checks across channels
 
-Example payload:
+Partner order ✅
 
-```json
-{
-  "form_id": 48,
-  "field": "ginput_base_price_48_141",
-  "before_raw": "3.000,00 €",
-  "after_raw": "30,00 €",
-  "before_num": 3000,
-  "intended_num": 30,
-  "ratio": 100
-}
-```
+Stripe:
 
----
+Client (no coupon) ✅
 
-## What NOT to Change
+Client (with coupon) ✅
 
-* Do not remove Stage-3 unless GF core behavior changes
-* Do not add broad `change` listeners
-* Do not remove debounce guards
-* Do not log repairs on every occurrence
+Partner logged-in ✅
+Status: ✅ Done
 
----
+10.2 Migrate legacy snippets into plugin
 
-## Debugging Checklist
+#163 — SC Event header meta + renderer
 
-1. Enable **Debug mode** in TC Booking Flow settings
-2. Load an event page with GF booking form
-3. Check **Diagnostics** for `frontend_stage3_repair`
-4. Verify booking totals remain correct
+Backward-compatible HTML & CSS variable contract
 
----
+Remove duplicate “details in content”
 
-## Status
+Fix:
 
-**This system is LOCKED.**
+Date format when Event Details Block moved to header
 
-Any future GF-related work must assume this layer is present and operational.
+Current test version: v0.2.65
+
+11. Event admin UX consolidation
+
+One clean meta panel:
+
+Pricing + rentals
+
+EB rules
+
+Header controls + CSS variables
+
+Partner toggles (if needed)
+
+Clear schema & validation
+Status: 🔜 Next (after 10.2 stabilizes)
+
+12. Discount engine formalization
+
+EB (done)
+
+Partner rules
+
+Coupon lifecycle
+
+Multi-discount transparency (GF / cart / order / portal)
+Status: 🔜 Later
+
+13. Cleanup & finalization
+
+Remove legacy snippets
+
+Remove fallbacks / debug overlays
+
+Lock public API
+
+Tag stable release
+Status: 🔜 Final stage
+
+SECTION B — ISSUE & IDEAS BACKLOG (ACTIONABLE)
+
+⚠️ Items are independent and non-sequential.
+Each item becomes one GitHub issue / one chat thread.
+
+Booking Flow Issues / Ideas
+
+Issue format convention (recommended for GitHub):
+
+ID
+
+Title
+
+Why
+
+Done when
+
+1. Email missing bike rental details (client-facing)
+
+Why: Confusion → support tickets
+
+Done when: Email prints rental/bike info from reliable meta (not get_resource())
+
+2. Visually connect participation + rental (grouping)
+
+Why: Admin & customer confusion
+
+Pattern: tc_group_id, tc_scope, tc_hide_line, tc_event_key
+
+Done when: Cart, checkout, order, emails show one grouped package
+
+3. Deprecated API replacement
+
+API: WC_Bookings_Controller::get_bookings_in_date_range
+
+Done when: Replaced with WC_Booking_Data_Store::get_bookings_in_date_range
+
+4. Resource can be false — defensive rendering
+
+Why: Avoid fatals & wrong display
+
+Done when: All templates handle “no resource” via meta
+
+5. Booking group concept (data model)
+
+Why: Woo sees separate bookings
+
+Done when: Shared group ID stored on cart items, order items & bookings
+
+6. Availability logic hardening
+
+Why: Prevent overbooking
+
+Done when: One centralized helper covers all edge cases
+
+7. Scale-proof extras (delivery / insurance / shuttle)
+
+Why: UI breaks with more services
+
+Done when: Grouping supports multiple scoped services
+
+8. Debug visibility control
+
+Done when: Notices logged only, never echoed
+
+9. Partner coupon auto-apply policy
+
+Question: Can it be removed?
+
+Done when: Policy chosen & enforced consistently
+
+10. Partner Portal v2 (optional)
+
+Filter by partner meta
+
+CSV export
+
+Woo-style tables
+Done when: Portal is robust & exportable
+
+11. Partner fast checkout (hidden billing fields)
+
+Why: UX improvement
+
+Done when: Safe, role-limited, attribution preserved
+
+12. Admin mode in Partner panel
+
+Why: Ops + reporting
+
+Done when: Admin can view/filter all partners
+
+13. Order summary price split (partner-aware)
+
+Done when: Correct totals render per role from ledger
+
+14. EB settings UX (no raw JSON)
+
+Why: Reduce admin errors
+
+Done when: UI-based tier editor with validation
+
+15. GF entry cleanup to prevent ghost participants
+
+Why: GravityView noise
+
+Done when: Cart removal / expiry updates GF entry state
+
+16. Show EB + partner discount visibly in event & form
+
+Why: Trust + clarity
+
+Done when: Form, cart, order show same discount logic
+
+17. Clear EB rule messaging per event
+
+Done when: “Book now save X% until DATE” visible
+
+18. Visual differentiation of categories
+
+Options: Colors / icons / logos
+
+Done when: Category recognizable instantly
+
+19. Notifications overhaul
+
+Include: Actions, cancellation policy, event links
+
+Done when: Consistent, professional, actionable
+
+20. Field mapping layer in plugin settings
+
+Why: Remove hardcoded GF field IDs
+
+Done when: Mapping UI with validation exists
+
+21. Consent field with Privacy Policy link
+
+Done when: Dynamic, multilingual-safe link
+
+22. qTranslate raw strings in admin
+
+Done when: Admin output is clean
+
+23. Image choice design for unavailable resources
+
+Done when: CSS-class-based state system replaces inline CSS
+
+24. Snippet audit candidate #136
+
+Why: Possible OpenPOS dependency
+
+Done when: Dependency verified and refactored safely
+
+25. Technical recommendations bundle
+
+25A Multi-day availability range bug
+
+25B Hardcoded product_cat IDs
+
+25C Timezone consistency
+
+25D Partner detection performance
+
+25E Pricing model transition (GF display only)
+Done when: Each sub-item resolved safely
+
+26. TCBF-026 — Logo sizing meta not applied
+
+Status: ✅ DONE
+
+Phase: 10.2
+
+Scope: Event header
+
+Done when: Logo size respects per-event meta + CSS contract
+
+27. TCBF-027 — Header date/details styling regression
+
+Status: ✅ DONE
+
+Phase: 10.2
+
+Done when: Layout matches intended design
+
+28. TCBF-028 — Header date format bug
+
+Status: ✅ DONE
+
+Preferred: 4/02/2026 10:00–13:00
+
+Scope: Event header date renderer
+
+Done when: Dates render according to Sugar Calendar settings, compact for same-day events
+
+29. GravityView participants index starts at 0
+
+Done when: Index is 1-based
+
+30. Core integrity upgrade (GF lifecycle)
+
+State machine: draft → in_cart → paid → expired
+
+Cart TTL alignment
+
+Reverse hooks
+
+Idempotency key
+
+Status: ✅ DONE / 🔒 LOCKED
+
+Note:
+Gravity Forms frontend lifecycle hardening and decimal-comma price integrity protection are now complete and locked.
+Stage-3 auto-repair ensures frontend prices remain correct even if GF re-renders or mis-parses values.
+
+Reference:
+
+docs/gf-frontend-lifecycle.md
+
+🧩 Notes / Edge Cases
+
+Bike rental price 1,00 € incorrectly showing as 100
+
+Must support 0 € rentals safely
