@@ -1,0 +1,44 @@
+name: TCBF Issue / Improvement
+description: TC Booking Flow – tracked issue or idea
+title: "TCBF-XXX | <short descriptive title>"
+labels: ["tcbf", "needs-triage"]
+body:
+  - type: input
+    id: phase
+    attributes:
+      label: Related Phase
+      placeholder: "e.g. 10.2, 11, backlog"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What is the issue?
+      description: Describe the observable problem or idea.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does this matter?
+      description: Impact on UX, correctness, maintenance, or ops.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Clear, verifiable acceptance criteria.
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes / Constraints
+      description: Edge cases, related files, or historical context.
+    validations:
+      required: false

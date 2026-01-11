@@ -1,0 +1,27 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tc-booking-flow 0.1.10\n"
+"POT-Creation-Date: 2026-01-02 00:00+0000\n"
+"PO-Revision-Date: 2026-01-02 00:00+0000\n"
+"Language: es_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Event"
+msgstr "Evento"
+
+msgid "Participant"
+msgstr "Participante"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Bike"
+msgstr "Bicicleta"
+
+msgid "Rental"
+msgstr "Alquiler"
+
+msgid "Participation"
+msgstr "Participación"

@@ -1,0 +1,223 @@
+name: Publish latest plugin ZIP (SFTP)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    environment: TCBF
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build latest.zip
+        run: |
+          set -e
+          PLUGIN_SLUG="tc-booking-flow-next"
+          BUILD_DIR="build"
+
+          echo "Building plugin zip..."
+          mkdir -p "$BUILD_DIR/$PLUGIN_SLUG"
+
+          echo "Copying files to build directory..."
+          rsync -av \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "$BUILD_DIR" \
+            --exclude ".DS_Store" \
+            ./ "$BUILD_DIR/$PLUGIN_SLUG/"
+
+          cd "$BUILD_DIR"
+          zip -r "../latest.zip" "$PLUGIN_SLUG"
+
+          echo "Zip file created: $(ls -lh ../latest.zip | awk '{print $5}')"
+          echo "File count: $(find "$PLUGIN_SLUG" -type f | wc -l) files"
+
+      - name: Create latest.json
+        run: |
+          set -e
+
+          # Extract version from main plugin file
+          VERSION=$(grep -oP "Version:\s*\K[\d\.\-a-z]+" tc-booking-flow-next.php)
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          DOWNLOAD_URL="https://staging.lukaszkomar.com/dev/tc-booking-flow-next/latest.zip"
+
+          echo "Creating latest.json with version $VERSION"
+
+          # Create JSON with WordPress plugin update checker format
+          echo "{" > latest.json
+          echo "  \"name\": \"TC Booking Flow NEXT\"," >> latest.json
+          echo "  \"version\": \"$VERSION\"," >> latest.json
+          echo "  \"download_url\": \"$DOWNLOAD_URL\"," >> latest.json
+          echo "  \"requires\": \"5.0\"," >> latest.json
+          echo "  \"tested\": \"6.4\"," >> latest.json
+          echo "  \"last_updated\": \"$DATE\"," >> latest.json
+          echo "  \"sections\": {" >> latest.json
+          echo "    \"description\": \"WordPress plugin for booking flow integration\"," >> latest.json
+          echo "    \"changelog\": \"Build $COMMIT on $DATE\"" >> latest.json
+          echo "  }" >> latest.json
+          echo "}" >> latest.json
+
+          cat latest.json
+
+      - name: Create plugin-full.txt snapshot
+        run: |
+          set -e
+
+          VERSION=$(grep -oP "Version:\s*\K[\d\.\-a-z]+" tc-booking-flow-next.php)
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          echo "Creating plugin-full.txt snapshot..."
+
+          # Create snapshot header
+          echo "================================================================================" > plugin-full.txt
+          echo "TC BOOKING FLOW - PLUGIN SNAPSHOT" >> plugin-full.txt
+          echo "================================================================================" >> plugin-full.txt
+          echo "" >> plugin-full.txt
+          echo "VERSION: $VERSION" >> plugin-full.txt
+          echo "COMMIT: $COMMIT" >> plugin-full.txt
+          echo "BUILT: $DATE" >> plugin-full.txt
+          echo "" >> plugin-full.txt
+
+          # Add file tree
+          echo "================================================================================" >> plugin-full.txt
+          echo "FILE TREE" >> plugin-full.txt
+          echo "================================================================================" >> plugin-full.txt
+          echo "" >> plugin-full.txt
+
+          find . -type f \
+            -not -path "./.git/*" \
+            -not -path "./.github/*" \
+            -not -path "./build/*" \
+            -not -name ".DS_Store" \
+            -not -name "plugin-full.txt" \
+            -not -name "latest.zip" \
+            -not -name "latest.json" \
+            -not -name ".htaccess" \
+            | sort | sed 's|^\./||' >> plugin-full.txt
+
+          echo "" >> plugin-full.txt
+
+          # Add file contents
+          echo "================================================================================" >> plugin-full.txt
+          echo "FILE CONTENTS" >> plugin-full.txt
+          echo "================================================================================" >> plugin-full.txt
+          echo "" >> plugin-full.txt
+
+          # Include only text-based plugin files (exclude binaries and generated files)
+          find . -type f \( -name "*.php" -o -name "*.txt" -o -name "*.md" -o -name "*.po" \) \
+            -not -path "./.git/*" \
+            -not -path "./.github/*" \
+            -not -path "./build/*" \
+            -not -path "./plugin-update-checker/*" \
+            -not -name "plugin-full.txt" \
+            | sort | while read file; do
+              echo "==== FILE: ${file#./} ====" >> plugin-full.txt
+              cat "$file" >> plugin-full.txt
+              echo "" >> plugin-full.txt
+              echo "" >> plugin-full.txt
+            done
+
+          echo "==== END OF SNAPSHOT ====" >> plugin-full.txt
+
+          echo "Snapshot created: $(wc -l < plugin-full.txt) lines"
+
+      - name: Create .htaccess for no-cache headers
+        run: |
+          echo "# Prevent caching of update metadata files" > .htaccess
+          echo "<FilesMatch \"\\.(json|txt)$\">" >> .htaccess
+          echo "  Header set Cache-Control \"no-cache, no-store, must-revalidate\"" >> .htaccess
+          echo "  Header set Pragma \"no-cache\"" >> .htaccess
+          echo "  Header set Expires \"0\"" >> .htaccess
+          echo "</FilesMatch>" >> .htaccess
+
+          echo ".htaccess created for no-cache headers"
+
+      - name: Install SFTP tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Probe SFTP root (no shell)
+        env:
+          SFTP_HOST_RAW: ${{ secrets.FTP_SERVER }}
+          SFTP_USER_RAW: ${{ secrets.FTP_USERNAME }}
+          SFTP_PASS: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -e
+
+          SFTP_HOST="$(printf "%s" "$SFTP_HOST_RAW" | tr -d '\r' | xargs)"
+          SFTP_USER="$(printf "%s" "$SFTP_USER_RAW" | tr -d '\r' | xargs)"
+
+          cat > sftp-probe.txt <<'EOF'
+          pwd
+          ls
+          bye
+          EOF
+
+          sshpass -p "$SFTP_PASS" sftp \
+            -oBatchMode=no \
+            -oStrictHostKeyChecking=no \
+            -oUserKnownHostsFile=/dev/null \
+            -P 22 \
+            -b sftp-probe.txt \
+            "$SFTP_USER@$SFTP_HOST"
+
+      - name: Upload via SFTP (no shell)
+        env:
+          SFTP_HOST_RAW: ${{ secrets.FTP_SERVER }}
+          SFTP_USER_RAW: ${{ secrets.FTP_USERNAME }}
+          SFTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          REMOTE_DIR_RAW: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          set -e
+
+          SFTP_HOST="$(printf "%s" "$SFTP_HOST_RAW" | tr -d '\r' | xargs)"
+          SFTP_USER="$(printf "%s" "$SFTP_USER_RAW" | tr -d '\r' | xargs)"
+          REMOTE_DIR="$(printf "%s" "$REMOTE_DIR_RAW" | tr -d '\r' | xargs)"
+
+          echo "Files to upload:"
+          ls -lh latest.zip latest.json plugin-full.txt .htaccess
+
+          cat > sftp-batch.txt <<EOF
+          EOF
+
+          # Only navigate if REMOTE_DIR is set and not current directory
+          if [ -n "$REMOTE_DIR" ] && [ "$REMOTE_DIR" != "." ]; then
+            # Create directories recursively by navigating step-by-step
+            IFS='/' read -ra DIRS <<< "$REMOTE_DIR"
+
+            # Build mkdir and cd commands for each directory level
+            for DIR in "${DIRS[@]}"; do
+              if [ -n "$DIR" ]; then
+                cat >> sftp-batch.txt <<EOF
+          -mkdir "$DIR"
+          cd "$DIR"
+          EOF
+              fi
+            done
+          fi
+
+          cat >> sftp-batch.txt <<EOF
+          put latest.zip
+          put latest.json
+          put plugin-full.txt
+          put .htaccess
+          pwd
+          ls -la
+          bye
+          EOF
+
+          sshpass -p "$SFTP_PASS" sftp \
+            -oBatchMode=no \
+            -oStrictHostKeyChecking=no \
+            -oUserKnownHostsFile=/dev/null \
+            -P 22 \
+            -b sftp-batch.txt \
+            "$SFTP_USER@$SFTP_HOST"
