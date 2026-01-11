@@ -665,12 +665,11 @@ final class Sc_Event_Extras {
                 gravel:      "<?php echo esc_js((string) $rental_price_gravel); ?>"
             };
 
-            function tcBfToFloat(v){
-                if (v === null || typeof v === 'undefined') return 0;
-                v = String(v).replace(/\s+/g,'').replace(/€/g,'').replace(/,/g,'.');
-                var n = parseFloat(v);
-                return isNaN(n) ? 0 : n;
-            }
+			function tcBfToFloat(v){
+				// Keep legacy name used across this inline script, but parse robustly.
+				// IMPORTANT: Admin may input 30,00 and sometimes values can include thousands separators.
+				return tcBfParseMoneyToNumber(v);
+			}
 
             // Availability flags used by GF conditional logic (Section 57 shows if ANY of these == 'X')
             // Derived from GF form export (Form 44):
@@ -829,7 +828,12 @@ final class Sc_Event_Extras {
                 });
             }
 
-            function tcBfRepairSingleProductBasePrices(){
+			// Stage 3 testing mode:
+			// If true, we only LOG "would repair" events, without mutating inputs.
+			// This allows us to validate whether decimal-comma normalization alone solves the bug.
+			var tcBfStage3ObserveOnly = true;
+
+			function tcBfRepairSingleProductBasePrices(){
                 var changed = false;
 
                 tcBfGetSingleProductBasePriceInputs().each(function(){
@@ -846,13 +850,27 @@ final class Sc_Event_Extras {
                     // Allow small floating errors
                     function near(a,b){ return Math.abs(a-b) < 0.0001; }
 
-                    if ( near(ratio, 100) || near(ratio, 1000) ) {
-                        var restored = tcBfFormatEuroComma(intended);
-                        if ($inp.val() !== restored) {
-                            $inp.val(restored);
-                            changed = true;
-                        }
-                    }
+					if ( near(ratio, 100) || near(ratio, 1000) ) {
+						var restored = tcBfFormatEuroComma(intended);
+						if (tcBfStage3ObserveOnly) {
+							try {
+								console.warn('[TCBF Stage3 observe] Would repair base price mis-parse', {
+									formId: fid,
+									field: ($inp.attr('id')||''),
+									currentRaw: $inp.val(),
+									currentNum: cur,
+									intendedNum: intended,
+									ratio: ratio,
+									restoredRaw: restored
+								});
+							} catch(e) {}
+							return; // do not mutate
+						}
+						if ($inp.val() !== restored) {
+							$inp.val(restored);
+							changed = true;
+						}
+					}
                 });
 
                 if (changed) {
