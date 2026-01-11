@@ -831,7 +831,7 @@ final class Sc_Event_Extras {
 			// Stage 3 testing mode:
 			// If true, we only LOG "would repair" events, without mutating inputs.
 			// This allows us to validate whether decimal-comma normalization alone solves the bug.
-			var tcBfStage3ObserveOnly = true;
+			var tcBfStage3ObserveOnly = false;
 
 			function tcBfRepairSingleProductBasePrices(){
                 var changed = false;
