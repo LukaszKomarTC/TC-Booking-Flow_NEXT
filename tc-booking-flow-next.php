@@ -2,14 +2,14 @@
 /**
  * Plugin Name: TC — Booking Flow NEXT (Refactored Architecture)
  * Description: Consolidates GF44 → Woo cart/order booking flow and Early Booking Discount snapshot. Supports optional split of participation vs rental and per-event EB scope toggles.
- * Version: 0.3.7-alpha
+ * Version: 0.3.8-alpha
  * Text Domain: tc-booking-flow-next
  * Author: Tossa Cycling (internal)
  */
 
 if ( ! defined('ABSPATH') ) exit;
 
-if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.3.7-alpha');
+if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.3.8-alpha');
 if ( ! defined('TC_BF_PATH') ) define('TC_BF_PATH', plugin_dir_path(__FILE__));
 if ( ! defined('TC_BF_URL') ) define('TC_BF_URL', plugin_dir_url(__FILE__));
 
