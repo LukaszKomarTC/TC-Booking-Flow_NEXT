@@ -789,13 +789,16 @@ final class Sc_Event_Extras {
 
             // Debounced scheduler so we can call repair after GF updates the DOM.
             var tcBfRepairTimer = null;
-            function tcBfScheduleRepair(){
+            function tcBfScheduleRepair(runStage3){
+                if (runStage3 === undefined) runStage3 = true;
                 if (tcBfRepairTimer) window.clearTimeout(tcBfRepairTimer);
                 tcBfRepairTimer = window.setTimeout(function(){
                     var stage3Changed = false;
                     try { tcBfRepairRentalBikeChoices(); } catch(e) {}
                     // Stage 3 base-price repair (debounced together with bike-choice repair).
-                    try { stage3Changed = !!tcBfRepairSingleProductBasePrices(); } catch(e) {}
+                    if (runStage3) {
+                        try { stage3Changed = !!tcBfRepairSingleProductBasePrices(); } catch(e) {}
+                    }
 
                     // Single recalculation point (avoid repeated calc loops).
                     if (stage3Changed) {
@@ -885,15 +888,27 @@ final class Sc_Event_Extras {
 			// This allows us to validate whether decimal-comma normalization alone solves the bug.
 			var tcBfStage3ObserveOnly = false;
 
+			// Per-field throttling for Stage 3 repairs (prevents log storms, still keeps values correct).
+			window.tcBfStage3LastRepair = window.tcBfStage3LastRepair || {};
+
 			function tcBfRepairSingleProductBasePrices(){
                 var changed = false;
+
+                // Allow small floating errors
+                function near(a,b){ return Math.abs(a-b) < 0.0001; }
 
                 tcBfGetSingleProductBasePriceInputs().each(function(){
                     var $inp = $(this);
                     var intended = $inp.data('tcIntended');
                     if (intended === undefined || intended === null) return;
 
-                    var cur = tcBfParseMoneyToNumber($inp.val());
+                    // If we've already fixed this field and it's still correct, do nothing.
+                    var curNow = tcBfParseMoneyToNumber($inp.val());
+                    if (curNow && intended && $inp.data('tcBfFixed') && near(curNow, intended)) {
+                        return;
+                    }
+
+                    var cur = curNow;
                     if (!cur || !intended) return;
 
                     // Detect common mis-parse multipliers (30,00 -> 3000,00 = x100)
@@ -904,9 +919,14 @@ final class Sc_Event_Extras {
 
 					if ( near(ratio, 100) || near(ratio, 1000) ) {
 						var restored = tcBfFormatEuroComma(intended);
+						var fieldKey = ($inp.attr('id')||('fid_'+fid));
+						var nowTs = (Date.now ? Date.now() : (+new Date()));
+						var lastTs = window.tcBfStage3LastRepair[fieldKey] || 0;
+						var throttleLog = (nowTs - lastTs) < 1500;
+						if (!throttleLog) { window.tcBfStage3LastRepair[fieldKey] = nowTs; }
 						if (tcBfStage3ObserveOnly) {
 							try {
-								console.warn('[TCBF Stage3 observe] Would repair base price mis-parse', {
+								if (!throttleLog) console.warn('[TCBF Stage3 observe] Would repair base price mis-parse', {
 									formId: fid,
 									field: ($inp.attr('id')||''),
 									currentRaw: $inp.val(),
@@ -921,9 +941,11 @@ final class Sc_Event_Extras {
 						if ($inp.val() !== restored) {
 							var beforeRaw = $inp.val();
 							$inp.val(restored);
+							$inp.data('tcBfFixed', 1);
+							$inp.data('tcBfIntended', intended);
 							changed = true;
 							// Optional admin debug: record the repair in plugin logs (Settings → TC Booking Flow).
-							if (tcBfAdminDebug) {
+							if (tcBfAdminDebug && !throttleLog) {
 								try {
 									console.info('[TCBF Stage3] Repaired base price mis-parse', {
 										formId: fid,
@@ -957,7 +979,7 @@ final class Sc_Event_Extras {
 
             // Run once now (non-AJAX) and also after GF finishes rendering (AJAX-safe)
             tcBfApplyDriverFlags();
-            tcBfScheduleRepair();
+            tcBfScheduleRepair(true);
             tcBfCacheIntendedSingleProductPrices();
 
             // -----------------------------
@@ -983,13 +1005,13 @@ final class Sc_Event_Extras {
                     if (!isThisForm(formId)) return;
                     tcBfApplyDriverFlags();
                     tcBfCacheIntendedSingleProductPrices();
-                    tcBfScheduleRepair();
+                    tcBfScheduleRepair(false);
                 }
 
                 function onConditionalLogicDone(formId, source){
                     if (!isThisForm(formId)) return;
                     // Let GF finish applying the DOM changes, then repair (debounced).
-                    tcBfScheduleRepair();
+                    tcBfScheduleRepair(true);
                 }
 
                 // De-dupe: remove any existing handlers for this form namespace
@@ -1043,13 +1065,13 @@ final class Sc_Event_Extras {
                             tcBfApplyDriverFlags();
                         }
                         tcBfCacheIntendedSingleProductPrices();
-                        tcBfScheduleRepair();
+                        tcBfScheduleRepair(false);
                     });
                 } else {
                     // Fallback: narrow DOM listeners (avoid broad "all inputs/selects")
                     $(document).on('change' + ns, '#input_' + fid + '_106', function(){
                         tcBfCacheIntendedSingleProductPrices();
-                        tcBfScheduleRepair();
+                        tcBfScheduleRepair(false);
                     });
 
                     for (var i=0;i<driverIds.length;i++){
@@ -1057,7 +1079,7 @@ final class Sc_Event_Extras {
                             $(document).on('change' + ns, '#input_' + fid + '_' + fieldId, function(){
                                 tcBfApplyDriverFlags();
                                 tcBfCacheIntendedSingleProductPrices();
-                                tcBfScheduleRepair();
+                                tcBfScheduleRepair(false);
                             });
                         })(driverIds[i]);
                     }
