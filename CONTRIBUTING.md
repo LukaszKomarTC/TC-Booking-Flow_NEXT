@@ -1,4 +1,4 @@
-# Contributing — TC Booking Flow (TCBF)
+# Contributing — TC Booking Flow NEXT (TCBF NEXT)
 
 This repo follows strict workflow rules to keep development deterministic and prevent regressions.
 
@@ -18,11 +18,11 @@ If you cannot follow them, stop and ask for a human to apply the changes.
 ## 1) Source Control Rules (NON-NEGOTIABLE)
 
 1. **Always pull from:**
-   - `https://staging.lukaszkomar.com/dev/tc-booking-flow/latest.zip`
+   - `https://staging.lukaszkomar.com/dev/tc-booking-flow-next/latest.zip`
 
 2. **Always confirm plugin version after pulling**
-   - Read the header in: `tc-booking-flow/tc-booking-flow.php`
-   - Report the version in the response (e.g. `v0.1.38`)
+   - Read the header in: `tc-booking-flow-next/tc-booking-flow-next.php`
+   - Report the version in the response (e.g. `v0.3.0-alpha`)
 
 3. **Never edit based on memory or old files**
    - Do not rely on previously pasted code.

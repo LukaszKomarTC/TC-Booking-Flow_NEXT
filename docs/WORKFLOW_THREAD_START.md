@@ -1,4 +1,4 @@
-# Thread Start Template — TC Booking Flow
+# Thread Start Template — TC Booking Flow NEXT
 
 ## Context
 Task/Issue:
@@ -6,8 +6,8 @@ Task/Issue:
 - Short title:
 
 ## Rules (NON-NEGOTIABLE)
-- Always pull from: https://staging.lukaszkomar.com/dev/tc-booking-flow/latest.zip
-- Always confirm plugin version after pulling (header in tc-booking-flow.php)
+- Always pull from: https://staging.lukaszkomar.com/dev/tc-booking-flow-next/latest.zip
+- Always confirm plugin version after pulling (header in tc-booking-flow-next.php)
 - Never edit based on memory or old files
 
 ## File delivery rules
