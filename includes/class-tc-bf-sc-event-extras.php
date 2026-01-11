@@ -890,6 +890,7 @@ final class Sc_Event_Extras {
 
 			// Per-field throttling for Stage 3 repairs (prevents log storms, still keeps values correct).
 			window.tcBfStage3LastRepair = window.tcBfStage3LastRepair || {};
+						window.tcBfStage3LoggedOnce = window.tcBfStage3LoggedOnce || {};
 
 			function tcBfRepairSingleProductBasePrices(){
                 var changed = false;
@@ -945,27 +946,31 @@ final class Sc_Event_Extras {
 							$inp.data('tcBfIntended', intended);
 							changed = true;
 							// Optional admin debug: record the repair in plugin logs (Settings → TC Booking Flow).
-							if (tcBfAdminDebug && !throttleLog) {
-								try {
-									console.info('[TCBF Stage3] Repaired base price mis-parse', {
-										formId: fid,
+							if (tcBfAdminDebug) {
+								var logKey = fieldKey + '|' + String(intended);
+								if (!window.tcBfStage3LoggedOnce[logKey]) {
+									window.tcBfStage3LoggedOnce[logKey] = 1;
+									try {
+										console.info('[TCBF Stage3] Repaired base price mis-parse', {
+											formId: fid,
+											field: ($inp.attr('id')||''),
+											beforeRaw: beforeRaw,
+											afterRaw: restored,
+											beforeNum: cur,
+											intendedNum: intended,
+											ratio: ratio
+										});
+									} catch(e) {}
+									tcBfAdminLog('frontend_stage3_repair', {
+										form_id: fid,
 										field: ($inp.attr('id')||''),
-										beforeRaw: beforeRaw,
-										afterRaw: restored,
-										beforeNum: cur,
-										intendedNum: intended,
+										before_raw: beforeRaw,
+										after_raw: restored,
+										before_num: cur,
+										intended_num: intended,
 										ratio: ratio
-									});
-								} catch(e) {}
-								tcBfAdminLog('frontend_stage3_repair', {
-									form_id: fid,
-									field: ($inp.attr('id')||''),
-									before_raw: beforeRaw,
-									after_raw: restored,
-									before_num: cur,
-									intended_num: intended,
-									ratio: ratio
 								}, 'warning');
+								}
 							}
 						}
 					}
