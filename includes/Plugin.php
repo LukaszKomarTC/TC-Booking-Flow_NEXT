@@ -272,7 +272,369 @@ final class Plugin {
 	}
 
 	public function gf_after_submission_add_to_cart( $entry, $form ) {
-		// ... (rest of file unchanged)
+
+		// Only run for the configured GF form
+		$form_id = (int) (is_array($form) && isset($form['id']) ? $form['id'] : 0);
+		$target_form_id = \TC_BF\Admin\Settings::get_form_id();
+		if ( $form_id !== $target_form_id ) return;
+
+
+		$entry_id = (int) rgar($entry, 'id');
+		if ( $entry_id <= 0 ) return;
+
+		if ( $this->gf_entry_was_cart_added($entry_id) ) return;
+
+		if ( ! function_exists('WC') || ! WC() || ! WC()->cart ) return;
+
+			// Bulletproof duplicate guard: if the cart already contains an item linked to this GF entry,
+			// do NOT add again (covers refresh/back, retries, or legacy snippet overlap).
+			if ( $this->cart_contains_entry_id($entry_id) ) {
+				$this->log('cart.add.skip.already_in_cart', ['entry_id'=>$entry_id]);
+				$this->gf_entry_mark_cart_added($entry_id);
+				return;
+			}
+
+		$event_id    = (int) rgar($entry, (string) self::GF_FIELD_EVENT_ID);
+		// Prefer the actual event post title (current language). Fall back to GF field.
+		$event_title = $this->localize_post_title( $event_id );
+		if ( $event_title === '' ) {
+			$event_title = (string) rgar($entry, (string) self::GF_FIELD_EVENT_TITLE);
+		}
+
+		if ( $event_id <= 0 ) return;
+
+		// Canonical event dates / duration
+		if ( ! function_exists('tc_sc_event_dates') ) return;
+
+		$d = tc_sc_event_dates($event_id);
+		if ( ! is_array($d) || empty($d['start_ts']) || empty($d['end_ts']) ) return;
+
+		$start_ts = (int) $d['start_ts'];
+		$end_ts   = (int) $d['end_ts'];
+
+		// duration days (end exclusive)
+		$duration_days = (int) ceil( max(1, ($end_ts - $start_ts) / DAY_IN_SECONDS ) );
+
+		$start_year  = (int) gmdate('Y', $start_ts);
+		$start_month = (int) gmdate('n', $start_ts);
+		$start_day   = (int) gmdate('j', $start_ts);
+
+		// participant
+		$first = (string) rgar($entry, (string) self::GF_FIELD_FIRST_NAME);
+		$last  = (string) rgar($entry, (string) self::GF_FIELD_LAST_NAME);
+
+		// coupon code (partner)
+		$coupon_code = trim((string) rgar($entry, (string) self::GF_FIELD_COUPON_CODE));
+		$coupon_code = $coupon_code ? wc_format_coupon_code($coupon_code) : '';
+
+		// EB snapshot (once)
+		$calc = $this->calculate_for_event($event_id);
+		$eb_days   = (int)   ($calc['days_before'] ?? 0);
+		$eb_evt_ts = (int)   ($calc['event_start_ts'] ?? 0);
+		$cfg       = (array) ($calc['cfg'] ?? []);
+		$eb_step   = (array) ($calc['step'] ?? []);
+
+		// Determine "with rental" based on your current bike choice concat
+		$bicycle_choice = (string) rgar($entry, (string) self::GF_FIELD_BIKE_130)
+			. (string) rgar($entry, (string) self::GF_FIELD_BIKE_142)
+			. (string) rgar($entry, (string) self::GF_FIELD_BIKE_143)
+			. (string) rgar($entry, (string) self::GF_FIELD_BIKE_169);
+
+		$bicycle_choice_ = explode('_', $bicycle_choice);
+		$product_id_bicycle  = isset($bicycle_choice_[0]) ? (int) $bicycle_choice_[0] : 0;
+		$resource_id_bicycle = isset($bicycle_choice_[1]) ? (int) $bicycle_choice_[1] : 0;
+
+		$has_rental = ($product_id_bicycle > 0 && $resource_id_bicycle > 0);
+
+		$eb_pct_display = 0.0;
+		if ( $eb_step && strtolower((string)($eb_step['type'] ?? 'percent')) === 'percent' ) {
+			$eb_pct_display = (float) ($eb_step['value'] ?? 0.0);
+		}
+		$this->log('gf.after_submission.start', [
+			'form_id' => $form_id,
+			'entry_id' => $entry_id,
+			'event_id' => $event_id,
+			'event_title' => $event_title,
+			'has_rental' => $has_rental,
+			'product_id_bicycle' => $product_id_bicycle,
+			'resource_id_bicycle' => $resource_id_bicycle,
+			'eb_pct' => $eb_pct_display,
+			'eb_days' => $eb_days,
+		], 'info');
+
+		/**
+		 * IMPORTANT:
+		 * Your current snippet uses "tour product" as the booking product (and even uses bike resource on it).
+		 * For the new split model, we expect:
+		 * - participation product id resolved from your mapping (existing logic)
+		 * - rental product id = selected bicycle product (bookable)
+		 *
+		 * Until your product scheme is rearranged, we keep a safe fallback:
+		 * If we cannot add a clean participation booking without resources, we keep the legacy single-line behavior.
+		 */
+
+		$quantity = 1;
+
+		// ---- Resolve participation product (KEEP: put your mapping here) ----
+		$product_id_participation = $this->resolve_participation_product_id($event_id, $entry);
+		$this->log('resolver.participation.result', ['event_id'=>$event_id,'product_id'=>$product_id_participation]);
+
+		if ( $product_id_participation <= 0 ) return;
+
+		$product_part = wc_get_product($product_id_participation);
+		if ( ! $product_part || ! function_exists('is_wc_booking_product') || ! is_wc_booking_product($product_part) ) return;
+
+		// Participation booking posted data (no resource)
+		$sim_post_part = [
+			'wc_bookings_field_duration'         => $duration_days,
+			'wc_bookings_field_start_date_year'  => $start_year,
+			'wc_bookings_field_start_date_month' => $start_month,
+			'wc_bookings_field_start_date_day'   => $start_day,
+		];
+
+		// If participation product requires resource, but we don't have one, we will fallback to legacy mode.
+		$part_requires_resource = method_exists($product_part, 'has_resources') ? (bool) $product_part->has_resources() : false;
+
+		// -------------------------
+		// Build participation cart item
+		// -------------------------
+		$cart_item_meta_part = [];
+		$cart_item_meta_part['booking'] = wc_bookings_get_posted_data($sim_post_part, $product_part);
+
+		$cart_item_meta_part['booking'][self::BK_EVENT_ID]    = $event_id;
+		$cart_item_meta_part['booking'][self::BK_EVENT_TITLE] = $event_title;
+		$cart_item_meta_part['booking'][self::BK_ENTRY_ID]    = $entry_id;
+		$cart_item_meta_part['booking'][self::BK_SCOPE]       = 'participation';
+
+		$participant_name = trim($first . ' ' . $last);
+		if ( $participant_name !== '' ) {
+			$cart_item_meta_part['booking']['_participant'] = $participant_name;
+		}
+
+
+		// EB snapshot fields for participation
+		$eligible_part = ! empty($cfg['enabled']) && ! empty($cfg['participation_enabled']);
+		$cart_item_meta_part['booking'][self::BK_EB_ELIGIBLE] = $eligible_part ? 1 : 0;
+		$cart_item_meta_part['booking'][self::BK_EB_DAYS]     = (string) $eb_days;
+		$cart_item_meta_part['booking'][self::BK_EB_EVENT_TS] = (string) $eb_evt_ts;
+
+		/**
+		 * Cost model:
+		 * Participation price comes from event meta (single source of truth).
+		 *
+		 * Keys used today (from your snippets / event metabox):
+		 * - event_price  (participation base)
+		 *
+		 * We always snapshot it into BK_CUSTOM_COST so Woo Bookings cannot drift.
+		 * If meta is missing, we fall back to the GF total as a last-resort safety net.
+		 */
+		$part_price = $this->money_to_float( get_post_meta($event_id, 'event_price', true) );
+		if ( $part_price > 0 ) {
+			$cart_item_meta_part['booking'][self::BK_CUSTOM_COST] = wc_format_decimal($part_price, 2);
+		} else {
+			$legacy_total = (float) rgar($entry, (string) self::GF_FIELD_TOTAL);
+			if ( $legacy_total > 0 ) {
+				$cart_item_meta_part['booking'][self::BK_CUSTOM_COST] = wc_format_decimal($legacy_total, 2);
+			}
+		}
+
+		// -------------------------------------------------
+		// EB discount distribution (event-wise meta rules)
+		// Compute once per submission and distribute across eligible scopes.
+		// -------------------------------------------------
+		$base_part = isset($cart_item_meta_part['booking'][self::BK_CUSTOM_COST]) ? (float) $cart_item_meta_part['booking'][self::BK_CUSTOM_COST] : 0.0;
+		$eligible_bases = [];
+		if ( $eligible_part && $base_part > 0 ) {
+			$eligible_bases['part'] = $base_part;
+		}
+
+		$rental_fixed_preview = 0.0;
+		$eligible_rental = false;
+		if ( $has_rental ) {
+			$eligible_rental = ! empty($cfg['enabled']) && ! empty($cfg['rental_enabled']);
+			// We need the fixed rental price now (to correctly distribute EB across scopes).
+			$rental_fixed_preview = $this->get_event_rental_price($event_id, $entry, $product_id_bicycle);
+			if ( $eligible_rental && $rental_fixed_preview > 0 ) {
+				$eligible_bases['rental'] = (float) $rental_fixed_preview;
+			}
+		}
+
+		$eb_total_amt = 0.0;
+		$eb_eff_pct   = 0.0;
+		$eb_amt_part  = 0.0;
+		$eb_amt_rental = 0.0;
+		$eligible_sum = array_sum($eligible_bases);
+		if ( ! empty($cfg['enabled']) && $eligible_sum > 0 && $eb_step ) {
+			$comp = $this->compute_eb_amount((float)$eligible_sum, $eb_step, (array)($cfg['global_cap'] ?? []));
+			$eb_total_amt = (float) ($comp['amount'] ?? 0.0);
+			$eb_eff_pct   = (float) ($comp['effective_pct'] ?? 0.0);
+
+			if ( $eb_total_amt > 0 ) {
+				// Proportional distribution with rounding.
+				if ( isset($eligible_bases['part']) && $eligible_bases['part'] > 0 ) {
+					$eb_amt_part = $this->money_round($eb_total_amt * ($eligible_bases['part'] / $eligible_sum));
+				}
+				if ( isset($eligible_bases['rental']) && $eligible_bases['rental'] > 0 ) {
+					$eb_amt_rental = $this->money_round($eb_total_amt * ($eligible_bases['rental'] / $eligible_sum));
+				}
+				// Fix rounding drift on last eligible line.
+				$drift = $this->money_round($eb_total_amt - ($eb_amt_part + $eb_amt_rental));
+				if ( abs($drift) > 0.0001 ) {
+					if ( isset($eligible_bases['rental']) ) {
+						$eb_amt_rental = max(0.0, $eb_amt_rental + $drift);
+					} else {
+						$eb_amt_part = max(0.0, $eb_amt_part + $drift);
+					}
+				}
+			}
+		}
+
+		// Apply EB snapshot fields (audit) to participation booking payload
+		$cart_item_meta_part['booking'][self::BK_EB_ELIGIBLE] = $eligible_part ? 1 : 0;
+		$cart_item_meta_part['booking'][self::BK_EB_PCT]      = $eligible_part ? wc_format_decimal($eb_eff_pct, 2) : '0';
+		$cart_item_meta_part['booking'][self::BK_EB_AMOUNT]   = $eligible_part ? wc_format_decimal($eb_amt_part, 2) : '0';
+
+
+		$cart_obj = WC()->cart;
+
+		$added_keys = [];
+
+		// If participation product requires resource and rental exists, use rental resource as fallback (legacy compatibility)
+		if ( $part_requires_resource && $has_rental ) {
+			$cart_item_meta_part['booking']['resource_id'] = $resource_id_bicycle;
+			$cart_item_meta_part['booking']['wc_bookings_field_resource'] = $resource_id_bicycle;
+		}
+
+		$this->log('cart.add.participation', ['event_id'=>$event_id,'product_id'=>$product_id_participation,'custom_cost'=>$cart_item_meta_part['booking'][self::BK_CUSTOM_COST] ?? null,'duration_days'=>$duration_days]);
+		$added_part = $cart_obj->add_to_cart($product_id_participation, $quantity, 0, [], $cart_item_meta_part);
+		if ( $added_part ) { $this->log('cart.add.participation.ok', ['cart_key'=>$added_part]); }
+		if ( $added_part ) $added_keys[] = $added_part;
+
+		// -------------------------
+		// Add rental as separate cart item (only if scheme supports it)
+		// -------------------------
+		if ( $has_rental ) {
+
+			$product_rental = wc_get_product($product_id_bicycle);
+
+			if ( $product_rental && function_exists('is_wc_booking_product') && is_wc_booking_product($product_rental) ) {
+
+				$sim_post_rental = [
+					'wc_bookings_field_duration'         => $duration_days,
+					'wc_bookings_field_start_date_year'  => $start_year,
+					'wc_bookings_field_start_date_month' => $start_month,
+					'wc_bookings_field_start_date_day'   => $start_day,
+					'wc_bookings_field_resource'         => $resource_id_bicycle,
+				];
+
+				$cart_item_meta_rental = [];
+				$cart_item_meta_rental['booking'] = wc_bookings_get_posted_data($sim_post_rental, $product_rental);
+
+				$cart_item_meta_rental['booking'][self::BK_EVENT_ID]    = $event_id;
+				$cart_item_meta_rental['booking'][self::BK_EVENT_TITLE] = $event_title;
+				$cart_item_meta_rental['booking'][self::BK_ENTRY_ID]    = $entry_id;
+				$cart_item_meta_rental['booking'][self::BK_SCOPE]       = 'rental';
+
+				// Participant + bicycle label snapshots (for cart/order display)
+				$participant_name = trim($first . ' ' . $last);
+				if ( $participant_name !== '' ) {
+					$cart_item_meta_rental['booking']['_participant'] = $participant_name;
+				}
+
+				$bicycle_label = '';
+				if ( is_object($product_rental) && method_exists($product_rental, 'get_name') ) {
+					$bicycle_label = (string) $product_rental->get_name();
+				}
+				if ( $resource_id_bicycle > 0 ) {
+					$res_title = $this->localize_post_title( $resource_id_bicycle );
+					if ( $res_title ) {
+						$bicycle_label = $bicycle_label ? ($bicycle_label . ' — ' . $res_title) : (string) $res_title;
+					}
+				}
+				if ( $bicycle_label !== '' ) {
+					$cart_item_meta_rental['booking']['_bicycle'] = $bicycle_label;
+				}
+
+
+				// EB snapshot fields for rental (distributed amounts computed above)
+				$cart_item_meta_rental['booking'][self::BK_EB_ELIGIBLE] = $eligible_rental ? 1 : 0;
+				$cart_item_meta_rental['booking'][self::BK_EB_PCT]      = $eligible_rental ? wc_format_decimal($eb_eff_pct, 2) : '0';
+				$cart_item_meta_rental['booking'][self::BK_EB_AMOUNT]   = $eligible_rental ? wc_format_decimal($eb_amt_rental, 2) : '0';
+				$cart_item_meta_rental['booking'][self::BK_EB_DAYS]     = (string) $eb_days;
+				$cart_item_meta_rental['booking'][self::BK_EB_EVENT_TS] = (string) $eb_evt_ts;
+					// Rental price is fixed per event (stored on event meta) and must be snapshotted.
+					$rental_fixed = $rental_fixed_preview;
+					if ( $rental_fixed <= 0 ) {
+						$rental_fixed = $this->get_event_rental_price($event_id, $entry, $product_id_bicycle);
+					}
+					if ( $rental_fixed > 0 ) {
+						$cart_item_meta_rental['booking'][self::BK_CUSTOM_COST] = wc_format_decimal($rental_fixed, 2);
+					}
+
+				$this->log('cart.add.rental', [
+					'event_id' => $event_id,
+					'product_id' => $product_id_bicycle,
+					'resource_id' => $resource_id_bicycle,
+					'custom_cost' => ($cart_item_meta_rental['booking'][self::BK_CUSTOM_COST] ?? ''),
+					'eligible_eb' => ($cart_item_meta_rental['booking'][self::BK_EB_ELIGIBLE] ?? 0),
+				]);
+				$added_rental = $cart_obj->add_to_cart($product_id_bicycle, $quantity, 0, [], $cart_item_meta_rental);
+				if ( $added_rental ) $added_keys[] = $added_rental;
+			}
+		}
+
+		// Apply coupon after items exist (Woo validates)
+		if ( $coupon_code && $added_keys ) {
+			$cart_obj->add_discount($coupon_code);
+		}
+
+		// Mark GF entry only if we added at least the participation line
+		if ( $added_part ) {
+			$this->gf_entry_mark_cart_added($entry_id);
+		}
+	}
+
+	/**
+	 * Calculate booking cost snapshot (not extracted - remains here).
+	 *
+	 * We intentionally calculate once and then enforce via set_price() + BK_CUSTOM_COST.
+	 * This prevents Woo Bookings from recalculating later in the funnel.
+	 */
+	private function calculate_booking_cost_snapshot( $product, array $booking ) : ?float {
+
+		// Strip our internal meta keys from the posted array.
+		$posted = $booking;
+		unset(
+			$posted[self::BK_EVENT_ID],
+			$posted[self::BK_EVENT_TITLE],
+			$posted[self::BK_ENTRY_ID],
+			$posted[self::BK_SCOPE],
+			$posted[self::BK_EB_PCT],
+			$posted[self::BK_EB_ELIGIBLE],
+			$posted[self::BK_EB_DAYS],
+			$posted[self::BK_EB_BASE],
+			$posted[self::BK_EB_EVENT_TS],
+			$posted[self::BK_CUSTOM_COST]
+		);
+
+		// Primary path: Woo Bookings cost calculator (if available).
+		if ( class_exists('WC_Bookings_Cost_Calculation') && is_callable(['WC_Bookings_Cost_Calculation', 'calculate_booking_cost']) ) {
+			try {
+				$cost = \WC_Bookings_Cost_Calculation::calculate_booking_cost( $posted, $product );
+				if ( is_numeric($cost) ) return (float) $cost;
+			} catch ( \Throwable $e ) {
+				return null;
+			}
+		}
+
+		// Fallback: if Woo already set a price for this cart item, we can snapshot it.
+		// (Better than nothing; still locks the number.)
+		if ( is_object($product) && method_exists($product, 'get_price') ) {
+			$maybe = (float) $product->get_price();
+			if ( $maybe > 0 ) return $maybe;
+		}
+
+		return null;
 	}
 
 	/* =========================================================
