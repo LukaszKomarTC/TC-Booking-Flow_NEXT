@@ -15,8 +15,8 @@ final class GF_Validation {
 	const GF_FIELD_EVENT_ID      = 20;
 	const GF_FIELD_RENTAL_TYPE   = 106;
 	const GF_FIELD_TOTAL         = 76;
-	const GF_FIELD_CLIENT_TOTAL_A = 79;
-	const GF_FIELD_CLIENT_TOTAL_B = 168;
+	const GF_FIELD_CLIENT_TOTAL_A = 79;  // legacy/optional (not present in current GF48 export)
+	const GF_FIELD_CLIENT_TOTAL_B = 168; // canonical: Total client
 	const GF_FIELD_BIKE_130      = 130;
 	const GF_FIELD_BIKE_142      = 142;
 	const GF_FIELD_BIKE_143      = 143;
@@ -35,10 +35,12 @@ final class GF_Validation {
 		if ( $form_id !== $target_form_id ) return $validation_result;
 
 		// Basic required field: event_id
-		$event_id = isset($_POST['input_' . self::GF_FIELD_EVENT_ID]) ? (int) $_POST['input_' . self::GF_FIELD_EVENT_ID] : 0;
+		// Prefer resolving by GF inputName (survives refactors / re-imports that change numeric field IDs).
+		$event_field_id = self::find_field_id_by_input_name($form, 'event_id', self::GF_FIELD_EVENT_ID);
+		$event_id = isset($_POST['input_' . $event_field_id]) ? (int) $_POST['input_' . $event_field_id] : 0;
 		if ( $event_id <= 0 || get_post_type($event_id) !== 'sc_event' ) {
 			$validation_result['is_valid'] = false;
-			$validation_result['form'] = self::gf_mark_field_invalid($form, self::GF_FIELD_EVENT_ID, __('Invalid event. Please reload the event page and try again.', 'tc-booking-flow'));
+			$validation_result['form'] = self::gf_mark_field_invalid($form, $event_field_id, __('Invalid event. Please reload the event page and try again.', 'tc-booking-flow'));
 			return $validation_result;
 		}
 
@@ -48,9 +50,8 @@ final class GF_Validation {
 		// GF calculated money fields are DISPLAY ONLY. We recompute server-side ledger totals from intent inputs,
 		// then compare against the submitted client totals to prevent JS/locale drift and tampering.
 		//
-		// Requirements (current flow):
-		// - Field 79 must match field 168 (both client-facing totals)
-		// - Both must match the PHP ledger client total (cart/order parity), including EB + partner discount
+		// Strategy: LOG mismatches for debugging, but ALLOW submission (server ledger is authoritative).
+		// The cart and order will recalculate from ledger anyway, so blocking here creates UX friction.
 		//
 		// IMPORTANT: Never parse money with (float) in a decimal-comma locale. Always use money_to_float().
 		$part_price = \TC_BF\Support\Money::money_to_float( get_post_meta($event_id, 'event_price', true) );
@@ -122,44 +123,40 @@ final class GF_Validation {
 		$client_discount    = \TC_BF\Support\Money::money_round( $partner_base_total * ($partner_discount_pct / 100) );
 		$expected_client_total = \TC_BF\Support\Money::money_round( max(0.0, $partner_base_total - $client_discount) );
 
-		// ---- Read posted client totals (display fields) ----
-		$raw_79  = $_POST['input_' . self::GF_FIELD_CLIENT_TOTAL_A] ?? '';
+		// ---- Read posted client total (CANONICAL: field 168) ----
+		// The GF form export confirms "Total client" is field 168 (used for partner notifications and UI).
+		// For trustworthiness/simplicity: validate ONLY against 168 when it is present.
 		$raw_168 = $_POST['input_' . self::GF_FIELD_CLIENT_TOTAL_B] ?? '';
-
-		$posted_79  = \TC_BF\Support\Money::money_round( \TC_BF\Support\Money::money_to_float( $raw_79 ) );
 		$posted_168 = \TC_BF\Support\Money::money_round( \TC_BF\Support\Money::money_to_float( $raw_168 ) );
 
-		// Fallback: if those fields are not present in the active form, fall back to legacy TOTAL (76).
+		// Fallback: if 168 is not posted for some reason, fall back to legacy TOTAL (76).
 		$legacy_raw = $_POST['input_' . self::GF_FIELD_TOTAL] ?? '';
 		$posted_legacy = \TC_BF\Support\Money::money_round( \TC_BF\Support\Money::money_to_float( $legacy_raw ) );
 
-		$have_79  = ($raw_79 !== '');
 		$have_168 = ($raw_168 !== '');
-
-		// Choose primary posted value (prefer 79, then 168, then legacy 76).
-		$posted_primary = $have_79 ? $posted_79 : ($have_168 ? $posted_168 : $posted_legacy);
-		$primary_field_id = $have_79 ? self::GF_FIELD_CLIENT_TOTAL_A : ($have_168 ? self::GF_FIELD_CLIENT_TOTAL_B : self::GF_FIELD_TOTAL);
+		$posted_total = $have_168 ? $posted_168 : $posted_legacy;
+		$invalid_field_id = $have_168 ? self::GF_FIELD_CLIENT_TOTAL_B : self::GF_FIELD_TOTAL;
+		$posted_raw_for_log = $have_168 ? (string) $raw_168 : (string) $legacy_raw;
 
 		// ---- Comparisons (tolerance 0.02) ----
 		$tol = 0.02;
 
-		// 1) Internal form consistency (79 vs 168) — hard fail when both exist.
-		if ( $have_79 && $have_168 && abs($posted_79 - $posted_168) > $tol ) {
-			\TC_BF\Support\Logger::log('gf.validation.total_inconsistent', [
-				'event_id'      => $event_id,
-				'field_79_raw'  => (string) $raw_79,
-				'field_168_raw' => (string) $raw_168,
-				'field_79'      => $posted_79,
-				'field_168'     => $posted_168,
-				'diff'          => \TC_BF\Support\Money::money_round( abs($posted_79 - $posted_168) ),
+		// 1) If the expected total is > 0 but the posted total is empty/zero, LOG but ALLOW.
+		// (Changed from blocking - server will self-heal to correct total anyway)
+		if ( $expected_client_total > 0 && $posted_total <= 0 ) {
+			\TC_BF\Support\Logger::log('gf.validation.total_missing', [
+				'event_id'              => $event_id,
+				'expected_client_total' => $expected_client_total,
+				'posted_raw'            => $posted_raw_for_log,
+				'posted_total'          => $posted_total,
+				'action'                => 'allowed_with_self_heal',
 			], 'warning');
-			$validation_result['is_valid'] = false;
-			$validation_result['form'] = self::gf_mark_field_invalid($form, self::GF_FIELD_CLIENT_TOTAL_A, __('Total: Values in the form are out of sync. Please wait for totals to update, then submit again.', 'tc-booking-flow'));
-			return $validation_result;
+			// DO NOT BLOCK - self-heal below will fix it
 		}
 
 		// 2) Ledger parity (posted total vs expected ledger client total)
-		if ( $posted_primary > 0 && abs($posted_primary - $expected_client_total) > $tol ) {
+		// LOG mismatch but ALLOW submission - server ledger is authoritative
+		if ( $posted_total > 0 && abs($posted_total - $expected_client_total) > $tol ) {
 
 			\TC_BF\Support\Logger::log('gf.validation.total_mismatch', [
 				'event_id'              => $event_id,
@@ -173,25 +170,29 @@ final class GF_Validation {
 				'partner_base_total'    => $partner_base_total,
 				'client_discount'       => $client_discount,
 				'expected_client_total' => $expected_client_total,
-				'posted_primary_field'  => $primary_field_id,
-				'posted_primary_raw'    => $have_79 ? (string)$raw_79 : ($have_168 ? (string)$raw_168 : (string)$legacy_raw),
-				'posted_primary'        => $posted_primary,
-				'diff'                  => \TC_BF\Support\Money::money_round( abs($posted_primary - $expected_client_total) ),
+				'posted_field'          => $invalid_field_id,
+				'posted_raw'            => $posted_raw_for_log,
+				'posted_total'          => $posted_total,
+				'diff'                  => \TC_BF\Support\Money::money_round( abs($posted_total - $expected_client_total) ),
 				'rental_type_raw'       => (string) $rental_raw,
 				'rental_meta_key'       => (string) $meta_key,
+				'action'                => 'allowed_with_self_heal',
 			], 'warning');
 
-			$validation_result['is_valid'] = false;
-			$validation_result['form'] = self::gf_mark_field_invalid($form, $primary_field_id, __('Total: Price mismatch. Please refresh the page and submit again.', 'tc-booking-flow'));
-			return $validation_result;
+			// DO NOT BLOCK - validation changed to log-only
+			// Server ledger recalculation in cart/order is authoritative
+			// This prevents UX friction from JS timing/locale/rounding differences
 		}
 
-		// 3) Self-heal: if totals are empty (rare), write expected total into legacy field to avoid downstream zero.
-		if ( $posted_primary <= 0 && $expected_client_total > 0 ) {
+		// 3) Self-heal: ensure correct total is in POST for downstream processing
+		// This guarantees cart and order get the correct ledger-calculated value
+		if ( $expected_client_total > 0 ) {
+			// Write correct total to both fields for consistency
 			$_POST['input_' . self::GF_FIELD_TOTAL] = wc_format_decimal($expected_client_total, 2);
+			if ( $have_168 ) {
+				$_POST['input_' . self::GF_FIELD_CLIENT_TOTAL_B] = wc_format_decimal($expected_client_total, 2);
+			}
 		}
-
-
 
 		// Rental consistency: if any bike choice is present, require product_id + resource_id.
 		$bike_raw = '';
@@ -212,6 +213,33 @@ final class GF_Validation {
 
 		$validation_result['form'] = $form;
 		return $validation_result;
+	}
+
+	/**
+	 * Find a field ID by its inputName.
+	 *
+	 * Gravity Forms can change numeric field IDs after form duplication/rebuild/refactor,
+	 * but inputName stays stable if you keep it.
+	 */
+	private static function find_field_id_by_input_name( $form, string $input_name, int $fallback_id ) : int {
+		$input_name = trim($input_name);
+		if ( $input_name === '' || ! is_array($form) || empty($form['fields']) || ! is_array($form['fields']) ) {
+			return $fallback_id;
+		}
+		foreach ( $form['fields'] as $field ) {
+			$fid = (int) (is_object($field) ? ($field->id ?? 0) : (is_array($field) ? (int)($field['id'] ?? 0) : 0));
+			if ( $fid <= 0 ) continue;
+			$in = '';
+			if ( is_object($field) ) {
+				$in = (string) ($field->inputName ?? '');
+			} elseif ( is_array($field) ) {
+				$in = (string) ($field['inputName'] ?? '');
+			}
+			if ( trim($in) === $input_name ) {
+				return $fid;
+			}
+		}
+		return $fallback_id;
 	}
 
 	/**
