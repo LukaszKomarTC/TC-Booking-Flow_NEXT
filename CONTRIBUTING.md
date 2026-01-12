@@ -2,7 +2,7 @@
 
 This repo follows strict workflow rules to keep development deterministic and prevent regressions.
 
-If you are an AI assistant collaborating on this project, you MUST follow the rules below.
+If you are an AI assistant collaborating on this project, you MUST follow the rules below.  
 If you cannot follow them, stop and ask for a human to apply the changes.
 
 ---
@@ -12,6 +12,9 @@ If you cannot follow them, stop and ask for a human to apply the changes.
 - **SSOT (Single Source of Truth)**: `docs/PROJECT_CONTROL.md`
 - **Latest plugin snapshot**: `latest.zip` served from staging (see "Source Control Rules" below)
 - **Ledger**: PHP ledger calculation is the only authoritative pricing logic.
+- **Repo root = Plugin root**:  
+  This GitHub repository root IS the WordPress plugin root  
+  (e.g. `includes/`, `.github/`, `docs/`, `tc-booking-flow-next.php` live at repo root).
 
 ---
 
@@ -21,8 +24,8 @@ If you cannot follow them, stop and ask for a human to apply the changes.
    - `https://staging.lukaszkomar.com/dev/tc-booking-flow-next/latest.zip`
 
 2. **Always confirm plugin version after pulling**
-   - Read the header in: `tc-booking-flow-next/tc-booking-flow-next.php`
-   - Report the version in the response (e.g. `v0.3.0-alpha`)
+   - Read the header in: `tc-booking-flow-next.php`
+   - Report the version in the response (e.g. `v0.3.18-alpha`)
 
 3. **Never edit based on memory or old files**
    - Do not rely on previously pasted code.
@@ -36,21 +39,107 @@ If you cannot follow them, stop and ask for a human to apply the changes.
 
 ## 2) File Delivery Rules (How changes are returned)
 
-When providing changes (human or AI), follow exactly:
+**CRITICAL:**  
+This repository root IS the plugin root.  
+All deliveries must preserve repo-relative paths exactly.
+
+GitHub UI uploads must never alter folder structure or introduce nested roots.
+
+---
 
 ### A) If only ONE file changed
 - Provide **only the full file** (copy/paste ready).
+- No diffs, no snippets.
 
-### B) If the changed file is >1500 lines
-- Provide a **zip** containing the file (and only what is needed).
+---
 
-### C) Provide the whole plugin zip ONLY if
-- More than one file changed, OR
-- The requester explicitly asks for the whole plugin zip
+### B) If ONE file changed and is >1500 lines
+- Provide a **zip containing ONLY that file**
+- The file MUST be placed inside the zip at its **repo-relative path**
 
-### D) No partial snippets
-- Unless explicitly requested, never provide “diff-only” output for PHP/JS files.
-- The default is “full file replacement”.
+Example (correct):
+includes/Plugin.php
+
+yaml
+Copy code
+
+---
+
+### C) If TWO OR MORE files changed → **CHANGESET ZIP (REQUIRED)**
+
+When more than one file is modified:
+
+- Provide a **CHANGESET ZIP**
+- The zip MUST contain:
+  - **Only the changed and/or new files**
+  - **Exact repo-relative paths**
+- The zip MUST NOT:
+  - Include the entire plugin unless explicitly requested
+  - Include an extra top-level folder (e.g. `tc-booking-flow-next/`)
+
+✅ Correct zip structure:
+tc-booking-flow-next.php
+includes/Plugin.php
+includes/Domain/EventMeta.php
+
+python
+Copy code
+
+❌ Forbidden zip structure:
+tc-booking-flow-next/
+└── tc-booking-flow-next.php
+
+yaml
+Copy code
+
+Uploading a forbidden structure risks creating nested plugin roots and is not acceptable.
+
+---
+
+### D) Full plugin / repo zip
+Provide a full plugin or repo zip **ONLY IF**:
+- Explicitly requested by the human, OR
+- A large refactor makes a changeset impractical
+
+---
+
+### E) REQUIRED MANIFEST for any zip delivery
+
+Every zip (single-file or changeset) MUST include a file named:
+
+__MANIFEST.txt
+
+css
+Copy code
+
+With the following content:
+
+Repo: TC-Booking-Flow_NEXT
+Base branch: main
+Pulled from: latest.zip (staging)
+
+Version before → after:
+0.3.17-alpha → 0.3.18-alpha
+
+Modified:
+
+tc-booking-flow-next.php
+
+includes/Plugin.php
+
+Added: none
+Deleted: none
+
+yaml
+Copy code
+
+This manifest is used for merge sanity checks and PR validation.
+
+---
+
+### F) No partial snippets (unchanged rule)
+- Unless explicitly requested, never provide diffs or snippets.
+- Default remains **full-file replacement**.
 
 ---
 
@@ -95,7 +184,7 @@ The assistant must respond by:
 ## 5) Debug / Logging Rules
 
 - Debug output must not leak to frontend or emails.
-- Use logging mechanisms (e.g., `error_log`, plugin logger) rather than `echo/print`.
+- Use logging mechanisms (e.g. `error_log`, plugin logger) rather than `echo/print`.
 - Deprecation notices must not be user-visible.
 
 ---
@@ -126,6 +215,7 @@ Before delivering changes, confirm:
 - [ ] Pulled `latest.zip` from staging URL
 - [ ] Confirmed plugin version from header
 - [ ] Identified which files change
-- [ ] Followed File Delivery Rules (full file / zip)
+- [ ] Followed File Delivery Rules (full file / changeset zip)
+- [ ] Zip (if any) preserves repo-relative paths and contains NO extra root folder
 - [ ] Respected decimal_comma formatting
 - [ ] Did not introduce new pricing authority outside ledger
