@@ -34,10 +34,10 @@ final class Sc_Event_Extras {
         // Ensure sc_event_tag taxonomy exists (keeps Event Tags box visible)
         add_action('init', [__CLASS__, 'ensure_event_tag_taxonomy'], 5);
 
-        // Admin meta box
-        add_action('add_meta_boxes', [__CLASS__, 'add_metabox']);
-        add_action('save_post_sc_event', [__CLASS__, 'save_metabox'], 10, 2);
-        add_action('admin_enqueue_scripts', [__CLASS__, 'admin_assets']);
+        // Admin meta box - DISABLED (replaced by Admin\Admin_Event_Meta in TCBF-11)
+        // add_action('add_meta_boxes', [__CLASS__, 'add_metabox']);
+        // add_action('save_post_sc_event', [__CLASS__, 'save_metabox'], 10, 2);
+        // add_action('admin_enqueue_scripts', [__CLASS__, 'admin_assets']);
 
         // Frontend content injections
         add_filter('the_content', [__CLASS__, 'filter_sc_event_content'], 11);
