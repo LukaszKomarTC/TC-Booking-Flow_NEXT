@@ -276,6 +276,15 @@ final class Woo {
 			return $pid;
 		}
 
+
+// 2b) Global default (plugin settings) — bookable products only
+$default_pid = (int) get_option('tcbf_default_participation_product_id', 0);
+if ( $default_pid > 0 && self::is_valid_participation_product($default_pid) ) {
+	\TC_BF\Support\Logger::log('resolver.participation.default_setting', ['event_id'=>$event_id,'product_id'=>$default_pid]);
+	return $default_pid;
+}
+
+
 		// 3) Category slug → participation product meta mapping (recommended)
 		$slugs = wp_get_post_terms( (int) $event_id, 'sc_event_category', [ 'fields' => 'slugs' ] );
 		if ( is_wp_error($slugs) ) $slugs = [];
