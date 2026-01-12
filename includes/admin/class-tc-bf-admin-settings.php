@@ -78,6 +78,12 @@ final class Settings {
 			'sanitize_callback' => function($v){ return absint($v); },
 			'default'           => 0,
 		]);
+
+		register_setting('tc_bf_settings', self::OPT_PARTNERS_ENABLED_DEFAULT, [
+			'type' => 'boolean',
+			'sanitize_callback' => function($v){ return (int)(!empty($v)); },
+			'default' => 1,
+		]);
 	}
 
 	public static function get_form_id() : int {
@@ -105,6 +111,14 @@ public static function get_default_participation_product_id() : int {
 	}
 	return $pid;
 }
+
+
+	/**
+	 * TCBF-12: Global default for partner program.
+	 */
+	public static function is_partners_enabled_default() : bool {
+		return (int) get_option(self::OPT_PARTNERS_ENABLED_DEFAULT, 1) === 1;
+	}
 
 /**
  * Return [product_id => "Title (#ID)"] for bookable products only.
@@ -217,6 +231,15 @@ foreach ( $bookables as $pid => $label ) {
 }
 echo '</select>';
 echo '<p class="description">Used when an event does not set a participation product. List contains only WooCommerce Bookings products.</p>';
+echo '</td></tr>';
+
+// Partner program default (TCBF-12)
+$partners_default = self::is_partners_enabled_default();
+echo '<tr>';
+echo '<th scope="row"><label for="'.esc_attr(self::OPT_PARTNERS_ENABLED_DEFAULT).'">Partner program enabled by default</label></th>';
+echo '<td>';
+echo '<label><input type="checkbox" name="'.esc_attr(self::OPT_PARTNERS_ENABLED_DEFAULT).'" id="'.esc_attr(self::OPT_PARTNERS_ENABLED_DEFAULT).'" value="1" '.checked($partners_default, true, false).' /> Enable partner program by default for all events</label>';
+echo '<p class="description">All events participate in the partner system unless explicitly disabled at event level.</p>';
 echo '</td></tr>';
 
 echo '</td></tr>';

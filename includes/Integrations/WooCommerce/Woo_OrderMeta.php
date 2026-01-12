@@ -120,6 +120,16 @@ class Woo_OrderMeta {
 
 		if ( ! $partner_user_id || $partner_code === '' ) return;
 
+
+		// TCBF-12: strict mode — if ANY event in order has partners disabled, do not persist partner meta.
+		foreach ( $order->get_items() as $item ) {
+			$event_id = (int) $item->get_meta('_event_id', true);
+			if ( $event_id > 0 && ! \TC_BF\Domain\EventMeta::event_partners_enabled( $event_id ) ) {
+				return;
+			}
+		}
+
+
 		$partner_commission_rate = (float) get_user_meta( $partner_user_id, 'usrdiscount', true );
 		if ( $partner_commission_rate < 0 ) $partner_commission_rate = 0;
 
