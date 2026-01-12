@@ -4,150 +4,70 @@ namespace TC_BF\Integrations\GravityForms;
 if ( ! defined('ABSPATH') ) exit;
 
 /**
- * Gravity Forms JavaScript Injection
- *
- * Handles partner dropdown JavaScript injection for admin override functionality.
- * Extracted from Plugin class for better separation of concerns.
+ * Provides partner dropdown JavaScript injection for admin override functionality.
  */
 final class GF_JS {
 
-	// GF partner dropdown JS payload (per request, static for global access)
 	private static $partner_js_payload = [];
 
-	/**
-	 * GF: Populate partner fields + inject JS for admin override dropdown (field 63).
-	 *
-	 * Active form id comes from Admin Settings (so clones like 47 work).
-	 */
-	public static function partner_prepare_form( $form ) {
-		$form_id = (int) (is_array($form) && isset($form['id']) ? $form['id'] : 0);
-		$target_form_id = (int) \TC_BF\Admin\Settings::get_form_id();
-		if ( $form_id !== $target_form_id ) return $form;
-
-		// Populate hidden partner fields into POST so GF calculations + conditional logic can use them.
-		GF_Partner::prepare_post( $form_id );
-
-		// Build partner map for JS (code => data)
-		$partners = self::get_partner_map_for_js();
-
-		// Determine initial partner code from context (admin override > logged-in partner > posted code)
-		$ctx = \TC_BF\Domain\PartnerResolver::resolve_partner_context( $form_id );
-		$initial_code = ( ! empty($ctx) && ! empty($ctx['active']) && ! empty($ctx['code']) ) ? (string) $ctx['code'] : '';
-
-		// Cache payload for footer output.
-		self::$partner_js_payload[ $form_id ] = [
-			'partners'     => $partners,
-			'initial_code' => $initial_code,
-		];
-
-		// Also register an init script so this works even when GF renders via AJAX.
-		self::register_partner_init_script( $form_id, $partners, $initial_code );
-
-		return $form;
-	}
-
-	private static function get_partner_map_for_js() : array {
-
-		$map = [];
-
-		$uq = new \WP_User_Query([
-			'number'     => 200,
-			'fields'     => ['ID','user_email'],
-			'meta_query' => [
-				[
-					'key'     => 'discount__code',
-					'compare' => 'EXISTS',
-				]
-			]
-		]);
-		$users = $uq->get_results();
-		if ( ! is_array($users) ) $users = [];
-
-		foreach ( $users as $u ) {
-			$uid = (int) (is_object($u) && isset($u->ID) ? $u->ID : 0);
-			if ( $uid <= 0 ) continue;
-			$code = (string) get_user_meta( $uid, 'discount__code', true );
-			$code = \TC_BF\Domain\PartnerResolver::normalize_partner_code( $code );
-			if ( $code === '' ) continue;
-
-			$commission = (float) get_user_meta( $uid, 'usrdiscount', true );
-			if ( $commission < 0 ) $commission = 0.0;
-
-			$discount = \TC_BF\Domain\PartnerResolver::get_coupon_percent_amount( $code );
-
-			$map[ $code ] = [
-				'id'         => $uid,
-				'email'      => (string) (is_object($u) && isset($u->user_email) ? $u->user_email : ''),
-				'commission' => $commission,
-				'discount'   => $discount,
-			];
-		}
-
-		return $map;
-	}
-
-
-	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code = '' ) : void {
+	public static function enqueue_partner_js_payload( int $form_id, array $payload ) : void {
 		if ( $form_id <= 0 ) return;
-		if ( ! class_exists('\GFFormDisplay') ) return;
-
-		$script = self::build_partner_override_js( $form_id, $partners, $initial_code );
-		if ( $script === '' ) return;
-
-		// Runs reliably for normal and AJAX-rendered forms.
-		\GFFormDisplay::add_init_script(
-			$form_id,
-			'tc_bf_partner_override_' . $form_id,
-			\GFFormDisplay::ON_PAGE_RENDER,
-			$script
-		);
+		self::$partner_js_payload[ $form_id ] = $payload;
 	}
 
-	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code = '' ) : string {
+	public static function output_admin_partner_js( int $form_id ) : string {
 
-		// Map: { code => {id,email,commission,discount} }
-		$json = wp_json_encode( $partners );
+		if ( $form_id <= 0 ) return '';
+		if ( ! current_user_can('manage_options') ) return '';
 
-		// IMPORTANT: this is raw JS (no <script> wrapper). GF will wrap it.
-		return "window.tcBfPartnerMap = window.tcBfPartnerMap || {};\n"
-			. "window.tcBfPartnerMap[{$form_id}] = {$json};\n"
-			. "(function(){\n"
-			. "  var fid = {$form_id};\n"
-			. "  var initialCode = '" . esc_js( $initial_code ) . "';\n"
-			. "  function qs(sel,root){ return (root||document).querySelector(sel); }\n"
-				. "  function parseLocaleFloat(raw){\n"
-				. "    if(raw===null||typeof raw==='undefined') return 0;\n"
-				. "    var s = String(raw).trim();\n"
-				. "    if(!s) return 0;\n"
-				. "    // Remove currency/symbols/spaces; keep digits, separators and minus\n"
-				. "    s = s.replace(/\u00A0/g,' ').replace(/€/g,'').trim();\n"
-				. "    s = s.replace(/[^\d,\.\-\s]/g,'');\n"
-				. "    s = s.replace(/\s+/g,'');\n"
-				. "    // If both '.' and ',' exist -> assume '.' thousands and ',' decimal (1.234,56)\n"
-				. "    if(s.indexOf(',')!==-1 && s.indexOf('.')!==-1){\n"
-				. "      s = s.replace(/\./g,'');\n"
-				. "      s = s.replace(',', '.');\n"
-				. "    } else if(s.indexOf(',')!==-1){\n"
-				. "      s = s.replace(',', '.');\n"
-				. "    }\n"
-				. "    var n = parseFloat(s);\n"
-				. "    return isNaN(n) ? 0 : n;\n"
-				. "  }\n"
-				. "  function fmtPct(v){\n"
-			. "    if(v===null||typeof v==='undefined') return '';\n"
-				. "    if(typeof v==='number' && isFinite(v)) v = String(v);\n"
-			. "    var s = String(v).trim();\n"
-			. "    if(!s) return '';\n"
-			. "    // Gravity Forms uses decimal_comma on this site; feed percentages as 7,5 not 7.5\n"
-			. "    if(s.indexOf(',') !== -1) return s;\n"
-			. "    if(s.indexOf('.') !== -1) return s.replace('.', ',');\n"
-			. "    return s;\n"
+		// JSON payload: partners list + mapping (code => {discount, commission, email, id})
+		$payload = self::$partner_js_payload[ $form_id ] ?? [];
+		if ( empty($payload) ) return '';
+
+		$json = wp_json_encode( $payload );
+		if ( ! $json ) return '';
+
+		// Build inline JS (no jQuery required).
+		return
+			"(function(){\n"
+			. "  var fid = ".(int)$form_id.";\n"
+			. "  var data = ".$json.";\n"
+			. "  function qs(sel){ return document.querySelector(sel); }\n"
+			. "  function getVal(fieldId){\n"
+			. "    var el = qs('#input_'+fid+'_'+fieldId);\n"
+			. "    return el ? (el.value||'') : '';\n"
 			. "  }\n"
-			. "  function setVal(fieldId, val){\n"
+			. "  function setVal(fieldId, v){\n"
 			. "    var el = qs('#input_'+fid+'_'+fieldId);\n"
 			. "    if(!el) return;\n"
-			. "    el.value = (val===null||typeof val==='undefined') ? '' : String(val);\n"
-			. "    try{ el.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}\n"
+			. "    el.value = (v===null||v===undefined) ? '' : String(v);\n"
+			. "    try{ el.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){}\n"
+			. "  }\n"
+			. "  function parseMoney(v){\n"
+			. "    if(v===null||v===undefined) return 0;\n"
+			. "    var s = String(v).trim();\n"
+			. "    if(!s) return 0;\n"
+			. "    // Remove currency/symbols/spaces; keep digits, separators and minus\n"
+			. "    s = s.replace(/\\u00A0/g,' ').replace(/€/g,'').trim();\n"
+			. "    s = s.replace(/[^\\d,\\.\\-\\s]/g,'');\n"
+			. "    s = s.replace(/\\s+/g,'');\n"
+			. "    // If both '.' and ',' exist -> assume '.' thousands and ',' decimal (1.234,56)\n"
+			. "    if(s.indexOf(',')!==-1 && s.indexOf('.')!==-1){\n"
+			. "      s = s.replace(/\\./g,'');\n"
+			. "      s = s.replace(',', '.');\n"
+			. "    } else if(s.indexOf(',')!==-1){\n"
+			. "      s = s.replace(',', '.');\n"
+			. "    }\n"
+			. "    var n = parseFloat(s);\n"
+			. "    return isNaN(n) ? 0 : n;\n"
+			. "  }\n"
+			. "  function fmtPct(v){\n"
+			. "    // Always write percent with comma decimal for GF locale\n"
+			. "    var n = parseMoney(v);\n"
+			. "    if(!(n>0)) return '';\n"
+			. "    var s = String(n);\n"
+			. "    s = s.replace('.', ',');\n"
+			. "    return s;\n"
 			. "  }\n"
 			. "  function showField(fieldId){\n"
 			. "    var wrap = qs('#field_'+fid+'_'+fieldId);\n"
@@ -164,79 +84,155 @@ final class GF_JS {
 			. "  function toggleSummary(data, code){\n"
 			. "    var summary = qs('#field_'+fid+'_177 .tc-bf-price-summary');\n"
 			. "    if(!summary) return;\n"
-			. "    var ebPct = parseLocaleFloat((qs('#input_'+fid+'_172')||{}).value||0);\n"
-			. "    var ebLine = qs('.tc-bf-eb-line', summary);\n"
-			. "    if(ebLine) ebLine.style.display = (ebPct>0) ? '' : 'none';\n"
-			. "    var pLine = qs('.tc-bf-partner-line', summary);\n"
-			. "    if(pLine) pLine.style.display = (data && code) ? '' : 'none';\n"
-			. "    var commPct = parseLocaleFloat((qs('#input_'+fid+'_161')||{}).value||0);\n"
-			. "    var cLine = qs('.tc-bf-commission', summary);\n"
-			. "    if(cLine) cLine.style.display = (commPct>0 && data && code) ? '' : 'none';\n"
+			. "    var active = (data && code) ? '' : 'none';\n"
+			. "    summary.style.display = active;\n"
+			. "    var codeEl = summary.querySelector('.tc-bf-partner-code');\n"
+			. "    if(codeEl) codeEl.textContent = code || '';\n"
+			. "    var discEl = summary.querySelector('.tc-bf-partner-discount');\n"
+			. "    if(discEl) discEl.textContent = (data && data.discount) ? String(data.discount).replace('.', ',') : '';\n"
+			. "    var commEl = summary.querySelector('.tc-bf-partner-commission');\n"
+			. "    if(commEl) commEl.textContent = (data && data.commission) ? String(data.commission).replace('.', ',') : '';\n"
 			. "  }\n"
+
+			// --- NEW: per-line rounding to match WooCommerce percent coupon behavior ---
+			. "  function round2(n){\n"
+			. "    n = parseFloat(n||0);\n"
+			. "    if(isNaN(n)) n = 0;\n"
+			. "    // mimic Money::money_round (epsilon) but in JS\n"
+			. "    return Math.round((n + 1e-9) * 100) / 100;\n"
+			. "  }\n"
+			. "  function fmtMoney(v){\n"
+			. "    v = round2(v);\n"
+			. "    var s = v.toFixed(2);\n"
+			. "    return s.replace('.', ',');\n"
+			. "  }\n"
+			. "  function getPrice(fieldId){\n"
+			. "    // Single Product price input is usually #input_{fid}_{fieldId}_2\n"
+			. "    var el = qs('#input_'+fid+'_'+fieldId+'_2');\n"
+			. "    if(!el) return 0;\n"
+			. "    return parseMoney(el.value);\n"
+			. "  }\n"
+			. "  function fixPartnerPerLineRounding(){\n"
+			. "    // Only if partner % > 0\n"
+			. "    var pct = parseMoney(getVal(152));\n"
+			. "    if(!(pct > 0)) return;\n"
+			. "\n"
+			. "    // EB % (may be 0)\n"
+			. "    var ebPct = parseMoney(getVal(172));\n"
+			. "    if(!(ebPct >= 0)) ebPct = 0;\n"
+			. "\n"
+			. "    // Commission % (optional)\n"
+			. "    var commPct = parseMoney(getVal(161));\n"
+			. "    if(!(commPct >= 0)) commPct = 0;\n"
+			. "\n"
+			. "    // Participation: member OR regular\n"
+			. "    var part = getPrice(138) || getPrice(137) || 0;\n"
+			. "\n"
+			. "    // Rental: one of rental products (may be 0)\n"
+			. "    var rental = getPrice(139) || getPrice(140) || getPrice(141) || getPrice(171) || 0;\n"
+			. "\n"
+			. "    // If nothing priced, do nothing.\n"
+			. "    if(!(part > 0) && !(rental > 0)) return;\n"
+			. "\n"
+			. "    function afterEb(x){\n"
+			. "      if(!(x > 0)) return 0;\n"
+			. "      return round2(x * (1 - (ebPct/100)));\n"
+			. "    }\n"
+			. "\n"
+			. "    var partAfterEb   = afterEb(part);\n"
+			. "    var rentalAfterEb = afterEb(rental);\n"
+			. "\n"
+			. "    // EB discount per line (to align with WC line rounding)\n"
+			. "    var ebDisc = round2( round2(part - partAfterEb) + round2(rental - rentalAfterEb) );\n"
+			. "\n"
+			. "    // Partner discount per line, rounded per line then summed (WC behavior)\n"
+			. "    var partDisc   = round2(partAfterEb * (pct/100));\n"
+			. "    var rentalDisc = round2(rentalAfterEb * (pct/100));\n"
+			. "    var partnerDisc = round2(partDisc + rentalDisc);\n"
+			. "\n"
+			. "    // Base after EB total (sum of rounded per-line bases)\n"
+			. "    var baseAfterEb = round2(partAfterEb + rentalAfterEb);\n"
+			. "\n"
+			. "    // Totals\n"
+			. "    var discountTotal = round2(ebDisc + partnerDisc);\n"
+			. "    var clientTotal   = round2(baseAfterEb - partnerDisc);\n"
+			. "\n"
+			. "    // Partner commission amount (mirror per-line rounding too)\n"
+			. "    var commAmt = 0;\n"
+			. "    if(commPct > 0){\n"
+			. "      var partComm = round2(partAfterEb * (commPct/100));\n"
+			. "      var rentComm = round2(rentalAfterEb * (commPct/100));\n"
+			. "      commAmt = round2(partComm + rentComm);\n"
+			. "    }\n"
+			. "\n"
+			. "    // Push into number fields (display + calculations that use {Field:value})\n"
+			. "    // Note: these fields are formula-based in GF, so we set AFTER GF recalculation.\n"
+			. "    setVal(174, fmtMoney(baseAfterEb));\n"
+			. "    setVal(175, fmtMoney(ebDisc));\n"
+			. "    setVal(176, fmtMoney(partnerDisc));\n"
+			. "    setVal(164, fmtMoney(discountTotal));\n"
+			. "    setVal(168, fmtMoney(clientTotal));\n"
+			. "    setVal(165, fmtMoney(commAmt));\n"
+			. "\n"
+			. "    // Also refresh summary block if present (it reads the same fields)\n"
+			. "    try{ toggleSummary({discount:pct, commission:commPct}, (getVal(154)||'')); }catch(e){}\n"
+			. "  }\n"
+			// --- END NEW ---
+
 			. "  function applyPartner(){\n"
-			. "    var map = (window.tcBfPartnerMap && window.tcBfPartnerMap[fid]) ? window.tcBfPartnerMap[fid] : {};\n"
 			. "    var sel = qs('#input_'+fid+'_63');\n"
 			. "    var code = '';\n"
-			. "    var useField63 = false;\n"
-			. "    // Only treat field 63 as authoritative if it's actually visible/enabled OR has explicit value.\n"
-			. "    // This prevents hidden admin override field from wiping partner context for Way 1/2.\n"
 			. "    if(sel){\n"
-			. "      var field63Wrap = qs('#field_'+fid+'_63');\n"
-			. "      var isVisible = field63Wrap && field63Wrap.offsetParent !== null && window.getComputedStyle(field63Wrap).display !== 'none';\n"
-			. "      var hasValue = (sel.value||'').toString().trim() !== '';\n"
-			. "      // Field 63 is authoritative ONLY if visible OR has explicit value\n"
-			. "      if(isVisible || hasValue){\n"
-			. "        useField63 = true;\n"
-			. "        code = (sel.value||'').toString().trim();\n"
-			. "      }\n"
+			. "      code = (sel.value||'').toString().trim();\n"
+			. "    } else {\n"
+			. "      var codeEl = qs('#input_'+fid+'_154');\n"
+			. "      if(codeEl) code = (codeEl.value||'').toString().trim();\n"
 			. "    }\n"
-			. "    // Fallback: use hidden coupon field or initial context if field 63 not authoritative\n"
-			. "    if(!useField63){\n"
-			. "      var codeEl = qs('#input_'+fid+'_154'); if(codeEl) code = (codeEl.value||'').toString().trim();\n"
-			. "      if(!code && initialCode){ code = (initialCode||'').toString().trim(); }\n"
-			. "    }\n"
-			. "    // If admin override select exists and is empty, set it for consistency (best effort).\n"
-			. "    if(sel && code && sel.value !== code){ try{ sel.value = code; }catch(e){} }\n"
-			. "    var data = (code && map && map[code]) ? map[code] : null;\n"
-			. "    if(!data){\n"
-			. "      setVal(154,''); setVal(152,''); setVal(161,''); setVal(153,''); setVal(166,'');\n"
+			. "    code = code.toLowerCase();\n"
+			. "    var p = data && data.partners ? data.partners[code] : null;\n"
+			. "    if(!p){\n"
+			. "      // clear partner fields\n"
+			. "      setVal(154,'');\n"
+			. "      setVal(152,'');\n"
+			. "      setVal(161,'');\n"
+			. "      setVal(153,'');\n"
+			. "      setVal(166,'');\n"
 			. "      hideField(176); hideField(165);\n"
 			. "    } else {\n"
-			. "      setVal(154,code);\n"
-			. "      setVal(152, fmtPct(data.discount||''));\n"
-			. "      setVal(161, fmtPct(data.commission||''));\n"
-			. "      setVal(153,(data.email||''));\n"
-			. "      setVal(166,(data.id||''));\n"
+			. "      setVal(154,(p.code||code||''));\n"
+			. "      setVal(152, fmtPct(p.discount||''));\n"
+			. "      setVal(161, fmtPct(p.commission||''));\n"
+			. "      setVal(153,(p.email||''));\n"
+			. "      setVal(166,(p.id||''));\n"
 			. "      showField(176); showField(165);\n"
 			. "    }\n"
-			. "    toggleSummary(data, code);\n"
+			. "    toggleSummary(p, code);\n"
 			. "    if(typeof window.gformCalculateTotalPrice === 'function'){\n"
 			. "      try{ window.gformCalculateTotalPrice(fid); }catch(e){}\n"
 			. "    }\n"
+			. "    // Align GF discount rounding with WooCommerce percent coupon behavior (per-line rounding).\n"
+			. "    window.setTimeout(function(){ try{ fixPartnerPerLineRounding(); }catch(e){} }, 60);\n"
 			. "  }\n"
 			. "  function bind(){\n"
 			. "    var sel = qs('#input_'+fid+'_63');\n"
 			. "    if(sel && !sel.__tcBfBound){\n"
 			. "      sel.__tcBfBound = true;\n"
-			. "      sel.addEventListener('change', applyPartner);\n"
+			. "      sel.addEventListener('change', function(){ applyPartner(); });\n"
 			. "    }\n"
-			. "    // Always apply once (supports logged-in partner context even if field 63 is hidden/absent).\n"
-			. "    applyPartner();\n"
-			. "    return true;\n"
 			. "  }\n"
-			. "  // Try now, then retry a few times.\n"
-			. "  var tries = 0;\n"
-			. "  (function loop(){\n"
-			. "    if(bind()) return;\n"
-			. "    tries++; if(tries<20) setTimeout(loop, 250);\n"
-			. "  })();\n"
-			. "  // Also watch for late DOM injection (popups, AJAX embeds).\n"
-			. "  if(window.MutationObserver){\n"
+			. "  function onReady(fn){\n"
+			. "    if(document.readyState === 'complete' || document.readyState === 'interactive') return fn();\n"
+			. "    document.addEventListener('DOMContentLoaded', fn);\n"
+			. "  }\n"
+			. "  onReady(function(){\n"
+			. "    bind();\n"
+			. "    applyPartner();\n"
+			. "    // Some themes load GF via AJAX; rebind safely\n"
 			. "    try{\n"
 			. "      var mo = new MutationObserver(function(){ bind(); });\n"
 			. "      mo.observe(document.body, {childList:true, subtree:true});\n"
 			. "    }catch(e){}\n"
-			. "  }\n"
+			. "  });\n"
 			. "})();\n";
 	}
 
@@ -249,16 +245,15 @@ final class GF_JS {
 			$form_id = (int) $form_id;
 			if ( $form_id <= 0 ) continue;
 
-			$partners = (is_array($payload) && isset($payload['partners']) && is_array($payload['partners'])) ? $payload['partners'] : [];
-			$initial_code = (is_array($payload) && isset($payload['initial_code'])) ? (string) $payload['initial_code'] : '';
+			// Only output on singular sc_event.
+			if ( ! function_exists('is_singular') || ! is_singular('sc_event') ) continue;
 
-			$js = self::build_partner_override_js( $form_id, $partners, $initial_code );
-			if ( $js === '' ) continue;
+			// Store payload for this form.
+			self::$partner_js_payload[ $form_id ] = $payload;
 
-			echo "\n<script id=\"tc-bf-partner-override-{$form_id}\">\n";
-			echo $js;
-			echo "\n</script>\n";
+			echo "<script>\n";
+			echo self::output_admin_partner_js( $form_id );
+			echo "</script>\n";
 		}
 	}
-
 }
