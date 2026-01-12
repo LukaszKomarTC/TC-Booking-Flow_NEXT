@@ -6,8 +6,8 @@ if ( ! defined('ABSPATH') ) exit;
 final class Settings {
 
 	const OPT_FORM_ID = 'tc_bf_form_id';
-	const OPT_DEBUG = 'tc_bf_debug';
-	const OPT_LOGS  = 'tc_bf_logs';
+	const OPT_DEBUG   = 'tc_bf_debug';
+	const OPT_LOGS    = 'tc_bf_logs';
 
 	// TCBF-11+: Global fallback participation product (bookable products only)
 	const OPT_DEFAULT_PARTICIPATION_PRODUCT_ID = 'tcbf_default_participation_product_id';
@@ -18,21 +18,45 @@ final class Settings {
 	public static function init() : void {
 		add_action('admin_menu', [__CLASS__, 'menu']);
 		add_action('admin_init', [__CLASS__, 'register_settings']);
-		// AJAX logging endpoint for admin-only frontend diagnostics.
+		// AJAX logging endpoint for admin-only diagnostics.
 		add_action('wp_ajax_tc_bf_log', [__CLASS__, 'ajax_log']);
 	}
 
 	/**
 	 * Compatibility shim (legacy callers rely on this).
-	 * Appends a log line to option storage + server error_log, only when Debug Mode is enabled.
+	 *
+	 * IMPORTANT:
+	 * Older code calls append_log() with arrays/objects as the first argument.
+	 * So we MUST accept mixed input and normalize safely.
+	 *
+	 * @param mixed $message string|array|object|int|etc
+	 * @param mixed $context optional
 	 */
-	public static function append_log( string $message, $context = null ) : void {
+	public static function append_log( $message, $context = null ) : void {
 		if ( ! self::is_debug() ) {
 			return;
 		}
 
-		$line = gmdate('c') . ' ' . trim((string) $message);
+		// If legacy code passes an array/object as "message" and no context,
+		// treat it as context and use a generic label.
+		$label = 'log';
+		if ( (is_array($message) || is_object($message)) && $context === null ) {
+			$context = $message;
+			$message = $label;
+		}
 
+		// Normalize message to string
+		if ( is_array($message) || is_object($message) ) {
+			$msg = wp_json_encode($message);
+		} elseif ( $message === null ) {
+			$msg = '';
+		} else {
+			$msg = (string) $message;
+		}
+
+		$line = gmdate('c') . ' ' . trim($msg);
+
+		// Normalize context
 		if ( $context !== null ) {
 			if ( is_array($context) || is_object($context) ) {
 				$line .= ' ' . wp_json_encode($context);
@@ -41,10 +65,10 @@ final class Settings {
 			}
 		}
 
-		// Always safe server-side log.
+		// Server-side log (safe)
 		error_log('[TC_BF] ' . $line);
 
-		// Optional rolling buffer stored in wp_options (kept small).
+		// Optional rolling buffer stored in wp_options (kept small)
 		$logs = get_option(self::OPT_LOGS, []);
 		if ( ! is_array($logs) ) {
 			$logs = [];
@@ -52,20 +76,17 @@ final class Settings {
 
 		$logs[] = $line;
 
-		// Keep last 200 lines max to avoid bloating wp_options.
+		// Keep last 200 lines max to avoid bloating wp_options
 		$max = 200;
 		$count = count($logs);
 		if ( $count > $max ) {
 			$logs = array_slice($logs, $count - $max);
 		}
 
-		// No autoload.
+		// No autoload
 		update_option(self::OPT_LOGS, $logs, false);
 	}
 
-	/**
-	 * Admin-only AJAX log endpoint.
-	 */
 	public static function ajax_log() : void {
 		if ( ! current_user_can('manage_options') ) {
 			wp_send_json_error(['message' => 'forbidden'], 403);
@@ -75,7 +96,6 @@ final class Settings {
 		$ctx = isset($_POST['context']) ? wp_unslash($_POST['context']) : '';
 
 		if ( is_string($ctx) ) {
-			// Attempt to parse JSON, but don't fail if it's not valid JSON.
 			$decoded = json_decode($ctx, true);
 			if ( json_last_error() === JSON_ERROR_NONE ) {
 				$ctx = $decoded;
@@ -98,7 +118,6 @@ final class Settings {
 
 	public static function render() : void {
 		if ( ! current_user_can('manage_options') ) return;
-
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__('TC Booking Flow — Settings', 'tc-booking-flow-next'); ?></h1>
@@ -111,6 +130,7 @@ final class Settings {
 
 				<table class="form-table" role="presentation">
 					<tbody>
+
 						<tr>
 							<th scope="row">
 								<label for="<?php echo esc_attr(self::OPT_FORM_ID); ?>"><?php echo esc_html__('Gravity Form ID', 'tc-booking-flow-next'); ?></label>
@@ -129,7 +149,6 @@ final class Settings {
 								<?php
 								$val = (int) get_option(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID, 0);
 
-								// Bookable products only.
 								$products = get_posts([
 									'post_type'      => 'product',
 									'post_status'    => 'publish',
