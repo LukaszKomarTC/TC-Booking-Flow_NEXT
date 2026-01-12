@@ -130,7 +130,7 @@ final class Admin_Event_EB {
     }
 }
 
-// Boot in admin only
-if ( is_admin() ) {
-    Admin_Event_EB::init();
-}
+// Boot in admin only - DISABLED (replaced by Admin\Admin_Event_Meta in TCBF-11)
+// if ( is_admin() ) {
+//     Admin_Event_EB::init();
+// }
