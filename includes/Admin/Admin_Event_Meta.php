@@ -299,17 +299,14 @@ final class Admin_Event_Meta {
                 <div class="wide">
                     <label for="tcbf_participation_product_id"><?php esc_html_e( 'Participation Product', 'tc-booking-flow-next' ); ?></label>
                     <select id="tcbf_participation_product_id" name="tcbf_participation_product_id" style="max-width:500px">
-                        <option value="0"><?php esc_html_e( '— Select Product —', 'tc-booking-flow-next' ); ?></option>
                         <?php
-                        $products = get_posts( [
-                            'post_type' => 'product',
-                            'posts_per_page' => -1,
-                            'post_status' => 'publish',
-                            'orderby' => 'title',
-                            'order' => 'ASC',
-                        ] );
-                        foreach ( $products as $product ) {
-                            echo '<option value="' . esc_attr( $product->ID ) . '" ' . selected( $participation_product_id, $product->ID, false ) . '>' . esc_html( $product->post_title ) . ' (ID: ' . $product->ID . ')</option>';
+                        $default_pid = \TC_BF\Admin\Settings::get_default_participation_product_id();
+                        $bookables = \TC_BF\Admin\Settings::get_bookable_products_for_select();
+                        ?>
+                        <option value="0" <?php selected( $participation_product_id, 0 ); ?>><?php esc_html_e( '— Use default (Plugin settings) —', 'tc-booking-flow-next' ); ?></option>
+                        <?php
+                        foreach ( $bookables as $pid => $label ) {
+                            echo '<option value="' . esc_attr( $pid ) . '" ' . selected( $participation_product_id, (int) $pid, false ) . '>' . esc_html( $label ) . '</option>';
                         }
                         ?>
                     </select>
