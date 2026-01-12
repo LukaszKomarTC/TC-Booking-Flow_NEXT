@@ -9,6 +9,9 @@ final class Settings {
 	const OPT_DEBUG = 'tc_bf_debug';
 	const OPT_LOGS  = 'tc_bf_logs';
 
+	// TCBF-11+: Global fallback participation product (bookable products only)
+	const OPT_DEFAULT_PARTICIPATION_PRODUCT_ID = 'tcbf_default_participation_product_id';
+
 	public static function init() : void {
 		add_action('admin_menu', [__CLASS__, 'menu']);
 		add_action('admin_init', [__CLASS__, 'register_settings']);
@@ -70,6 +73,11 @@ final class Settings {
 			'sanitize_callback' => function($v){ return (int)(!empty($v)); },
 			'default' => 0,
 		]);
+		register_setting('tc_bf_settings', self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID, [
+			'type'              => 'integer',
+			'sanitize_callback' => function($v){ return absint($v); },
+			'default'           => 0,
+		]);
 	}
 
 	public static function get_form_id() : int {
@@ -80,6 +88,57 @@ final class Settings {
 	public static function is_debug() : bool {
 		return (int) get_option(self::OPT_DEBUG, 0) === 1;
 	}
+
+
+/**
+ * Global default participation product ID.
+ * Only booking (bookable) products are considered valid.
+ */
+public static function get_default_participation_product_id() : int {
+	$pid = absint( get_option(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID, 0) );
+	if ( $pid <= 0 ) return 0;
+
+	if ( function_exists('wc_get_product') ) {
+		$p = wc_get_product($pid);
+		if ( ! $p ) return 0;
+		if ( function_exists('is_wc_booking_product') && ! is_wc_booking_product($p) ) return 0;
+	}
+	return $pid;
+}
+
+/**
+ * Return [product_id => "Title (#ID)"] for bookable products only.
+ */
+public static function get_bookable_products_for_select() : array {
+	if ( ! function_exists('wc_get_product') ) return [];
+
+	$q = new \WP_Query([
+		'post_type'      => 'product',
+		'post_status'    => 'publish',
+		'posts_per_page' => 500,
+		'orderby'        => 'title',
+		'order'          => 'ASC',
+		'fields'         => 'ids',
+		'tax_query'      => [[
+			'taxonomy' => 'product_type',
+			'field'    => 'slug',
+			'terms'    => ['booking'],
+		]],
+	]);
+
+	$out = [];
+	foreach ( (array) $q->posts as $pid ) {
+		$pid = (int) $pid;
+		if ( $pid <= 0 ) continue;
+		$p = wc_get_product($pid);
+		if ( ! $p ) continue;
+		if ( function_exists('is_wc_booking_product') && ! is_wc_booking_product($p) ) continue;
+		$out[$pid] = get_the_title($pid) . ' (#' . $pid . ')';
+	}
+
+	return $out;
+}
+
 
 	public static function get_logs() : array {
 		$logs = get_option(self::OPT_LOGS, []);
@@ -144,7 +203,23 @@ final class Settings {
 			echo '<p class="description">Gravity Forms not detected. Install/activate Gravity Forms to use this plugin.</p>';
 		}
 
-		echo '</td></tr>';
+		
+// Default participation product (bookable products only)
+$default_pid = self::get_default_participation_product_id();
+$bookables = self::get_bookable_products_for_select();
+echo '<tr>';
+echo '<th scope="row"><label for="'.esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID).'">Default participation product</label></th>';
+echo '<td>';
+echo '<select name="'.esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID).'" id="'.esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID).'" style="max-width:520px">';
+echo '<option value="0"'.selected($default_pid, 0, false).'>— None (use per-event / mapping fallback) —</option>';
+foreach ( $bookables as $pid => $label ) {
+	echo '<option value="'.esc_attr($pid).'"'.selected($default_pid, (int)$pid, false).'>'.esc_html($label).'</option>';
+}
+echo '</select>';
+echo '<p class="description">Used when an event does not set a participation product. List contains only WooCommerce Bookings products.</p>';
+echo '</td></tr>';
+
+echo '</td></tr>';
 
 		// Debug mode
 		$debug = self::is_debug();
