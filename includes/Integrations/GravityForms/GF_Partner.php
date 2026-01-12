@@ -18,32 +18,35 @@ final class GF_Partner {
 	 * Server-side: resolve partner context and write hidden inputs into POST.
 	 * This is required for GF calculation fields (152/154/161/153/166) to compute before submit.
 	 *
-	 * @param int $form_id The Gravity Forms form ID
-	 * @return void
+	 * NOTE: This runs on gform_pre_render (see GF_JS::partner_prepare_form()).
 	 */
 	public static function prepare_post( int $form_id ) : void {
 
-		// TCBF-12: event-level partner program gate
-		$event_id = isset($_POST['input_20']) ? (int) $_POST['input_20'] : 0;
-		if ( $event_id > 0 && ! \TC_BF\Domain\EventMeta::event_partners_enabled( $event_id ) ) {
-			// Clear fields to avoid stale partner values.
-			$_POST['input_' . self::GF_FIELD_COUPON_CODE] = '';
-			$_POST['input_152'] = '';
-			$_POST['input_161'] = '';
-			$_POST['input_153'] = '';
-			$_POST['input_166'] = '';
-			return;
+		// Resolve event_id as early as possible (GF48 field 20 has inputName=event_id).
+		$event_id = 0;
+		if ( isset($_POST['input_20']) ) {
+			$event_id = (int) $_POST['input_20'];
+		} elseif ( isset($_GET['event_id']) ) {
+			$event_id = (int) $_GET['event_id'];
+		} elseif ( isset($_GET['event']) ) {
+			$event_id = (int) $_GET['event'];
 		}
 
+		// TCBF-12 gate: if partner program disabled for this event, wipe partner fields and exit.
+		if ( $event_id > 0 && class_exists('TC_BF\\Domain\\EventMeta') ) {
+			try {
+				if ( ! \TC_BF\Domain\EventMeta::event_partners_enabled( $event_id ) ) {
+					self::clear_partner_fields();
+					return;
+				}
+			} catch ( \Throwable $e ) {
+				// Fail open (do not break booking).
+			}
+		}
 
 		$ctx = \TC_BF\Domain\PartnerResolver::resolve_partner_context( $form_id );
 		if ( empty($ctx) || empty($ctx['active']) ) {
-			// Clear fields to avoid stale partner values.
-			$_POST['input_' . self::GF_FIELD_COUPON_CODE] = '';
-			$_POST['input_152'] = '';
-			$_POST['input_161'] = '';
-			$_POST['input_153'] = '';
-			$_POST['input_166'] = '';
+			self::clear_partner_fields();
 			return;
 		}
 
@@ -56,4 +59,11 @@ final class GF_Partner {
 		$_POST['input_166'] = (string) ((int) ($ctx['partner_user_id'] ?? 0));
 	}
 
+	private static function clear_partner_fields() : void {
+		$_POST['input_' . self::GF_FIELD_COUPON_CODE] = '';
+		$_POST['input_152'] = '';
+		$_POST['input_161'] = '';
+		$_POST['input_153'] = '';
+		$_POST['input_166'] = '';
+	}
 }

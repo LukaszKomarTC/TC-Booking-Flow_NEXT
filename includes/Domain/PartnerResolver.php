@@ -41,7 +41,14 @@ final class PartnerResolver {
 			}
 		}
 
-		// 3) Manual/posted coupon field 154 (if already present).
+		
+		// 2b) Way 1: Coupon already applied in WC session/cart (partner URL flows).
+		$applied_code = self::get_applied_partner_coupon_code();
+		if ( $applied_code !== '' ) {
+			return self::build_partner_context_from_code( $applied_code );
+		}
+
+// 3) Manual/posted coupon field 154 (if already present).
 		$posted_code = isset($_POST['input_' . self::GF_FIELD_COUPON_CODE]) ? trim((string) $_POST['input_' . self::GF_FIELD_COUPON_CODE]) : '';
 		$posted_code = self::normalize_partner_code( $posted_code );
 		if ( $posted_code !== '' ) {
@@ -59,6 +66,56 @@ final class PartnerResolver {
 		}
 		return $code;
 	}
+
+	/**
+	 * Way 1 support: detect an already-applied partner coupon from WooCommerce session/cart.
+	 *
+	 * This is used when a customer arrives via a partner URL and an external plugin applies
+	 * the coupon to the WC session/cart before the GF form is submitted.
+	 *
+	 * @return string Normalized partner coupon code or empty string.
+	 */
+	private static function get_applied_partner_coupon_code() : string {
+		if ( ! function_exists('WC') || ! WC() ) return '';
+		$codes = [];
+
+		// Session-level coupons (works even when cart is empty)
+		try {
+			if ( WC()->session ) {
+				$sc = WC()->session->get('applied_coupons');
+				if ( is_array($sc) ) $codes = array_merge($codes, $sc);
+			}
+		} catch ( \Throwable $e ) {}
+
+		// Cart-level coupons (when cart exists)
+		try {
+			if ( WC()->cart ) {
+				$cc = WC()->cart->get_applied_coupons();
+				if ( is_array($cc) ) $codes = array_merge($codes, $cc);
+			}
+		} catch ( \Throwable $e ) {}
+
+		if ( empty($codes) ) return '';
+
+		// Normalize + de-dupe
+		$codes = array_values(array_unique(array_filter(array_map(function($c){
+			return self::normalize_partner_code( (string) $c );
+		}, $codes))));
+
+		foreach ( $codes as $code ) {
+			if ( $code === '' ) continue;
+
+			// Only consider valid percent coupons that map to a partner user.
+			if ( self::get_coupon_percent_amount( $code ) <= 0 ) continue;
+
+			$uid = self::find_partner_user_id_by_code( $code );
+			if ( $uid > 0 ) return $code;
+		}
+
+		return '';
+	}
+
+
 
 	/**
 	 * Build partner context from a partner code (coupon code).
