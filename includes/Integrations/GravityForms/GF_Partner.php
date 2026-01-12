@@ -23,6 +23,19 @@ final class GF_Partner {
 	 */
 	public static function prepare_post( int $form_id ) : void {
 
+		// TCBF-12: event-level partner program gate
+		$event_id = isset($_POST['input_20']) ? (int) $_POST['input_20'] : 0;
+		if ( $event_id > 0 && ! \TC_BF\Domain\EventMeta::event_partners_enabled( $event_id ) ) {
+			// Clear fields to avoid stale partner values.
+			$_POST['input_' . self::GF_FIELD_COUPON_CODE] = '';
+			$_POST['input_152'] = '';
+			$_POST['input_161'] = '';
+			$_POST['input_153'] = '';
+			$_POST['input_166'] = '';
+			return;
+		}
+
+
 		$ctx = \TC_BF\Domain\PartnerResolver::resolve_partner_context( $form_id );
 		if ( empty($ctx) || empty($ctx['active']) ) {
 			// Clear fields to avoid stale partner values.
