@@ -23,6 +23,47 @@ final class Settings {
 	}
 
 	/**
+	 * Compatibility shim (legacy callers rely on this).
+	 * Appends a log line to option storage + server error_log, only when Debug Mode is enabled.
+	 */
+	public static function append_log( string $message, $context = null ) : void {
+		if ( ! self::is_debug() ) {
+			return;
+		}
+
+		$line = gmdate('c') . ' ' . trim((string) $message);
+
+		if ( $context !== null ) {
+			if ( is_array($context) || is_object($context) ) {
+				$line .= ' ' . wp_json_encode($context);
+			} else {
+				$line .= ' ' . (string) $context;
+			}
+		}
+
+		// Always safe server-side log.
+		error_log('[TC_BF] ' . $line);
+
+		// Optional rolling buffer stored in wp_options (kept small).
+		$logs = get_option(self::OPT_LOGS, []);
+		if ( ! is_array($logs) ) {
+			$logs = [];
+		}
+
+		$logs[] = $line;
+
+		// Keep last 200 lines max to avoid bloating wp_options.
+		$max = 200;
+		$count = count($logs);
+		if ( $count > $max ) {
+			$logs = array_slice($logs, $count - $max);
+		}
+
+		// No autoload.
+		update_option(self::OPT_LOGS, $logs, false);
+	}
+
+	/**
 	 * Admin-only AJAX log endpoint.
 	 */
 	public static function ajax_log() : void {
