@@ -48,6 +48,41 @@ final class PartnerResolver {
 			return self::build_partner_context_from_code( $posted_code );
 		}
 
+		// 4) WooCommerce applied coupons (session/cart) — Way 1 (coupon-on-URL).
+		//    This catches external plugins that apply partner coupons via URL/QR parameters.
+		if ( function_exists('WC') && ( WC()->cart || WC()->session ) ) {
+			$applied_codes = [];
+
+			// Try cart first (most reliable source of truth)
+			if ( WC()->cart ) {
+				$applied_codes = WC()->cart->get_applied_coupons();
+			}
+
+			// Fallback to session if cart empty/unavailable
+			if ( empty($applied_codes) && WC()->session ) {
+				$applied_codes = WC()->session->get('applied_coupons', []);
+			}
+
+			if ( ! empty($applied_codes) && is_array($applied_codes) ) {
+				// Normalize all codes for comparison
+				$applied_codes = array_map( [ __CLASS__, 'normalize_partner_code' ], $applied_codes );
+
+				// Find first partner coupon (percent type + has partner user)
+				foreach ( $applied_codes as $code ) {
+					if ( $code === '' ) continue;
+
+					// Check if this is a partner coupon
+					$partner_user_id = self::find_partner_user_id_by_code( $code );
+					$discount_pct = self::get_coupon_percent_amount( $code );
+
+					// Valid partner coupon = has partner user OR has percent discount
+					if ( $partner_user_id > 0 || $discount_pct > 0 ) {
+						return self::build_partner_context_from_code( $code, $partner_user_id );
+					}
+				}
+			}
+		}
+
 		return [ 'active' => false ];
 	}
 
