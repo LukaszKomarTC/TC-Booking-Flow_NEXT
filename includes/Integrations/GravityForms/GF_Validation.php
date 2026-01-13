@@ -116,11 +116,51 @@ final class GF_Validation {
 		$partner_discount_pct = (float) (is_array($ctx) ? ($ctx['discount_pct'] ?? 0.0) : 0.0);
 		if ( $partner_discount_pct < 0 ) $partner_discount_pct = 0.0;
 
-		$partner_base_total = \TC_BF\Support\Money::money_round( max(0.0, $subtotal_original - $eb_amount) );
+		// ---- Calculate partner discount per-scope to match WooCommerce per-item coupon rounding ----
+		// WC applies partner coupon per line item (participation + rental), so we must mirror that.
 
-		// IMPORTANT: round discount amount first, then derive totals from rounded components.
-		// This matches the GF UI where discount lines are rounded and total is computed as base - discount.
-		$client_discount    = \TC_BF\Support\Money::money_round( $partner_base_total * ($partner_discount_pct / 100) );
+		// Distribute EB proportionally between participation and rental
+		$eb_amt_part = 0.0;
+		$eb_amt_rental = 0.0;
+
+		if ( $eb_amount > 0 && $subtotal_original > 0 ) {
+			// Proportional distribution (same as cart logic in Plugin.php:464-490)
+			$eb_amt_part = \TC_BF\Support\Money::money_round( $eb_amount * ($part_price / $subtotal_original) );
+			$eb_amt_rental = \TC_BF\Support\Money::money_round( $eb_amount * ($rental_price / $subtotal_original) );
+
+			// Drift correction (assign remainder to rental, or participation if no rental)
+			$drift = \TC_BF\Support\Money::money_round( $eb_amount - ($eb_amt_part + $eb_amt_rental) );
+			if ( abs($drift) > 0.0001 ) {
+				if ( $rental_price > 0 ) {
+					$eb_amt_rental = max(0.0, $eb_amt_rental + $drift);
+				} else {
+					$eb_amt_part = max(0.0, $eb_amt_part + $drift);
+				}
+			}
+		}
+
+		// Calculate per-scope bases after EB
+		$part_base_after_eb = \TC_BF\Support\Money::money_round( max(0.0, $part_price - $eb_amt_part) );
+		$rental_base_after_eb = \TC_BF\Support\Money::money_round( max(0.0, $rental_price - $eb_amt_rental) );
+
+		// Calculate partner discount per scope (matches WC per-item rounding)
+		$partner_discount_participation = 0.0;
+		$partner_discount_rental = 0.0;
+
+		if ( $partner_discount_pct > 0 ) {
+			$partner_discount_participation = \TC_BF\Support\Money::money_round( $part_base_after_eb * ($partner_discount_pct / 100) );
+			if ( $rental_price > 0 ) {
+				$partner_discount_rental = \TC_BF\Support\Money::money_round( $rental_base_after_eb * ($partner_discount_pct / 100) );
+			}
+		}
+
+		// Sum per-scope discounts (this matches WC behavior)
+		$client_discount = $partner_discount_participation + $partner_discount_rental;
+
+		// Recalculate partner base total (for backward compatibility with logs/assertions)
+		$partner_base_total = \TC_BF\Support\Money::money_round( $part_base_after_eb + $rental_base_after_eb );
+
+		// IMPORTANT: round total after summing rounded per-scope discounts
 		$expected_client_total = \TC_BF\Support\Money::money_round( max(0.0, $partner_base_total - $client_discount) );
 
 		// ---- Read posted client total (CANONICAL: field 168) ----
