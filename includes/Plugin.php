@@ -116,7 +116,9 @@ final class Plugin {
 		add_filter('gform_pre_render',             [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_filter('gform_pre_validation',         [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
+		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
 		add_action('wp_footer',                    [ $this, 'gf_output_partner_js' ], 100);
+		add_action('wp_footer',                    [ $this, 'output_late_diagnostic' ], 200); // Late diagnostic
 
 
 		// ---- GF: submission to cart (single source of truth)
@@ -824,6 +826,50 @@ final class Plugin {
 
 	public function gf_output_partner_js() : void {
 		Integrations\GravityForms\GF_JS::output_partner_js();
+	}
+
+	/**
+	 * Early diagnostic script to detect JavaScript syntax errors before our main code.
+	 * Outputs at wp_footer priority 5 (very early) to help identify if page has syntax errors.
+	 */
+	public function output_early_diagnostic() : void {
+		if ( is_admin() ) return;
+		if ( ! Admin\Settings::is_debug() ) return; // Only when debug mode enabled
+
+		// Output minimal diagnostic script to test if JS execution works
+		echo "\n<!-- TC Booking Flow: Early JS Diagnostic (priority 5) -->\n";
+		echo "<script id=\"tc-bf-early-diagnostic\">\n";
+		echo "(function(){\n";
+		echo "  try{\n";
+		echo "    console.log('[TC-BF-DIAG] Early diagnostic loaded at priority 5');\n";
+		echo "    window.tcBfEarlyDiagnostic = {loaded: true, time: Date.now()};\n";
+		echo "  }catch(e){ console.error('[TC-BF-DIAG]', e); }\n";
+		echo "})();\n";
+		echo "</script>\n";
+		echo "<!-- /TC Booking Flow: Early diagnostic -->\n";
+	}
+
+	/**
+	 * Late diagnostic script to verify our main code executed.
+	 * Outputs at wp_footer priority 200 (after our main script at 100).
+	 */
+	public function output_late_diagnostic() : void {
+		if ( is_admin() ) return;
+		if ( ! Admin\Settings::is_debug() ) return;
+
+		echo "\n<!-- TC Booking Flow: Late JS Diagnostic (priority 200) -->\n";
+		echo "<script id=\"tc-bf-late-diagnostic\">\n";
+		echo "(function(){\n";
+		echo "  try{\n";
+		echo "    console.log('[TC-BF-DIAG] Late diagnostic loaded at priority 200');\n";
+		echo "    console.log('[TC-BF-DIAG] Early diagnostic present:', !!window.tcBfEarlyDiagnostic);\n";
+		echo "    console.log('[TC-BF-DIAG] Partner disc initialized:', !!window.__tcBfPartnerDiscInitialized);\n";
+		echo "    console.log('[TC-BF-DIAG] Partner map present:', !!window.tcBfPartnerMap);\n";
+		echo "    console.log('[TC-BF-DIAG] gform.addFilter available:', !!(window.gform && window.gform.addFilter));\n";
+		echo "  }catch(e){ console.error('[TC-BF-DIAG-LATE]', e); }\n";
+		echo "})();\n";
+		echo "</script>\n";
+		echo "<!-- /TC Booking Flow: Late diagnostic -->\n";
 	}
 
 	// Woo delegation
