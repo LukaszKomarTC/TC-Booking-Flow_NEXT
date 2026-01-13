@@ -35,6 +35,8 @@ If you cannot follow them, stop and ask for a human to apply the changes.
 4. **If a rule conflicts with a suggestion**
    - The rules in this file win.
 
+5. **Always be sure to have full knowlegde about the Gravity Forms - https://docs.gravityforms.com**
+
 ---
 
 ## 2) File Delivery Rules (How changes are returned)
@@ -59,9 +61,6 @@ GitHub UI uploads must never alter folder structure or introduce nested roots.
 
 Example (correct):
 includes/Plugin.php
-
-yaml
-Copy code
 
 ---
 
@@ -89,8 +88,6 @@ Copy code
 tc-booking-flow-next/
 └── tc-booking-flow-next.php
 
-yaml
-Copy code
 
 Uploading a forbidden structure risks creating nested plugin roots and is not acceptable.
 
@@ -109,8 +106,6 @@ Every zip (single-file or changeset) MUST include a file named:
 
 __MANIFEST.txt
 
-css
-Copy code
 
 With the following content:
 
@@ -130,8 +125,6 @@ includes/Plugin.php
 Added: none
 Deleted: none
 
-yaml
-Copy code
 
 This manifest is used for merge sanity checks and PR validation.
 
