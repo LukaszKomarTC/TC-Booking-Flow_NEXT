@@ -204,6 +204,19 @@ final class Sc_Event_Extras {
             'hook'     => 'wp',
         ]);
 
+        // TCBF-12: Populate partner program enabled status (field 181)
+        // Must be added early (before pre_render) to ensure it fires before form loads
+        add_filter('gform_field_value_partners_enabled', function() use ($event_id) {
+            $enabled = \TC_BF\Domain\EventMeta::event_partners_enabled($event_id);
+            $value = $enabled ? '1' : '0';
+            self::log('frontend.gf_population.partners_enabled', [
+                'event_id' => $event_id,
+                'enabled' => $enabled,
+                'value' => $value,
+            ]);
+            return $value;
+        });
+
         add_filter('gform_pre_render', function($form) use ($form_id){
             return self::populate_choices($form, $form_id);
         });
@@ -582,11 +595,6 @@ final class Sc_Event_Extras {
                 });
             }
         }
-
-        // Populate partner program enabled status (TCBF-12) into field 181
-        add_filter('gform_field_value_partners_enabled', function() use ($event_id) {
-            return \TC_BF\Domain\EventMeta::event_partners_enabled($event_id) ? '1' : '0';
-        });
 
         return $form;
     }
