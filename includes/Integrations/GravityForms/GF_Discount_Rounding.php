@@ -47,6 +47,12 @@ final class GF_Discount_Rounding {
 			return $result;
 		}
 
+		// TCBF-12: If partner program disabled for this event, force discount to 0
+		$partners_enabled = isset($_POST['input_181']) ? trim((string) $_POST['input_181']) : '1';
+		if ( $partners_enabled === '0' ) {
+			return '0';
+		}
+
 		// Normalize to float, round DOWN to cents, return as a numeric string.
 		$v = is_numeric($result) ? (float) $result : Money::money_to_float($result);
 		$v = Money::money_round_down($v);

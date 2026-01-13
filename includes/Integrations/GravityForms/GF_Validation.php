@@ -116,6 +116,21 @@ final class GF_Validation {
 		$partner_discount_pct = (float) (is_array($ctx) ? ($ctx['discount_pct'] ?? 0.0) : 0.0);
 		if ( $partner_discount_pct < 0 ) $partner_discount_pct = 0.0;
 
+		// TCBF-12: Enforce partner program toggle from field 181
+		$partners_enabled_field_id = self::find_field_id_by_input_name($form, 'partners_enabled', 181);
+		$partners_enabled = isset($_POST['input_' . $partners_enabled_field_id]) ? trim((string) $_POST['input_' . $partners_enabled_field_id]) : '1';
+		if ( $partners_enabled === '0' ) {
+			// Partner program disabled for this event - force discount to 0
+			if ( $partner_discount_pct > 0 ) {
+				\TC_BF\Support\Logger::log('gf.validation.partner_disabled_override', [
+					'event_id'             => $event_id,
+					'original_partner_pct' => $partner_discount_pct,
+					'field_181_value'      => $partners_enabled,
+				], 'warning');
+			}
+			$partner_discount_pct = 0.0;
+		}
+
 		// ---- Calculate partner discount per-scope to match WooCommerce per-item coupon rounding ----
 		// WC applies partner coupon per line item (participation + rental), so we must mirror that.
 
