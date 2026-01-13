@@ -6,49 +6,103 @@ if ( ! defined('ABSPATH') ) exit;
 final class Settings {
 
 	const OPT_FORM_ID = 'tc_bf_form_id';
-	const OPT_DEBUG = 'tc_bf_debug';
-	const OPT_LOGS  = 'tc_bf_logs';
+	const OPT_DEBUG   = 'tc_bf_debug';
+	const OPT_LOGS    = 'tc_bf_logs';
 
 	// TCBF-11+: Global fallback participation product (bookable products only)
 	const OPT_DEFAULT_PARTICIPATION_PRODUCT_ID = 'tcbf_default_participation_product_id';
 
+	// TCBF-12: Partner program toggle default (enabled by default)
+	const OPT_PARTNERS_ENABLED_DEFAULT = 'tcbf_partners_enabled_default';
+
 	public static function init() : void {
 		add_action('admin_menu', [__CLASS__, 'menu']);
 		add_action('admin_init', [__CLASS__, 'register_settings']);
-		// AJAX logging endpoint for admin-only frontend diagnostics.
+		// AJAX logging endpoint for admin-only diagnostics.
 		add_action('wp_ajax_tc_bf_log', [__CLASS__, 'ajax_log']);
 	}
 
 	/**
-	 * Admin-only AJAX log endpoint.
+	 * Compatibility shim (legacy callers rely on this).
 	 *
-	 * Used by frontend diagnostics (e.g., Stage-3 repairs) when debug mode is enabled.
+	 * IMPORTANT:
+	 * Older code calls append_log() with arrays/objects as the first argument.
+	 * So we MUST accept mixed input and normalize safely.
+	 *
+	 * @param mixed $message string|array|object|int|etc
+	 * @param mixed $context optional
 	 */
+	public static function append_log( $message, $context = null ) : void {
+		if ( ! self::is_debug() ) {
+			return;
+		}
+
+		// If legacy code passes an array/object as "message" and no context,
+		// treat it as context and use a generic label.
+		$label = 'log';
+		if ( (is_array($message) || is_object($message)) && $context === null ) {
+			$context = $message;
+			$message = $label;
+		}
+
+		// Normalize message to string
+		if ( is_array($message) || is_object($message) ) {
+			$msg = wp_json_encode($message);
+		} elseif ( $message === null ) {
+			$msg = '';
+		} else {
+			$msg = (string) $message;
+		}
+
+		$line = gmdate('c') . ' ' . trim($msg);
+
+		// Normalize context
+		if ( $context !== null ) {
+			if ( is_array($context) || is_object($context) ) {
+				$line .= ' ' . wp_json_encode($context);
+			} else {
+				$line .= ' ' . (string) $context;
+			}
+		}
+
+		// Server-side log (safe)
+		error_log('[TC_BF] ' . $line);
+
+		// Optional rolling buffer stored in wp_options (kept small)
+		$logs = get_option(self::OPT_LOGS, []);
+		if ( ! is_array($logs) ) {
+			$logs = [];
+		}
+
+		$logs[] = $line;
+
+		// Keep last 200 lines max to avoid bloating wp_options
+		$max = 200;
+		$count = count($logs);
+		if ( $count > $max ) {
+			$logs = array_slice($logs, $count - $max);
+		}
+
+		// No autoload
+		update_option(self::OPT_LOGS, $logs, false);
+	}
+
 	public static function ajax_log() : void {
 		if ( ! current_user_can('manage_options') ) {
 			wp_send_json_error(['message' => 'forbidden'], 403);
 		}
-		if ( ! self::is_debug() ) {
-			wp_send_json_error(['message' => 'debug_off'], 400);
-		}
-		check_ajax_referer('tc_bf_log', 'nonce');
 
-		$context = isset($_POST['context']) ? sanitize_text_field((string) wp_unslash($_POST['context'])) : 'frontend';
-		$data_raw = isset($_POST['data']) ? (string) wp_unslash($_POST['data']) : '';
-		$level = isset($_POST['level']) ? sanitize_text_field((string) wp_unslash($_POST['level'])) : 'info';
+		$msg = isset($_POST['message']) ? sanitize_text_field( wp_unslash($_POST['message']) ) : '';
+		$ctx = isset($_POST['context']) ? wp_unslash($_POST['context']) : '';
 
-		$data = [];
-		if ( $data_raw !== '' ) {
-			$decoded = json_decode($data_raw, true);
-			if ( is_array($decoded) ) {
-				$data = $decoded;
-			} else {
-				$data = ['raw' => $data_raw];
+		if ( is_string($ctx) ) {
+			$decoded = json_decode($ctx, true);
+			if ( json_last_error() === JSON_ERROR_NONE ) {
+				$ctx = $decoded;
 			}
 		}
 
-		// Route through the plugin logger (writes to WC logs + keeps last 50 in options page).
-		\TC_BF\Support\Logger::log($context, $data, $level);
+		error_log('[TC_BF] ajax_log: ' . $msg . ' ' . ( is_array($ctx) ? wp_json_encode($ctx) : (string) $ctx ));
 		wp_send_json_success(['ok' => true]);
 	}
 
@@ -57,26 +111,132 @@ final class Settings {
 			'TC Booking Flow',
 			'TC Booking Flow',
 			'manage_options',
-			'tc-booking-flow',
-			[__CLASS__, 'render_page']
+			'tc-bf-settings',
+			[__CLASS__, 'render']
 		);
+	}
+
+	public static function render() : void {
+		if ( ! current_user_can('manage_options') ) return;
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html__('TC Booking Flow — Settings', 'tc-booking-flow-next'); ?></h1>
+
+			<form method="post" action="options.php">
+				<?php
+				settings_fields('tc_bf_settings');
+				do_settings_sections('tc_bf_settings');
+				?>
+
+				<table class="form-table" role="presentation">
+					<tbody>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_FORM_ID); ?>"><?php echo esc_html__('Gravity Form ID', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<input type="number" class="small-text" name="<?php echo esc_attr(self::OPT_FORM_ID); ?>" id="<?php echo esc_attr(self::OPT_FORM_ID); ?>" value="<?php echo esc_attr( (string) get_option(self::OPT_FORM_ID, 44) ); ?>" min="1" step="1" />
+								<p class="description"><?php echo esc_html__('The Gravity Form used for TC Booking Flow.', 'tc-booking-flow-next'); ?></p>
+							</td>
+						</tr>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID); ?>"><?php echo esc_html__('Fallback Participation Product', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<?php
+								$val = (int) get_option(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID, 0);
+
+								$products = get_posts([
+									'post_type'      => 'product',
+									'post_status'    => 'publish',
+									'posts_per_page' => 500,
+									'orderby'        => 'title',
+									'order'          => 'ASC',
+									'tax_query'      => [[
+										'taxonomy' => 'product_type',
+										'field'    => 'slug',
+										'terms'    => ['booking'],
+									]],
+								]);
+								?>
+								<select name="<?php echo esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID); ?>" id="<?php echo esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID); ?>">
+									<option value="0"><?php echo esc_html__('— None —', 'tc-booking-flow-next'); ?></option>
+									<?php foreach ( $products as $p ) : ?>
+										<option value="<?php echo esc_attr((string) $p->ID); ?>" <?php selected($val, (int)$p->ID); ?>>
+											<?php echo esc_html($p->post_title . ' (#' . $p->ID . ')'); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+								<p class="description">
+									<?php echo esc_html__('Used when an event does not have a custom participation product selected.', 'tc-booking-flow-next'); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_PARTNERS_ENABLED_DEFAULT); ?>"><?php echo esc_html__('Partner program enabled by default', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<?php $enabled = (int) get_option(self::OPT_PARTNERS_ENABLED_DEFAULT, 1) === 1; ?>
+								<label>
+									<input type="checkbox" name="<?php echo esc_attr(self::OPT_PARTNERS_ENABLED_DEFAULT); ?>" id="<?php echo esc_attr(self::OPT_PARTNERS_ENABLED_DEFAULT); ?>" value="1" <?php checked($enabled); ?> />
+									<?php echo esc_html__('Enable partner program for all events by default (unless disabled at event level).', 'tc-booking-flow-next'); ?>
+								</label>
+								<p class="description">
+									<?php echo esc_html__('When disabled for an event: partner coupons will not apply and no commission will be calculated. Direct booking remains unaffected.', 'tc-booking-flow-next'); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_DEBUG); ?>"><?php echo esc_html__('Debug Mode', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<?php $debug = (int) get_option(self::OPT_DEBUG, 0) === 1; ?>
+								<label>
+									<input type="checkbox" name="<?php echo esc_attr(self::OPT_DEBUG); ?>" id="<?php echo esc_attr(self::OPT_DEBUG); ?>" value="1" <?php checked($debug); ?> />
+									<?php echo esc_html__('Enable debug logging (server logs only).', 'tc-booking-flow-next'); ?>
+								</label>
+							</td>
+						</tr>
+
+					</tbody>
+				</table>
+
+				<?php submit_button(); ?>
+			</form>
+		</div>
+		<?php
 	}
 
 	public static function register_settings() : void {
 		register_setting('tc_bf_settings', self::OPT_FORM_ID, [
 			'type'              => 'integer',
-			'sanitize_callback' => function($v){ return (int) $v; },
+			'sanitize_callback' => function($v){ return absint($v); },
 			'default'           => 44,
 		]);
+
 		register_setting('tc_bf_settings', self::OPT_DEBUG, [
 			'type' => 'boolean',
 			'sanitize_callback' => function($v){ return (int)(!empty($v)); },
 			'default' => 0,
 		]);
+
 		register_setting('tc_bf_settings', self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID, [
 			'type'              => 'integer',
 			'sanitize_callback' => function($v){ return absint($v); },
 			'default'           => 0,
+		]);
+
+		register_setting('tc_bf_settings', self::OPT_PARTNERS_ENABLED_DEFAULT, [
+			'type' => 'boolean',
+			'sanitize_callback' => function($v){ return (int)(!empty($v)); },
+			'default' => 1,
 		]);
 	}
 
@@ -87,202 +247,5 @@ final class Settings {
 
 	public static function is_debug() : bool {
 		return (int) get_option(self::OPT_DEBUG, 0) === 1;
-	}
-
-
-/**
- * Global default participation product ID.
- * Only booking (bookable) products are considered valid.
- */
-public static function get_default_participation_product_id() : int {
-	$pid = absint( get_option(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID, 0) );
-	if ( $pid <= 0 ) return 0;
-
-	if ( function_exists('wc_get_product') ) {
-		$p = wc_get_product($pid);
-		if ( ! $p ) return 0;
-		if ( function_exists('is_wc_booking_product') && ! is_wc_booking_product($p) ) return 0;
-	}
-	return $pid;
-}
-
-/**
- * Return [product_id => "Title (#ID)"] for bookable products only.
- */
-public static function get_bookable_products_for_select() : array {
-	if ( ! function_exists('wc_get_product') ) return [];
-
-	$q = new \WP_Query([
-		'post_type'      => 'product',
-		'post_status'    => 'publish',
-		'posts_per_page' => 500,
-		'orderby'        => 'title',
-		'order'          => 'ASC',
-		'fields'         => 'ids',
-		'tax_query'      => [[
-			'taxonomy' => 'product_type',
-			'field'    => 'slug',
-			'terms'    => ['booking'],
-		]],
-	]);
-
-	$out = [];
-	foreach ( (array) $q->posts as $pid ) {
-		$pid = (int) $pid;
-		if ( $pid <= 0 ) continue;
-		$p = wc_get_product($pid);
-		if ( ! $p ) continue;
-		if ( function_exists('is_wc_booking_product') && ! is_wc_booking_product($p) ) continue;
-		$out[$pid] = get_the_title($pid) . ' (#' . $pid . ')';
-	}
-
-	return $out;
-}
-
-
-	public static function get_logs() : array {
-		$logs = get_option(self::OPT_LOGS, []);
-		return is_array($logs) ? $logs : [];
-	}
-
-	public static function append_log( array $row, int $max = 50 ) : void {
-		$logs = self::get_logs();
-		$logs[] = $row;
-		if ( count($logs) > $max ) {
-			$logs = array_slice($logs, -1 * $max);
-		}
-		update_option(self::OPT_LOGS, $logs, false);
-	}
-
-	public static function clear_logs() : void {
-		delete_option(self::OPT_LOGS);
-	}
-
-	public static function render_page() : void {
-
-		if ( ! current_user_can('manage_options') ) return;
-
-		$form_id = self::get_form_id();
-
-		$forms = [];
-		if ( class_exists('GFAPI') ) {
-			try {
-				$forms = \GFAPI::get_forms();
-			} catch ( \Exception $e ) {
-				$forms = [];
-			}
-		}
-
-		echo '<div class="wrap">';
-		echo '<h1>TC Booking Flow</h1>';
-		echo '<p>Select the Gravity Form that should trigger the Booking Flow (GF → Cart → Order).</p>';
-
-		echo '<form method="post" action="options.php">';
-		settings_fields('tc_bf_settings');
-
-		echo '<table class="form-table" role="presentation">';
-		echo '<tr>';
-		echo '<th scope="row"><label for="'.esc_attr(self::OPT_FORM_ID).'">Booking form</label></th>';
-		echo '<td>';
-
-		echo '<select name="'.esc_attr(self::OPT_FORM_ID).'" id="'.esc_attr(self::OPT_FORM_ID).'">';
-		echo '<option value="44"'.selected($form_id, 44, false).'>Form #44 (default)</option>';
-
-		if ( is_array($forms) ) {
-			foreach ( $forms as $f ) {
-				$id = isset($f['id']) ? (int) $f['id'] : 0;
-				if ( $id <= 0 ) continue;
-				$title = isset($f['title']) ? (string) $f['title'] : ('Form '.$id);
-				echo '<option value="'.esc_attr($id).'"'.selected($form_id, $id, false).'>#'.esc_html($id).' — '.esc_html($title).'</option>';
-			}
-		}
-
-		echo '</select>';
-
-		if ( ! class_exists('GFAPI') ) {
-			echo '<p class="description">Gravity Forms not detected. Install/activate Gravity Forms to use this plugin.</p>';
-		}
-
-		
-// Default participation product (bookable products only)
-$default_pid = self::get_default_participation_product_id();
-$bookables = self::get_bookable_products_for_select();
-echo '<tr>';
-echo '<th scope="row"><label for="'.esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID).'">Default participation product</label></th>';
-echo '<td>';
-echo '<select name="'.esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID).'" id="'.esc_attr(self::OPT_DEFAULT_PARTICIPATION_PRODUCT_ID).'" style="max-width:520px">';
-echo '<option value="0"'.selected($default_pid, 0, false).'>— None (use per-event / mapping fallback) —</option>';
-foreach ( $bookables as $pid => $label ) {
-	echo '<option value="'.esc_attr($pid).'"'.selected($default_pid, (int)$pid, false).'>'.esc_html($label).'</option>';
-}
-echo '</select>';
-echo '<p class="description">Used when an event does not set a participation product. List contains only WooCommerce Bookings products.</p>';
-echo '</td></tr>';
-
-echo '</td></tr>';
-
-		// Debug mode
-		$debug = self::is_debug();
-		echo '<tr>';
-		echo '<th scope="row"><label for="'.esc_attr(self::OPT_DEBUG).'">Debug mode</label></th>';
-		echo '<td>';
-		echo '<label><input type="checkbox" name="'.esc_attr(self::OPT_DEBUG).'" id="'.esc_attr(self::OPT_DEBUG).'" value="1" '.checked($debug, true, false).' /> Enable logging & diagnostics</label>';
-		echo '<p class="description">When enabled, decision logs are written to WooCommerce logs and kept here (last 50).</p>';
-		echo '</td></tr>';
-
-		echo '</table>';
-
-		submit_button('Save settings');
-
-		echo '</form>';
-
-		// Diagnostics
-		echo '<hr/>';
-		echo '<h2>Diagnostics</h2>';
-		if ( ! $debug ) {
-			echo '<p><em>Debug mode is currently off. Enable it above to collect logs.</em></p>';
-		} else {
-			// Clear logs
-			if ( isset($_POST['tc_bf_clear_logs']) && check_admin_referer('tc_bf_clear_logs') ) {
-				self::clear_logs();
-				echo '<div class="notice notice-success"><p>Logs cleared.</p></div>';
-			}
-			$logs = array_reverse( self::get_logs() );
-			echo '<form method="post" style="margin:0 0 12px 0;">';
-			wp_nonce_field('tc_bf_clear_logs');
-			echo '<input type="hidden" name="tc_bf_clear_logs" value="1" />';
-			submit_button('Clear logs', 'secondary', 'submit', false);
-			echo '</form>';
-			if ( empty($logs) ) {
-				echo '<p><em>No logs yet.</em> Submit the configured Gravity Form once, then return here.</p>';
-			} else {
-				echo '<table class="widefat striped" style="max-width: 1200px;">';
-				echo '<thead><tr><th style="width:170px;">Time</th><th style="width:220px;">Context</th><th>Data</th></tr></thead><tbody>';
-				foreach ( $logs as $row ) {
-					$time = isset($row['time']) ? (string) $row['time'] : '';
-					$ctx  = isset($row['context']) ? (string) $row['context'] : '';
-					$data = isset($row['data']) ? (string) $row['data'] : '';
-					echo '<tr>';
-					echo '<td>'.esc_html($time).'</td>';
-					echo '<td><code>'.esc_html($ctx).'</code></td>';
-					echo '<td><pre style="white-space:pre-wrap; margin:0;">'.esc_html($data).'</pre></td>';
-					echo '</tr>';
-				}
-				echo '</tbody></table>';
-
-				$bundle = [
-					'site' => home_url(),
-					'time' => gmdate('c'),
-					'plugin' => 'tc-booking-flow',
-					'version' => defined('TC_BF_VERSION') ? TC_BF_VERSION : '',
-					'logs' => array_reverse($logs),
-				];
-				$json = wp_json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-				echo '<h3 style="margin-top:16px;">Copy debug bundle</h3>';
-				echo '<textarea readonly style="width:100%; max-width:1200px; height:240px; font-family:monospace;">'.esc_textarea($json).'</textarea>';
-			}
-		}
-
-		echo '</div>';
 	}
 }

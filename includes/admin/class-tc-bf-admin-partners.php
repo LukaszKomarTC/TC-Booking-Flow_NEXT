@@ -88,6 +88,8 @@ final class Partners {
 			if ( $raw === '' ) {
 				delete_user_meta( $user_id, self::META_COMMISSION_PCT );
 			} else {
+				// Keep behavior but tolerate comma input.
+				$raw = str_replace( ',', '.', $raw );
 				$val = (float) $raw;
 				if ( $val < 0 ) $val = 0;
 				if ( $val > 100 ) $val = 100;
@@ -100,7 +102,14 @@ final class Partners {
 			$raw = wp_unslash( $_POST['tc_bf_partner_code'] );
 			$raw = is_string( $raw ) ? trim( $raw ) : '';
 			$raw = preg_replace( '/\s+/', '', $raw );
-			$raw = strtoupper( $raw );
+
+			// Normalize coupon code exactly like WooCommerce does (canonical).
+			// This avoids case-mismatch issues between coupon creation and partner linkage.
+			if ( function_exists( 'wc_format_coupon_code' ) ) {
+				$raw = wc_format_coupon_code( $raw );
+			} else {
+				$raw = strtolower( $raw );
+			}
 
 			if ( $raw === '' ) {
 				delete_user_meta( $user_id, self::META_COUPON_CODE );

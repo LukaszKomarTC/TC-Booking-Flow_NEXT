@@ -35,6 +35,9 @@ final class EventMeta {
         // Products
         'participation_product_id'  => 'tcbf_participation_product_id',
 
+        // Partners (TCBF-12)
+        'partners_enabled'          => 'tcbf_partners_enabled',
+
         // Rentals
         'rental_default_class'      => 'tcbf_rental_default_class',
 
@@ -206,7 +209,35 @@ final class EventMeta {
      * @param string $key      Friendly key from CANONICAL_SCHEMA
      * @return void
      */
-    public static function delete( int $event_id, string $key ) : void {
+    
+
+    /**
+     * TCBF-12: Partner program enabled resolver (SSOT).
+     *
+     * Meta key: tcbf_partners_enabled
+     * Values:
+     *  ''  => use plugin default
+     *  '1' => force enabled
+     *  '0' => force disabled
+     *
+     * Plugin default option:
+     *  tcbf_partners_enabled_default (default: 1)
+     */
+    public static function event_partners_enabled( int $event_id ) : bool {
+        if ( $event_id <= 0 ) {
+            // Defensive: keep existing behavior ON by default.
+            return (bool) get_option( 'tcbf_partners_enabled_default', 1 );
+        }
+
+        $override = (string) get_post_meta( $event_id, 'tcbf_partners_enabled', true );
+
+        if ( $override === '0' ) return false;
+        if ( $override === '1' ) return true;
+
+        return (bool) get_option( 'tcbf_partners_enabled_default', 1 );
+    }
+
+public static function delete( int $event_id, string $key ) : void {
         self::set( $event_id, $key, '' );
     }
 

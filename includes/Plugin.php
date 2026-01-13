@@ -154,6 +154,10 @@ final class Plugin {
 		// Run late on wp_loaded so WC()->cart is available.
 		add_action('wp_loaded', [ $this, 'maybe_auto_apply_partner_coupon' ], 30);
 
+		// TCBF-12: block partner coupons when any event disables partner program (strict mode)
+		add_filter('woocommerce_coupon_is_valid', [ $this, 'woo_validate_partner_coupon' ], 20, 3);
+		add_action('woocommerce_before_calculate_totals', [ $this, 'woo_maybe_remove_partner_coupons' ], 5, 1);
+
 	}
 
 	/* =========================================================
@@ -185,6 +189,11 @@ final class Plugin {
 		}
 		if ( ! $has_tc_item ) return;
 
+		// TCBF-12: strict mode — if ANY event in cart has partners disabled, do not auto-apply partner coupon.
+		if ( ! $this->cart_allows_partner_program( $cart ) ) {
+			return;
+		}
+
 		$user_id = get_current_user_id();
 		$code_raw = (string) get_user_meta( $user_id, 'discount__code', true );
 		$code_raw = trim($code_raw);
@@ -213,7 +222,99 @@ final class Plugin {
 		$this->log('partner.coupon.auto_apply', ['user_id'=>$user_id,'code'=>$code,'ok'=>$ok ? 1 : 0]);
 	}
 
+	
 	/**
+	 * TCBF-12 (Strict Mode)
+	 * Return true only if every TC event item in cart has partner program enabled.
+	 */
+	private function cart_allows_partner_program( $cart ) : bool {
+		if ( ! $cart || ! is_a( $cart, 'WC_Cart' ) ) return true;
+
+		foreach ( $cart->get_cart() as $cart_item ) {
+			if ( ! isset($cart_item['booking']) || ! is_array($cart_item['booking']) ) continue;
+			$event_id = isset($cart_item['booking'][self::BK_EVENT_ID]) ? (int) $cart_item['booking'][self::BK_EVENT_ID] : 0;
+			if ( $event_id <= 0 ) continue;
+			if ( ! \TC_BF\Domain\EventMeta::event_partners_enabled( $event_id ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Detect if a coupon code is a "partner coupon" (linked to any user meta discount__code).
+	 * Cached per-request to avoid repeated DB hits.
+	 */
+	private function is_partner_coupon_code( string $code ) : bool {
+		$code = function_exists('wc_format_coupon_code') ? wc_format_coupon_code($code) : strtolower($code);
+		if ( $code === '' ) return false;
+
+		static $cache = [];
+		if ( array_key_exists( $code, $cache ) ) return (bool) $cache[$code];
+
+		$users = get_users([
+			'meta_key'   => 'discount__code',
+			'meta_value' => $code,
+			'number'     => 1,
+			'fields'     => 'ids',
+		]);
+
+		$cache[$code] = ! empty($users[0]);
+		return (bool) $cache[$code];
+	}
+
+	/**
+	 * Block partner coupons if the cart contains any TC event with partners disabled.
+	 * (Woo applies coupons cart-wide, so we must prevent leakage.)
+	 */
+	public function woo_validate_partner_coupon( $valid, $coupon, $discount ) {
+		if ( ! $valid ) return $valid;
+		if ( is_admin() && ! wp_doing_ajax() ) return $valid;
+		if ( ! function_exists('WC') || ! WC() || ! WC()->cart ) return $valid;
+
+		$cart = WC()->cart;
+		if ( $cart->is_empty() ) return $valid;
+
+		// Only care if the coupon is a partner coupon.
+		$code = is_object($coupon) && method_exists($coupon,'get_code') ? (string) $coupon->get_code() : '';
+		if ( $code === '' || ! $this->is_partner_coupon_code( $code ) ) return $valid;
+
+		// If cart has any TC event with partners disabled, reject partner coupon.
+		if ( ! $this->cart_allows_partner_program( $cart ) ) {
+			if ( is_object($coupon) && method_exists($coupon,'add_coupon_message') ) {
+				// no-op; coupon object doesn't expose messages consistently across versions
+			}
+			$this->log('partner.coupon.blocked_by_event_toggle', ['code'=>$code]);
+			return false;
+		}
+
+		return $valid;
+	}
+
+	/**
+	 * Ensure partner coupons are removed if cart contains any event with partners disabled.
+	 * Runs before totals calculation.
+	 */
+	public function woo_maybe_remove_partner_coupons( $cart ) : void {
+		if ( is_admin() && ! wp_doing_ajax() ) return;
+		if ( ! $cart || ! is_a($cart, 'WC_Cart') ) return;
+		if ( $cart->is_empty() ) return;
+
+		if ( $this->cart_allows_partner_program( $cart ) ) return;
+
+		$applied = (array) $cart->get_applied_coupons();
+		if ( empty($applied) ) return;
+
+		foreach ( $applied as $code ) {
+			if ( $this->is_partner_coupon_code( (string) $code ) ) {
+				$cart->remove_coupon( $code );
+				$this->log('partner.coupon.removed_by_event_toggle', ['code'=>(string)$code]);
+			}
+		}
+	}
+
+
+/**
 	 * GF field value population for EB percentage (field 172).
 	 */
 	public function gf_populate_eb_pct( $value ) {
