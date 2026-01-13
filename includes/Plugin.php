@@ -11,7 +11,6 @@ require_once TC_BF_PATH . 'includes/Domain/Ledger.php';
 require_once TC_BF_PATH . 'includes/Domain/PartnerResolver.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Partner.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Validation.php';
-require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Rounding.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_JS.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
@@ -111,12 +110,6 @@ final class Plugin {
 
 		// ---- GF: server-side validation (tamper-proof + self-heal)
 		add_filter('gform_validation', [ $this, 'gf_validation' ], 10, 1);
-
-		// ---- GF: rounding parity (GF calc fields vs Woo rounding)
-		(new \TC_BF\Integrations\GravityForms\GF_Discount_Rounding())->init();
-
-		// ---- GF: discount rounding parity (partner % discount amount)
-		( new \TC_BF\Integrations\GravityForms\GF_Discount_Rounding() )->init();
 
 
 		// ---- GF: partner + admin override wiring (populate hidden fields + inject JS)
@@ -392,11 +385,6 @@ final class Plugin {
 		$entry_id = (int) rgar($entry, 'id');
 		if ( $entry_id <= 0 ) return;
 
-		// Ensure Woo cart/session are available even during Gravity Forms AJAX submissions.
-		if ( function_exists('wc_load_cart') ) {
-			wc_load_cart();
-		}
-
 		if ( $this->gf_entry_was_cart_added($entry_id) ) return;
 
 		if ( ! function_exists('WC') || ! WC() || ! WC()->cart ) return;
@@ -439,16 +427,8 @@ final class Plugin {
 		$last  = (string) rgar($entry, (string) self::GF_FIELD_LAST_NAME);
 
 		// coupon code (partner)
-		// Prefer what was stored in the GF entry, but fall back to resolved partner context.
-		// This prevents silent failures when the hidden GF field is empty due to form/JS changes.
 		$coupon_code = trim((string) rgar($entry, (string) self::GF_FIELD_COUPON_CODE));
-		if ( '' === $coupon_code ) {
-			$ctx = $this->resolve_partner_context( (int) $form['id'] );
-			if ( ! empty( $ctx['active'] ) && ! empty( $ctx['code'] ) ) {
-				$coupon_code = (string) $ctx['code'];
-			}
-		}
-		$coupon_code = $coupon_code ? wc_format_coupon_code( $coupon_code ) : '';
+		$coupon_code = $coupon_code ? wc_format_coupon_code($coupon_code) : '';
 
 		// EB snapshot (once)
 		$calc = $this->calculate_for_event($event_id);
@@ -708,26 +688,7 @@ final class Plugin {
 
 		// Apply coupon after items exist (Woo validates)
 		if ( $coupon_code && $added_keys ) {
-			// In some GF submission contexts (AJAX/redirect), coupons can fail to stick unless
-			// the cart has already calculated totals at least once.
-			$cart_obj->calculate_totals();
-
-			$before = $cart_obj->get_applied_coupons();
 			$cart_obj->add_discount($coupon_code);
-			$after  = $cart_obj->get_applied_coupons();
-
-			if ( ! in_array($coupon_code, $after, true) ) {
-				// Log a useful diagnostic without breaking UX.
-				Logger::debug('Partner coupon was not applied to cart', [
-					'coupon_code' => $coupon_code,
-					'before'      => $before,
-					'after'       => $after,
-					'notices'     => function_exists('wc_get_notices') ? wc_get_notices() : null,
-				]);
-			}
-
-			// Recalculate totals after coupon attempt.
-			$cart_obj->calculate_totals();
 		}
 
 		// Mark GF entry only if we added at least the participation line
