@@ -11,6 +11,7 @@ require_once TC_BF_PATH . 'includes/Domain/Ledger.php';
 require_once TC_BF_PATH . 'includes/Domain/PartnerResolver.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Partner.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Validation.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Rounding.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_JS.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
@@ -115,6 +116,12 @@ final class Plugin {
 		// ---- GF: partner + admin override wiring (populate hidden fields + inject JS)
 		add_filter('gform_pre_render',             [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_filter('gform_pre_validation',         [ $this, 'gf_partner_prepare_form' ], 10, 1);
+		// Ensure server-side calculation parity (GF entry values match UI/cart)
+		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_Discount_Rounding') ) {
+			$rounding = new \TC_BF\Integrations\GravityForms\GF_Discount_Rounding();
+			$rounding->init();
+		}
+
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
 		add_action('wp_footer',                    [ $this, 'gf_output_partner_js' ], 100);
@@ -598,6 +605,10 @@ final class Plugin {
 		$cart_item_meta_part['booking'][self::BK_EB_AMOUNT]   = $eligible_part ? wc_format_decimal($eb_amt_part, 2) : '0';
 
 
+		if ( function_exists('wc_load_cart') ) {
+			wc_load_cart();
+		}
+
 		$cart_obj = WC()->cart;
 
 		$added_keys = [];
@@ -689,6 +700,16 @@ final class Plugin {
 		// Apply coupon after items exist (Woo validates)
 		if ( $coupon_code && $added_keys ) {
 			$cart_obj->add_discount($coupon_code);
+			// Persist coupon + totals immediately.
+			if ( method_exists($cart_obj, 'calculate_totals') ) {
+				$cart_obj->calculate_totals();
+			}
+			if ( method_exists($cart_obj, 'set_session') ) {
+				$cart_obj->set_session();
+			}
+			if ( WC()->session && method_exists(WC()->session, 'save_data') ) {
+				WC()->session->save_data();
+			}
 		}
 
 		// Mark GF entry only if we added at least the participation line

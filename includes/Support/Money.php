@@ -58,4 +58,16 @@ final class Money {
 		return round($v + 1e-9, 2);
 	}
 
+	/**
+	 * Round DOWN to currency cents.
+	 *
+	 * We use this for percentage discounts to match WooCommerce behavior,
+	 * where discount totals often end up effectively rounded down (due to
+	 * per-line rounding).
+	 */
+	public static function money_round_down( float $v ) : float {
+		$scaled = ($v + 1e-9) * 100;
+		return floor($scaled) / 100;
+	}
+
 }
