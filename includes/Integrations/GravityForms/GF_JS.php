@@ -281,24 +281,7 @@ final class GF_JS {
 			. "  onReady(function(){\n"
 			. "    bind();\n"
 			. "    applyPartner();\n"
-			. "    // Keep GF display in sync with Woo rounding whenever GF recalculates/changes visibility.\n"
-			. "    if(window.jQuery){\n"
-			. "      try{\n"
-			. "        window.jQuery(document).on('gform_post_conditional_logic', function(e, formId){\n"
-			. "          if(parseInt(formId,10) === fid){ window.setTimeout(function(){ try{ fixPartnerPerLineRounding(); }catch(e){} }, 60); }\n"
-			. "        });\n"
-			. "      }catch(e){}\n"
-			. "    }\n"
-			. "    // Also react to direct input changes (products / EB% / partner%).\n"
-			. "    try{\n"
-			. "      var ids = [137,138,139,140,141,171,172,152,161];\n"
-			. "      ids.forEach(function(id){\n"
-			. "        var el = qs('#input_'+fid+'_'+id) || qs('#input_'+fid+'_'+id+'_2');\n"
-			. "        if(!el || el.__tcBfRoundFixBound) return;\n"
-			. "        el.__tcBfRoundFixBound = true;\n"
-			. "        el.addEventListener('change', function(){ window.setTimeout(function(){ try{ fixPartnerPerLineRounding(); }catch(e){} }, 60); });\n"
-			. "      });\n"
-			. "    }catch(e){}\n"
+			. "    // Rounding fix is handled via GF-native calculation filter (output_rounding_fix_js).\n"
 			. "    // Some themes load GF via AJAX; rebind safely\n"
 			. "    try{\n"
 			. "      var mo = new MutationObserver(function(){ bind(); });\n"
@@ -324,7 +307,9 @@ final class GF_JS {
 	 *   applying EB% per scope, then rounding each scope discount to cents before summing.
 	 *
 	 * Locale:
-	 * - Site uses decimal_comma. We return values with comma decimals (e.g. "0,47").
+	 * - Site uses decimal_comma for display, but Gravity Forms' internal calculation engine expects
+	 *   dot decimals in calculation results.
+	 * - Therefore we RETURN a dot-decimal numeric string (e.g. "0.47") and let GF format it for display.
 	 */
 	public static function output_rounding_fix_js( int $form_id ) : string {
 		if ( $form_id <= 0 ) return '';
@@ -355,7 +340,8 @@ final class GF_JS {
 			. "    if(isNaN(n)) n = 0;\n"
 			. "    return Math.round((n + 1e-9) * 100) / 100;\n"
 			. "  }\n"
-			. "  function fmtMoney(v){ return round2(v).toFixed(2).replace('.', ','); }\n"
+			. "  // IMPORTANT: return dot-decimal for GF internal calculations (display formatting is handled by GF locale).\n"
+			. "  function fmtMoneyForCalc(v){ return round2(v).toFixed(2); }\n"
 			. "  function getVal(fieldId){ var el = qs('#input_'+fid+'_'+fieldId); return el ? (el.value||'') : ''; }\n"
 			. "  function getPrice(fieldId){\n"
 			. "    var el = qs('#input_'+fid+'_'+fieldId+'_2');\n"
@@ -378,7 +364,7 @@ final class GF_JS {
 			. "    var discPart = round2(partAfterEb * (pct/100));\n"
 			. "    var discRent = round2(rentAfterEb * (pct/100));\n"
 			. "    var partnerDisc = round2(discPart + discRent);\n"
-			. "    return fmtMoney(partnerDisc);\n"
+			. "    return fmtMoneyForCalc(partnerDisc);\n"
 			. "  }\n"
 			. "  function getFieldId(formulaField){\n"
 			. "    var id = 0;\n"
@@ -390,8 +376,8 @@ final class GF_JS {
 			. "    return id;\n"
 			. "  }\n"
 			. "  function bind(){\n"
-			. "    if(!window.gform || typeof window.gform.addFilter !== 'function') return;\n"
-			. "    if(window.__tcBfCalcFilterBound && window.__tcBfCalcFilterBound[fid]) return;\n"
+			. "    if(!window.gform || typeof window.gform.addFilter !== 'function') return false;\n"
+			. "    if(window.__tcBfCalcFilterBound && window.__tcBfCalcFilterBound[fid]) return true;\n"
 			. "    window.__tcBfCalcFilterBound = window.__tcBfCalcFilterBound || {};\n"
 			. "    window.__tcBfCalcFilterBound[fid] = true;\n"
 			. "    try{\n"
@@ -405,9 +391,21 @@ final class GF_JS {
 			. "        }catch(e){ return result; }\n"
 			. "      });\n"
 			. "    }catch(e){}\n"
+			. "    return true;\n"
+			. "  }\n"
+			. "  function tryBind(retries){\n"
+			. "    if(bind()) return;\n"
+			. "    if(retries <= 0) return;\n"
+			. "    window.setTimeout(function(){ tryBind(retries-1); }, 200);\n"
 			. "  }\n"
 			. "  function onReady(fn){ if(document.readyState==='complete'||document.readyState==='interactive') return fn(); document.addEventListener('DOMContentLoaded', fn); }\n"
-			. "  onReady(function(){ bind(); });\n"
+			. "  onReady(function(){\n"
+			. "    tryBind(25);\n"
+			. "    // Also bind after GF renders (covers AJAX-loaded forms and ensures gform is available).\n"
+			. "    if(window.jQuery){\n"
+			. "      try{ window.jQuery(document).on('gform_post_render', function(e, formId){ if(parseInt(formId,10)===fid){ tryBind(5); } }); }catch(e){}\n"
+			. "    }\n"
+			. "  });\n"
 			. "})();\n";
 	}
 
