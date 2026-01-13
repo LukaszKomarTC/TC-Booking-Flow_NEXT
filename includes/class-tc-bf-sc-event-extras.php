@@ -583,6 +583,11 @@ final class Sc_Event_Extras {
             }
         }
 
+        // Populate partner program enabled status (TCBF-12) into field 181
+        add_filter('gform_field_value_partners_enabled', function() use ($event_id) {
+            return \TC_BF\Domain\EventMeta::event_partners_enabled($event_id) ? '1' : '0';
+        });
+
         return $form;
     }
 
