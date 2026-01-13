@@ -443,7 +443,7 @@ final class Plugin {
 		// This prevents silent failures when the hidden GF field is empty due to form/JS changes.
 		$coupon_code = trim((string) rgar($entry, (string) self::GF_FIELD_COUPON_CODE));
 		if ( '' === $coupon_code ) {
-			$ctx = PartnerResolver::resolve_partner_context( (int) $form['id'] );
+			$ctx = $this->resolve_partner_context( (int) $form['id'] );
 			if ( ! empty( $ctx['active'] ) && ! empty( $ctx['code'] ) ) {
 				$coupon_code = (string) $ctx['code'];
 			}
