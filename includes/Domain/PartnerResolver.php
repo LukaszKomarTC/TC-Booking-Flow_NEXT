@@ -53,34 +53,50 @@ final class PartnerResolver {
 			return self::build_partner_context_from_code( $posted_code );
 		}
 
-		// 4) WooCommerce applied coupons (session/cart) — Way 1 (coupon-on-URL).
+		// 5) WooCommerce applied coupons (session/cart) — Way 1 (coupon-on-URL).
 		//    This catches external plugins that apply partner coupons via URL/QR parameters.
-		if ( function_exists('WC') && ( WC()->cart || WC()->session ) ) {
+		//
+		// CRITICAL HARDENING:
+		// This resolver can be invoked while rendering Sugar Calendar pages (non-shop routes).
+		// On those routes WooCommerce often exists but session/cart are not initialized yet.
+		// We must never trigger WC session/cart bootstrapping or call methods on null.
+		if ( self::is_woo_context_safe_for_coupons() ) {
+			$wc = WC();
 			$applied_codes = [];
 
-			// Try cart first (most reliable source of truth)
-			if ( WC()->cart ) {
-				$applied_codes = WC()->cart->get_applied_coupons();
+			// Try cart first (most reliable source of truth).
+			try {
+				if ( isset( $wc->cart ) && is_object( $wc->cart ) && method_exists( $wc->cart, 'get_applied_coupons' ) ) {
+					$applied_codes = (array) $wc->cart->get_applied_coupons();
+				}
+			} catch ( \Throwable $e ) {
+				$applied_codes = [];
 			}
 
-			// Fallback to session if cart empty/unavailable
-			if ( empty($applied_codes) && WC()->session ) {
-				$applied_codes = WC()->session->get('applied_coupons', []);
+			// Fallback to session if cart empty/unavailable.
+			try {
+				if ( empty( $applied_codes ) && isset( $wc->session ) && is_object( $wc->session ) && method_exists( $wc->session, 'get' ) ) {
+					$maybe = $wc->session->get( 'applied_coupons', [] );
+					if ( is_array( $maybe ) ) {
+						$applied_codes = $maybe;
+					}
+				}
+			} catch ( \Throwable $e ) {
+				// ignore
 			}
 
-			if ( ! empty($applied_codes) && is_array($applied_codes) ) {
-				// Normalize all codes for comparison
+			if ( ! empty( $applied_codes ) && is_array( $applied_codes ) ) {
+				// Normalize all codes for comparison.
 				$applied_codes = array_map( [ __CLASS__, 'normalize_partner_code' ], $applied_codes );
 
-				// Find first partner coupon (percent type + has partner user)
+				// Find first partner coupon (percent type + has partner user).
 				foreach ( $applied_codes as $code ) {
 					if ( $code === '' ) continue;
 
-					// Check if this is a partner coupon
 					$partner_user_id = self::find_partner_user_id_by_code( $code );
-					$discount_pct = self::get_coupon_percent_amount( $code );
+					$discount_pct    = self::get_coupon_percent_amount( $code );
 
-					// Valid partner coupon = has partner user OR has percent discount
+					// Valid partner coupon = has partner user OR has percent discount.
 					if ( $partner_user_id > 0 || $discount_pct > 0 ) {
 						return self::build_partner_context_from_code( $code, $partner_user_id );
 					}
@@ -109,22 +125,26 @@ final class PartnerResolver {
 	 * - Discount visibility must work even if partner-user mapping is missing.
 	 */
 	private static function get_applied_percent_coupon_code() : string {
-		if ( ! function_exists('WC') || ! WC() ) return '';
+		if ( ! self::is_woo_context_safe_for_coupons() ) {
+			return '';
+		}
+
+		$wc = WC();
 
 		$codes = [];
 
 		// Session-level coupons (works even when cart is empty)
 		try {
-			if ( WC()->session ) {
-				$sc = WC()->session->get('applied_coupons');
+			if ( isset( $wc->session ) && is_object( $wc->session ) && method_exists( $wc->session, 'get' ) ) {
+				$sc = $wc->session->get('applied_coupons');
 				if ( is_array($sc) ) $codes = array_merge($codes, $sc);
 			}
 		} catch ( \Throwable $e ) {}
 
 		// Cart-level coupons (when cart exists)
 		try {
-			if ( WC()->cart ) {
-				$cc = WC()->cart->get_applied_coupons();
+			if ( isset( $wc->cart ) && is_object( $wc->cart ) && method_exists( $wc->cart, 'get_applied_coupons' ) ) {
+				$cc = $wc->cart->get_applied_coupons();
 				if ( is_array($cc) ) $codes = array_merge($codes, $cc);
 			}
 		} catch ( \Throwable $e ) {}
@@ -143,6 +163,34 @@ final class PartnerResolver {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Defensive gate: only touch WC session/cart when Woo is initialized enough.
+	 *
+	 * Why:
+	 * - This resolver is used on Sugar Calendar routes (event pages/lists).
+	 * - On non-shop routes, WooCommerce can be loaded but cart/session may be null.
+	 * - Accessing WC()->session or WC()->cart too early can fatally break rendering.
+	 *
+	 * Policy:
+	 * - Fail closed (return false) if unsure.
+	 */
+	private static function is_woo_context_safe_for_coupons() : bool {
+		if ( ! function_exists( 'WC' ) ) return false;
+		$wc = WC();
+		if ( ! $wc ) return false;
+
+		// Ensure Woo has had a chance to initialize its frontend objects.
+		// wp_loaded is late enough for most setups; woocommerce_init is a good signal too.
+		if ( ! did_action( 'wp_loaded' ) && ! did_action( 'woocommerce_init' ) ) {
+			return false;
+		}
+
+		// Session/cart may still be absent on some routes; require at least one usable object.
+		$has_cart = isset( $wc->cart ) && is_object( $wc->cart ) && method_exists( $wc->cart, 'get_applied_coupons' );
+		$has_sess = isset( $wc->session ) && is_object( $wc->session ) && method_exists( $wc->session, 'get' );
+		return ( $has_cart || $has_sess );
 	}
 
 	/**
