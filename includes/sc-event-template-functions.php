@@ -335,9 +335,9 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     margin-bottom: 0 !important;
 }
 @keyframes tcbf-shake {
-    0%, 100% { transform: rotate(0deg); }
-    10%, 30%, 50%, 70%, 90% { transform: rotate(-10deg); }
-    20%, 40%, 60%, 80% { transform: rotate(10deg); }
+    0%, 25%, 100% { transform: rotate(0deg); }
+    2.5%, 7.5%, 12.5%, 17.5%, 22.5% { transform: rotate(-10deg); }
+    5%, 10%, 15%, 20% { transform: rotate(10deg); }
 }
 .tcbf-eb-stripe {
     background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
@@ -356,12 +356,7 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     font-size: 32px;
     line-height: 1;
     flex-shrink: 0;
-    animation: tcbf-shake 0.5s ease-in-out;
-    animation-iteration-count: 1;
-    animation-delay: 2s;
-}
-.tcbf-eb-stripe__icon:hover {
-    animation: tcbf-shake 0.5s ease-in-out infinite;
+    animation: tcbf-shake 2s ease-in-out infinite;
 }
 .tcbf-eb-stripe__content {
     flex: 1;
