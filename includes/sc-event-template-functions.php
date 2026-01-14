@@ -331,7 +331,7 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         // Inline CSS (self-contained, no external dependencies)
         $css = <<<CSS
 <style>
-.single-post-header.with-thumb {
+.single-sc_event .single-post-header.with-thumb {
     margin-bottom: 0 !important;
 }
 .tcbf-eb-stripe {
