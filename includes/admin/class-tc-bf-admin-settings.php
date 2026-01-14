@@ -210,6 +210,54 @@ final class Settings {
 
 				<?php submit_button(); ?>
 			</form>
+
+			<hr/>
+			<h2><?php echo esc_html__('Diagnostics', 'tc-booking-flow-next'); ?></h2>
+
+			<?php
+			$debug = self::is_debug();
+			if ( ! $debug ) {
+				echo '<p><em>' . esc_html__('Debug mode is currently off. Enable it above to collect logs.', 'tc-booking-flow-next') . '</em></p>';
+			} else {
+				// Clear logs handler
+				if ( isset($_POST['tc_bf_clear_logs']) && check_admin_referer('tc_bf_clear_logs') ) {
+					self::clear_logs();
+					echo '<div class="notice notice-success"><p>' . esc_html__('Logs cleared.', 'tc-booking-flow-next') . '</p></div>';
+				}
+
+				$logs = array_reverse( self::get_logs() );
+				?>
+				<form method="post" style="margin:0 0 12px 0;">
+					<?php wp_nonce_field('tc_bf_clear_logs'); ?>
+					<input type="hidden" name="tc_bf_clear_logs" value="1" />
+					<?php submit_button( esc_html__('Clear logs', 'tc-booking-flow-next'), 'secondary', 'submit', false ); ?>
+				</form>
+
+				<?php
+				if ( empty($logs) ) {
+					echo '<p><em>' . esc_html__('No logs yet.', 'tc-booking-flow-next') . '</em> ' . esc_html__('Submit the configured Gravity Form once, then return here.', 'tc-booking-flow-next') . '</p>';
+				} else {
+					echo '<table class="widefat striped" style="max-width: 1200px;">';
+					echo '<thead><tr><th>' . esc_html__('Log Entry', 'tc-booking-flow-next') . '</th></tr></thead><tbody>';
+					foreach ( $logs as $line ) {
+						echo '<tr><td><pre style="white-space:pre-wrap; margin:0; font-family:monospace; font-size:12px;">' . esc_html($line) . '</pre></td></tr>';
+					}
+					echo '</tbody></table>';
+
+					$bundle = [
+						'site' => home_url(),
+						'time' => gmdate('c'),
+						'plugin' => 'tc-booking-flow-next',
+						'version' => defined('TC_BF_VERSION') ? TC_BF_VERSION : '',
+						'logs' => array_reverse($logs),
+					];
+					$json = wp_json_encode($bundle, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+					echo '<h3 style="margin-top:16px;">' . esc_html__('Copy debug bundle', 'tc-booking-flow-next') . '</h3>';
+					echo '<textarea readonly style="width:100%; max-width:1200px; height:240px; font-family:monospace; font-size:12px;">' . esc_textarea($json) . '</textarea>';
+				}
+			}
+			?>
+
 		</div>
 		<?php
 	}
@@ -247,5 +295,14 @@ final class Settings {
 
 	public static function is_debug() : bool {
 		return (int) get_option(self::OPT_DEBUG, 0) === 1;
+	}
+
+	public static function get_logs() : array {
+		$logs = get_option(self::OPT_LOGS, []);
+		return is_array($logs) ? $logs : [];
+	}
+
+	public static function clear_logs() : void {
+		delete_option(self::OPT_LOGS);
 	}
 }
