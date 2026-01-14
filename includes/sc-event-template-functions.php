@@ -341,8 +341,6 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
 }
 .tcbf-eb-stripe {
     background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     padding: 20px 24px;
     margin: 0;
     width: 100%;
