@@ -274,3 +274,129 @@ if ( ! function_exists('tc_sc_event_render_details_bar') ) {
         return (string) ob_get_clean();
     }
 }
+
+if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
+    /**
+     * Render Early Booking discount banner stripe (full-width).
+     *
+     * Display-only component that reads EB calculation from Ledger.
+     * Shows discount percentage, deadline date, and days remaining.
+     *
+     * @param int $event_id Event post ID
+     * @return string HTML output (empty if EB not active)
+     */
+    function tc_sc_event_render_eb_stripe( int $event_id ) : string {
+        $event_id = (int) $event_id;
+        if ( $event_id <= 0 ) return '';
+
+        // Read EB calculation from Ledger (read-only, no changes to logic)
+        if ( ! class_exists( '\TC_BF\Domain\Ledger' ) ) {
+            return '';
+        }
+
+        $calc = \TC_BF\Domain\Ledger::calculate_for_event( $event_id );
+
+        // Only show if EB is active and has discount > 0
+        if ( empty( $calc['enabled'] ) || empty( $calc['pct'] ) || $calc['pct'] <= 0 ) {
+            return '';
+        }
+
+        // Extract data
+        $pct = (float) $calc['pct'];
+        $days_before = isset( $calc['days_before'] ) ? (int) $calc['days_before'] : 0;
+        $event_start_ts = isset( $calc['event_start_ts'] ) ? (int) $calc['event_start_ts'] : 0;
+
+        // Calculate deadline (event start - days_before)
+        $deadline_date = '';
+        $days_left = 0;
+
+        if ( $event_start_ts > 0 && $days_before > 0 ) {
+            $deadline_ts = $event_start_ts - ( $days_before * DAY_IN_SECONDS );
+            $now = time();
+            $days_left = max( 0, (int) ceil( ( $deadline_ts - $now ) / DAY_IN_SECONDS ) );
+
+            // Format deadline date
+            $deadline_date = date_i18n( 'd/m/Y', $deadline_ts );
+        }
+
+        // Multilingual strings
+        $text_title = tc_sc_event_tr( '[:en]Early Booking Active — Save {pct}%[:es]Reserva Anticipada Activa — Ahorra {pct}%[:]' );
+        $text_deadline = tc_sc_event_tr( '[:en]Book before {date} ({days} days left)[:es]Reserva antes del {date} (quedan {days} días)[:]' );
+
+        // Replace placeholders
+        $text_title = str_replace( '{pct}', number_format_i18n( $pct, 0 ), $text_title );
+        $text_deadline = str_replace( '{date}', $deadline_date, $text_deadline );
+        $text_deadline = str_replace( '{days}', $days_left, $text_deadline );
+
+        // Inline CSS (self-contained, no external dependencies)
+        $css = <<<CSS
+<style>
+.tcbf-eb-stripe {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border-top: 1px solid rgba(14, 165, 233, 0.1);
+    border-bottom: 1px solid rgba(14, 165, 233, 0.1);
+    padding: 20px 24px;
+    margin: 0;
+    width: 100%;
+}
+.tcbf-eb-stripe__container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.tcbf-eb-stripe__icon {
+    font-size: 32px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.tcbf-eb-stripe__content {
+    flex: 1;
+}
+.tcbf-eb-stripe__title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0c4a6e;
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+}
+.tcbf-eb-stripe__deadline {
+    font-size: 14px;
+    font-weight: 400;
+    color: #075985;
+    margin: 0;
+    line-height: 1.4;
+}
+@media (max-width: 768px) {
+    .tcbf-eb-stripe {
+        padding: 16px 20px;
+    }
+    .tcbf-eb-stripe__container {
+        gap: 12px;
+    }
+    .tcbf-eb-stripe__icon {
+        font-size: 28px;
+    }
+    .tcbf-eb-stripe__title {
+        font-size: 16px;
+    }
+    .tcbf-eb-stripe__deadline {
+        font-size: 13px;
+    }
+}
+</style>
+CSS;
+
+        // HTML output
+        $html = sprintf(
+            '%s<div class="tcbf-eb-stripe" data-event-id="%d"><div class="tcbf-eb-stripe__container"><div class="tcbf-eb-stripe__icon">⏰</div><div class="tcbf-eb-stripe__content"><div class="tcbf-eb-stripe__title">%s</div><div class="tcbf-eb-stripe__deadline">%s</div></div></div></div>',
+            $css,
+            $event_id,
+            esc_html( $text_title ),
+            esc_html( $text_deadline )
+        );
+
+        return $html;
+    }
+}
