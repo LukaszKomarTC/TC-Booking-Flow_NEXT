@@ -34,14 +34,18 @@ final class GF_JS {
 		$ctx = \TC_BF\Domain\PartnerResolver::resolve_partner_context( $form_id );
 		$initial_code = ( ! empty($ctx) && ! empty($ctx['active']) && ! empty($ctx['code']) ) ? (string) $ctx['code'] : '';
 
+		// Get translated strings for partner banner
+		$i18n = self::get_partner_banner_i18n();
+
 		// Cache payload for footer output.
 		self::$partner_js_payload[ $form_id ] = [
 			'partners'     => $partners,
 			'initial_code' => $initial_code,
+			'i18n'         => $i18n,
 		];
 
 		// Also register an init script so this works even when GF renders via AJAX.
-		self::register_partner_init_script( $form_id, $partners, $initial_code );
+		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n );
 
 		return $form;
 	}
@@ -86,12 +90,36 @@ final class GF_JS {
 		return $map;
 	}
 
+	/**
+	 * Get translated strings for partner banner (qTranslateX compatible).
+	 *
+	 * @return array Translated strings
+	 */
+	private static function get_partner_banner_i18n() : array {
+		// Process qTranslateX shortcodes server-side
+		$title = '[:en]Partner Discount Applied[:es]Descuento Partner Aplicado[:]';
+		$discount_label = '[:en]discount[:es]descuento[:]';
 
-	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code = '' ) : void {
+		// Use qTranslateX helper if available (from sc-event-template-functions.php)
+		if ( function_exists( 'tc_sc_event_tr' ) ) {
+			$title = tc_sc_event_tr( $title );
+			$discount_label = tc_sc_event_tr( $discount_label );
+		} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage' ) ) {
+			$title = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $title );
+			$discount_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $discount_label );
+		}
+
+		return [
+			'title'          => $title,
+			'discount_label' => $discount_label,
+		];
+	}
+
+	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code = '', array $i18n = [] ) : void {
 		if ( $form_id <= 0 ) return;
 		if ( ! class_exists('\GFFormDisplay') ) return;
 
-		$script = self::build_partner_override_js( $form_id, $partners, $initial_code );
+		$script = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n );
 		if ( $script === '' ) return;
 
 		// Runs reliably for normal and AJAX-rendered forms.
@@ -109,10 +137,14 @@ final class GF_JS {
 	 * - JS must NOT hide/show fields or force recalculation loops.
 	 * - JS only populates partner hidden fields (154/152/161/153/166) and applies GF-Woo rounding parity (176).
 	 */
-	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code = '' ) : string {
+	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code = '', array $i18n = [] ) : string {
 
 		// Map: { code => {id,email,commission,discount} }
 		$json = wp_json_encode( $partners );
+
+		// Translated strings (qTranslateX processed server-side)
+		$banner_title = isset( $i18n['title'] ) ? esc_js( $i18n['title'] ) : 'Partner Discount Applied';
+		$discount_label = isset( $i18n['discount_label'] ) ? esc_js( $i18n['discount_label'] ) : 'discount';
 
 		// IMPORTANT: this is raw JS (no <script> wrapper). GF will wrap it.
 		return "window.tcBfPartnerMap = window.tcBfPartnerMap || {};\n"
@@ -176,6 +208,8 @@ final class GF_JS {
 			. "    var cLine = qs('.tc-bf-commission', summary);\n"
 			. "    if(cLine) cLine.style.display = (commPct>0 && data && code) ? '' : 'none';\n"
 			. "  }\n"
+			. "  var bannerTitle = '" . $banner_title . "';\n"
+			. "  var discountLabel = '" . $discount_label . "';\n"
 			. "  function updatePartnerBanner(data, code){\n"
 			. "    var banner = qs('#tcbf-partner-banner-'+fid);\n"
 			. "    if(!banner) return;\n"
@@ -184,13 +218,13 @@ final class GF_JS {
 			. "      var nameEl = qs('.tcbf-partner-name', banner);\n"
 			. "      var discEl = qs('.tcbf-partner-discount', banner);\n"
 			. "      if(titleEl){\n"
-			. "        titleEl.textContent = '[:en]Partner Discount Applied[:es]Descuento Partner Aplicado[:]';\n"
+			. "        titleEl.textContent = bannerTitle;\n"
 			. "      }\n"
 			. "      if(nameEl){\n"
 			. "        nameEl.textContent = code.toUpperCase();\n"
 			. "      }\n"
 			. "      if(discEl){\n"
-			. "        discEl.textContent = fmtPct(data.discount) + '% [:en]discount[:es]descuento[:]';\n"
+			. "        discEl.textContent = fmtPct(data.discount) + '% ' + discountLabel;\n"
 			. "      }\n"
 			. "      banner.style.display = 'flex';\n"
 			. "    } else {\n"
@@ -324,8 +358,9 @@ final class GF_JS {
 
 			$partners = (is_array($payload) && isset($payload['partners']) && is_array($payload['partners'])) ? $payload['partners'] : [];
 			$initial_code = (is_array($payload) && isset($payload['initial_code'])) ? (string) $payload['initial_code'] : '';
+			$i18n = (is_array($payload) && isset($payload['i18n']) && is_array($payload['i18n'])) ? $payload['i18n'] : [];
 
-			$js = self::build_partner_override_js( $form_id, $partners, $initial_code );
+			$js = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n );
 			if ( $js === '' ) continue;
 
 			echo "\n<script id=\"tc-bf-partner-override-{$form_id}\">\n";
