@@ -183,6 +183,13 @@
 
 </div><!--.intro-effect-fadeout-->
 
+<?php
+// Early Booking discount stripe (full-width banner)
+if ( function_exists( 'tc_sc_event_render_eb_stripe' ) ) {
+    echo tc_sc_event_render_eb_stripe( $event_id_ );
+}
+?>
+
 <div id="post-<?php the_ID(); ?>" <?php post_class(); ?>>
 
     <div class="row">
