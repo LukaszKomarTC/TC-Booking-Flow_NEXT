@@ -331,6 +331,9 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         // Inline CSS (self-contained, no external dependencies)
         $css = <<<CSS
 <style>
+.single-sc_event .single-post-header.with-thumb {
+    margin-bottom: 0 !important;
+}
 .tcbf-eb-stripe {
     background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
     border-top: 1px solid rgba(14, 165, 233, 0.1);
