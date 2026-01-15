@@ -45,15 +45,41 @@ final class GF_View_Filters {
 	 *
 	 * This runs when GravityView queries entries for display.
 	 *
+	 * Note: GravityView passes parameters in different orders depending on version.
+	 * We handle this flexibly by accepting mixed types.
+	 *
 	 * @param array  $search_criteria Current search criteria
-	 * @param int    $form_id         GF form ID
-	 * @param object $view            GravityView object
+	 * @param mixed  $param2          Could be form_id (int), form (array), or view object
+	 * @param mixed  $param3          Could be view object or other data
 	 * @return array Modified search criteria
 	 */
-	public static function filter_gravityview_paid_only( array $search_criteria, int $form_id, $view ) : array {
+	public static function filter_gravityview_paid_only( $search_criteria, $param2 = null, $param3 = null ) : array {
+
+		// Ensure we have an array for search criteria
+		if ( ! is_array( $search_criteria ) ) {
+			$search_criteria = [];
+		}
+
+		// Try to determine the view object from parameters
+		$view = null;
+		$form_id = 0;
+
+		// Check if param3 is the view object
+		if ( is_object( $param3 ) ) {
+			$view = $param3;
+		} elseif ( is_object( $param2 ) ) {
+			$view = $param2;
+		}
+
+		// Try to extract form_id
+		if ( is_int( $param2 ) ) {
+			$form_id = $param2;
+		} elseif ( is_array( $param2 ) && isset( $param2['id'] ) ) {
+			$form_id = (int) $param2['id'];
+		}
 
 		// Check if filtering is enabled for this view
-		if ( ! self::is_filtering_enabled_for_view( $view ) ) {
+		if ( $view && ! self::is_filtering_enabled_for_view( $view ) ) {
 			return $search_criteria;
 		}
 
@@ -75,7 +101,7 @@ final class GF_View_Filters {
 
 		\TC_BF\Support\Logger::log( 'gf_view.filter_applied', [
 			'form_id' => $form_id,
-			'view_id' => method_exists( $view, 'get_view_id' ) ? $view->get_view_id() : 0,
+			'view_id' => ( $view && method_exists( $view, 'get_view_id' ) ) ? $view->get_view_id() : 0,
 			'filter'  => 'paid_only',
 		] );
 
