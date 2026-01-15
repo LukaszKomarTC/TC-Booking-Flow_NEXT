@@ -344,27 +344,6 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     padding: 20px 24px;
     margin: 20px 0;
     width: 100%;
-    position: relative;
-}
-.tcbf-eb-stripe:before,
-.tcbf-eb-stripe:after {
-    content: "";
-    display: block;
-    height: 10px;
-    width: 100%;
-    position: absolute;
-    left: 0;
-    background-image: radial-gradient(circle at center, transparent 0, transparent 5px, #b74d96 5px);
-    background-size: 20px 10px;
-    background-repeat: repeat-x;
-    background-position: 0 0;
-}
-.tcbf-eb-stripe:before {
-    top: -10px;
-}
-.tcbf-eb-stripe:after {
-    bottom: -10px;
-    transform: scaleY(-1);
 }
 .tcbf-eb-stripe__container {
     max-width: 1200px;
@@ -414,6 +393,91 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         font-size: 13px;
     }
 }
+/* Enhanced Field 179 - EB Discount */
+#field_48_179 .gfield_label {
+    display: none !important;
+}
+.tcbf-eb-enhanced {
+    background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    position: relative;
+    margin: 20px 0;
+}
+.tcbf-eb-enhanced:before,
+.tcbf-eb-enhanced:after {
+    content: "";
+    display: block;
+    height: 10px;
+    width: 100%;
+    position: absolute;
+    left: 0;
+    background-color: transparent;
+    background-image: radial-gradient(closest-side, transparent 9px, rgba(0,0,0,0.05) 100%);
+    background-size: 20px 10px;
+    background-repeat: repeat-x;
+}
+.tcbf-eb-enhanced:before {
+    top: -10px;
+}
+.tcbf-eb-enhanced:after {
+    bottom: -10px;
+    transform: rotate(180deg);
+}
+.tcbf-eb-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tcbf-eb-icon {
+    font-size: 24px;
+    color: #ffffff;
+    line-height: 1;
+}
+.tcbf-eb-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+}
+.tcbf-eb-info {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.tcbf-eb-pct {
+    font-size: 14px;
+    color: #ffffff;
+    font-weight: 500;
+    opacity: 0.95;
+}
+.tcbf-eb-amt {
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+}
+@media (max-width: 768px) {
+    .tcbf-eb-enhanced {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+    .tcbf-eb-icon {
+        font-size: 20px;
+    }
+    .tcbf-eb-text {
+        font-size: 16px;
+    }
+    .tcbf-eb-pct {
+        font-size: 13px;
+    }
+    .tcbf-eb-amt {
+        font-size: 18px;
+    }
+}
 /* Enhanced Field 180 - Partner Discount */
 #field_48_180 .gfield_label {
     display: none !important;
@@ -441,7 +505,7 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     position: absolute;
     left: 0;
     background-color: transparent;
-    background-image: radial-gradient(circle at 10px 5px, transparent 5px, #dcfce7 5px);
+    background-image: radial-gradient(closest-side, transparent 9px, rgba(0,0,0,0.05) 100%);
     background-size: 20px 10px;
     background-repeat: repeat-x;
 }
