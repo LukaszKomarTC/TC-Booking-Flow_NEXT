@@ -303,15 +303,21 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
 
         // Extract data
         $pct = (float) $calc['pct'];
-        $days_before = isset( $calc['days_before'] ) ? (int) $calc['days_before'] : 0;
         $event_start_ts = isset( $calc['event_start_ts'] ) ? (int) $calc['event_start_ts'] : 0;
 
-        // Calculate deadline (event start - days_before)
+        // Get the EB step's threshold (NOT days until event!)
+        $min_days_before = 0;
+        if ( isset( $calc['step'] ) && is_array( $calc['step'] ) ) {
+            $min_days_before = isset( $calc['step']['min_days_before'] ) ? (int) $calc['step']['min_days_before'] : 0;
+        }
+
+        // Calculate deadline: event_start - min_days_before
+        // Example: Event on June 15, step requires 30 days before → deadline is May 16
         $deadline_date = '';
         $days_left = 0;
 
-        if ( $event_start_ts > 0 && $days_before > 0 ) {
-            $deadline_ts = $event_start_ts - ( $days_before * DAY_IN_SECONDS );
+        if ( $event_start_ts > 0 && $min_days_before > 0 ) {
+            $deadline_ts = $event_start_ts - ( $min_days_before * DAY_IN_SECONDS );
             $now = time();
             $days_left = max( 0, (int) ceil( ( $deadline_ts - $now ) / DAY_IN_SECONDS ) );
 
