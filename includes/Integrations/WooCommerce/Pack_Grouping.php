@@ -39,6 +39,14 @@ final class Pack_Grouping {
 	private static $processing_groups = [];
 
 	/**
+	 * Guard against marking entries as removed during checkout
+	 *
+	 * When checkout completes, cart is cleared which triggers removal hooks.
+	 * We use transients to prevent wrongly marking paid entries as removed.
+	 */
+	private static $checkout_in_progress = [];
+
+	/**
 	 * Initialize pack grouping hooks
 	 */
 	public static function init() : void {
@@ -217,6 +225,13 @@ final class Pack_Grouping {
 			'removed_count' => $removed_count,
 		] );
 
+		// Mark GF entry as removed (unless checkout is in progress)
+		if ( ! self::is_checkout_in_progress_for_group( $group_id ) ) {
+			if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+				\TC_BF\Domain\Entry_State::mark_removed( $group_id, \TC_BF\Domain\Entry_State::REASON_USER_REMOVED );
+			}
+		}
+
 		// Clear the processing guard
 		unset( self::$processing_groups[ $group_id ] );
 	}
@@ -254,8 +269,14 @@ final class Pack_Grouping {
 			'groups'      => $groups,
 		] );
 
-		// Phase 2 will integrate with Entry_State here
-		// Entry_State::mark_groups_removed( $groups, 'cart_emptied' );
+		// Mark all groups as removed (unless checkout is in progress)
+		if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+			foreach ( $groups as $group_id ) {
+				if ( ! self::is_checkout_in_progress_for_group( $group_id ) ) {
+					\TC_BF\Domain\Entry_State::mark_removed( $group_id, \TC_BF\Domain\Entry_State::REASON_CART_EMPTIED );
+				}
+			}
+		}
 	}
 
 	/**
@@ -457,5 +478,86 @@ final class Pack_Grouping {
 		}
 
 		return $items;
+	}
+
+	/**
+	 * Mark group as checkout in progress
+	 *
+	 * Sets a transient to prevent marking entry as removed during checkout cart clearing.
+	 * Transient expires after 10 minutes as safety fallback.
+	 *
+	 * @param int $group_id Group ID (entry ID)
+	 */
+	public static function mark_checkout_in_progress( int $group_id ) : void {
+		if ( $group_id <= 0 ) {
+			return;
+		}
+
+		// Use transient for persistence across requests
+		set_transient( 'tcbf_checkout_' . $group_id, true, 600 ); // 10 minutes
+
+		// Also set in-memory for same-request checks
+		self::$checkout_in_progress[ $group_id ] = true;
+
+		\TC_BF\Support\Logger::log( 'pack.checkout_guard.set', [
+			'group_id' => $group_id,
+		] );
+	}
+
+	/**
+	 * Check if checkout is in progress for a group
+	 *
+	 * Checks both transient and in-memory guard.
+	 *
+	 * @param int $group_id Group ID (entry ID)
+	 * @return bool Checkout in progress
+	 */
+	public static function is_checkout_in_progress_for_group( int $group_id ) : bool {
+		if ( $group_id <= 0 ) {
+			return false;
+		}
+
+		// Check in-memory first (same request)
+		if ( isset( self::$checkout_in_progress[ $group_id ] ) ) {
+			return true;
+		}
+
+		// Check transient (cross-request)
+		$in_progress = get_transient( 'tcbf_checkout_' . $group_id );
+		if ( $in_progress ) {
+			return true;
+		}
+
+		// Additional check: if entry already has order_id or is paid, never mark as removed
+		if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+			if ( \TC_BF\Domain\Entry_State::is_paid( $group_id ) ) {
+				return true; // Treat as checkout in progress (guard against removal)
+			}
+
+			$order_id = \TC_BF\Domain\Entry_State::get_order_id( $group_id );
+			if ( $order_id > 0 ) {
+				return true; // Has order, treat as checkout in progress
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Clear checkout in progress guard
+	 *
+	 * @param int $group_id Group ID (entry ID)
+	 */
+	public static function clear_checkout_guard( int $group_id ) : void {
+		if ( $group_id <= 0 ) {
+			return;
+		}
+
+		delete_transient( 'tcbf_checkout_' . $group_id );
+		unset( self::$checkout_in_progress[ $group_id ] );
+
+		\TC_BF\Support\Logger::log( 'pack.checkout_guard.cleared', [
+			'group_id' => $group_id,
+		] );
 	}
 }
