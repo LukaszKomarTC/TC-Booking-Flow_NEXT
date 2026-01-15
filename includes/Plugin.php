@@ -131,6 +131,7 @@ final class Plugin {
 		}
 
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
+		add_action('wp_head',                      [ $this, 'output_form_field_css' ], 100); // CSS for enhanced fields
 		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
 		add_action('wp_footer',                    [ $this, 'gf_output_partner_js' ], 100);
 		add_action('wp_footer',                    [ $this, 'output_late_diagnostic' ], 200); // Late diagnostic
@@ -883,6 +884,64 @@ final class Plugin {
 
 	public function gf_output_partner_js() : void {
 		Integrations\GravityForms\GF_JS::output_partner_js();
+	}
+
+	/**
+	 * Output CSS for enhanced form fields (EB and Partner discount).
+	 * Runs in wp_head on single-sc_event pages to ensure styles are always available.
+	 */
+	public function output_form_field_css() : void {
+		if ( is_admin() ) return;
+		if ( ! is_singular('sc_event') ) return;
+
+		// Get dynamic form ID
+		$form_id = (int) Admin\Settings::get_form_id();
+		if ( $form_id <= 0 ) $form_id = 48; // Fallback
+
+		echo "\n<!-- TC Booking Flow: Enhanced Field CSS -->\n";
+		echo "<style id=\"tc-bf-enhanced-fields\">\n";
+		echo "/* Enhanced Field 179 - EB Discount (form ID: {$form_id}) */\n";
+		echo "#field_{$form_id}_179 .gfield_label { display: none !important; }\n";
+		echo ".tcbf-eb-enhanced {\n";
+		echo "  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);\n";
+		echo "  padding: 16px 20px;\n";
+		echo "  display: flex;\n";
+		echo "  justify-content: space-between;\n";
+		echo "  align-items: center;\n";
+		echo "  gap: 16px;\n";
+		echo "}\n";
+		echo ".tcbf-eb-badge { display: flex; align-items: center; gap: 10px; }\n";
+		echo ".tcbf-eb-icon { font-size: 24px; color: #ffffff; line-height: 1; }\n";
+		echo ".tcbf-eb-text { font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; }\n";
+		echo ".tcbf-eb-info { text-align: right; display: flex; flex-direction: column; gap: 2px; }\n";
+		echo ".tcbf-eb-pct { font-size: 14px; color: #ffffff; font-weight: 500; opacity: 0.95; }\n";
+		echo ".tcbf-eb-amt { font-size: 20px; font-weight: 700; color: #ffffff; }\n";
+		echo "/* Enhanced Field 180 - Partner Discount (form ID: {$form_id}) */\n";
+		echo "#field_{$form_id}_180 .gfield_label { display: none !important; }\n";
+		echo "#field_{$form_id}_182 { display: none !important; }\n";
+		echo ".tcbf-partner-enhanced {\n";
+		echo "  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);\n";
+		echo "  padding: 16px 20px;\n";
+		echo "  display: flex;\n";
+		echo "  justify-content: space-between;\n";
+		echo "  align-items: center;\n";
+		echo "  gap: 16px;\n";
+		echo "}\n";
+		echo ".tcbf-partner-badge { display: flex; align-items: center; gap: 10px; }\n";
+		echo ".tcbf-partner-icon { font-size: 24px; color: #22c55e; line-height: 1; }\n";
+		echo ".tcbf-partner-code { font-size: 18px; font-weight: 700; color: #14532d; letter-spacing: 0.5px; }\n";
+		echo ".tcbf-partner-info { text-align: right; display: flex; flex-direction: column; gap: 2px; }\n";
+		echo ".tcbf-partner-pct { font-size: 14px; color: #14532d; font-weight: 500; }\n";
+		echo ".tcbf-partner-amt { font-size: 20px; font-weight: 700; color: #14532d; }\n";
+		echo "@media (max-width: 768px) {\n";
+		echo "  .tcbf-eb-enhanced, .tcbf-partner-enhanced { padding: 14px 16px; gap: 12px; }\n";
+		echo "  .tcbf-eb-icon, .tcbf-partner-icon { font-size: 20px; }\n";
+		echo "  .tcbf-eb-text, .tcbf-partner-code { font-size: 16px; }\n";
+		echo "  .tcbf-eb-pct, .tcbf-partner-pct { font-size: 13px; }\n";
+		echo "  .tcbf-eb-amt, .tcbf-partner-amt { font-size: 18px; }\n";
+		echo "}\n";
+		echo "</style>\n";
+		echo "<!-- /TC Booking Flow: Enhanced Field CSS -->\n";
 	}
 
 	/**

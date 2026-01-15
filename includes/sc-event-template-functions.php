@@ -328,7 +328,14 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         $text_deadline = str_replace( '{date}', $deadline_date, $text_deadline );
         $text_deadline = str_replace( '{days}', $days_left, $text_deadline );
 
+        // Get dynamic form ID from settings
+        $form_id = 48; // Default fallback
+        if ( class_exists( '\TC_BF\Admin\Settings' ) ) {
+            $form_id = (int) \TC_BF\Admin\Settings::get_form_id();
+        }
+
         // Inline CSS (self-contained, no external dependencies)
+        // IMPORTANT: Form ID is now dynamic based on active GF form
         $css = <<<CSS
 <style>
 .single-sc_event .single-post-header.with-thumb {
@@ -392,8 +399,8 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         font-size: 13px;
     }
 }
-/* Enhanced Field 179 - EB Discount */
-#field_48_179 .gfield_label {
+/* Enhanced Field 179 - EB Discount (form ID: {$form_id}) */
+#field_{$form_id}_179 .gfield_label {
     display: none !important;
 }
 .tcbf-eb-enhanced {
@@ -455,12 +462,12 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         font-size: 18px;
     }
 }
-/* Enhanced Field 180 - Partner Discount */
-#field_48_180 .gfield_label {
+/* Enhanced Field 180 - Partner Discount (form ID: {$form_id}) */
+#field_{$form_id}_180 .gfield_label {
     display: none !important;
 }
 /* Hide field 182 banner (replaced by enhanced field 180) */
-#field_48_182 {
+#field_{$form_id}_182 {
     display: none !important;
 }
 .tcbf-partner-enhanced {
