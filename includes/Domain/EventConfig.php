@@ -41,7 +41,16 @@ class EventConfig {
 			'version' => 1,
 			'global_cap' => [ 'enabled' => false, 'amount' => 0.0 ],
 			'steps' => [],
+			'_debug_meta' => [], // For diagnostics
 		];
+
+		// Debug: Read raw meta values directly
+		if ( ! is_admin() && function_exists('is_singular') && is_singular('sc_event') ) {
+			$cfg['_debug_meta']['tc_ebd_enabled'] = get_post_meta( $event_id, 'tc_ebd_enabled', true );
+			$cfg['_debug_meta']['tcbf_eb_enabled'] = get_post_meta( $event_id, 'tcbf_eb_enabled', true );
+			$cfg['_debug_meta']['tc_ebd_rules_json'] = get_post_meta( $event_id, 'tc_ebd_rules_json', true );
+			$cfg['_debug_meta']['tcbf_eb_rules_json'] = get_post_meta( $event_id, 'tcbf_eb_rules_json', true );
+		}
 
 		// Use EventMeta for canonical+legacy fallback (reads tcbf_eb_enabled, falls back to tc_ebd_enabled)
 		$enabled = EventMeta::get( $event_id, 'eb_enabled', '' );
