@@ -403,7 +403,6 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
 }
 .tcbf-partner-enhanced {
     background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-    border-left: 4px solid #22c55e;
     padding: 16px 20px;
     display: flex;
     justify-content: space-between;
@@ -420,9 +419,9 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     width: 100%;
     position: absolute;
     left: 0;
-    background: radial-gradient(circle, transparent 0%, transparent 50%, #f0fdf4 50%);
-    background-size: 20px 20px;
-    background-position: 0 5px;
+    background-image: radial-gradient(circle at 10px 5px, transparent 5px, #f0fdf4 5px);
+    background-size: 20px 10px;
+    background-repeat: repeat-x;
 }
 .tcbf-partner-enhanced:before {
     top: -10px;
