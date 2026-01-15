@@ -15,6 +15,7 @@ require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Partner.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Validation.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Rounding.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_JS.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_View_Filters.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
@@ -123,6 +124,10 @@ final class Plugin {
 		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_Discount_Rounding') ) {
 			$rounding = new \TC_BF\Integrations\GravityForms\GF_Discount_Rounding();
 			$rounding->init();
+		}
+		// GravityView filters: show only paid participants
+		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_View_Filters') ) {
+			\TC_BF\Integrations\GravityForms\GF_View_Filters::init();
 		}
 
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
