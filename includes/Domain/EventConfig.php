@@ -24,6 +24,9 @@ class EventConfig {
 	 * Retrieves and parses early booking discount configuration for a given event.
 	 * Supports both legacy array format and new schema v1 with step-based rules.
 	 *
+	 * IMPORTANT: Uses EventMeta::get() for canonical-first read with legacy fallback.
+	 * This ensures compatibility with both old (tc_*) and new (tcbf_*) meta keys.
+	 *
 	 * @param int $event_id The event post ID
 	 * @return array Configuration array with enabled, participation_enabled, rental_enabled, version, global_cap, and steps
 	 */
@@ -38,21 +41,33 @@ class EventConfig {
 			'version' => 1,
 			'global_cap' => [ 'enabled' => false, 'amount' => 0.0 ],
 			'steps' => [],
+			'_debug_meta' => [], // For diagnostics
 		];
 
-		$enabled = get_post_meta($event_id, self::META_EB_ENABLED, true);
+		// Debug: Read raw meta values directly
+		if ( ! is_admin() && function_exists('is_singular') && is_singular('sc_event') ) {
+			$cfg['_debug_meta']['tc_ebd_enabled'] = get_post_meta( $event_id, 'tc_ebd_enabled', true );
+			$cfg['_debug_meta']['tcbf_eb_enabled'] = get_post_meta( $event_id, 'tcbf_eb_enabled', true );
+			$cfg['_debug_meta']['tc_ebd_rules_json'] = get_post_meta( $event_id, 'tc_ebd_rules_json', true );
+			$cfg['_debug_meta']['tcbf_eb_rules_json'] = get_post_meta( $event_id, 'tcbf_eb_rules_json', true );
+		}
+
+		// Use EventMeta for canonical+legacy fallback (reads tcbf_eb_enabled, falls back to tc_ebd_enabled)
+		$enabled = EventMeta::get( $event_id, 'eb_enabled', '' );
 		if ( $enabled !== '' ) {
 			$val = strtolower(trim((string)$enabled));
 			$cfg['enabled'] = in_array($val, ['1','yes','true','on'], true);
 		}
 
 		// Legacy cap meta (deprecated): if present we interpret it as a GLOBAL cap amount (in currency).
+		// Note: No canonical key exists for this, so we read legacy directly
 		$cap = get_post_meta($event_id, self::META_EB_CAP, true);
 		if ( $cap !== '' && is_numeric($cap) ) {
 			$cfg['global_cap'] = [ 'enabled' => true, 'amount' => (float) $cap ];
 		}
 
-		$rules_json = (string) get_post_meta($event_id, self::META_EB_RULES_JSON, true);
+		// Use EventMeta for rules JSON (reads tcbf_eb_rules_json, falls back to tc_ebd_rules_json)
+		$rules_json = (string) EventMeta::get( $event_id, 'eb_rules_json', '' );
 		if ( $rules_json !== '' ) {
 			$decoded = json_decode($rules_json, true);
 			if ( is_array($decoded) ) {
@@ -105,13 +120,15 @@ class EventConfig {
 			}
 		}
 
-		$p = get_post_meta($event_id, self::META_EB_PARTICIPATION_ENABLED, true);
+		// Use EventMeta for canonical+legacy fallback
+		$p = EventMeta::get( $event_id, 'eb_participation_enabled', '' );
 		if ( $p !== '' ) {
 			$val = strtolower(trim((string)$p));
 			$cfg['participation_enabled'] = in_array($val, ['1','yes','true','on'], true);
 		}
 
-		$r = get_post_meta($event_id, self::META_EB_RENTAL_ENABLED, true);
+		// Use EventMeta for canonical+legacy fallback
+		$r = EventMeta::get( $event_id, 'eb_rental_enabled', '' );
 		if ( $r !== '' ) {
 			$val = strtolower(trim((string)$r));
 			$cfg['rental_enabled'] = in_array($val, ['1','yes','true','on'], true);

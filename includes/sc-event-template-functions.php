@@ -296,9 +296,48 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
 
         $calc = \TC_BF\Domain\Ledger::calculate_for_event( $event_id );
 
+        // Debug output (HTML comment - visible in page source)
+        $debug_output = "\n<!-- TC-BF EB Debug for event_id={$event_id}\n";
+        $debug_output .= "=== CALCULATION RESULTS ===\n";
+        $debug_output .= "  enabled: " . ( empty( $calc['enabled'] ) ? 'FALSE' : 'TRUE' ) . "\n";
+        $debug_output .= "  pct: " . ( $calc['pct'] ?? 'null' ) . "\n";
+        $debug_output .= "  days_before: " . ( $calc['days_before'] ?? 'null' ) . "\n";
+        $debug_output .= "  event_start_ts: " . ( $calc['event_start_ts'] ?? 'null' ) . " (" . ( isset($calc['event_start_ts']) && $calc['event_start_ts'] > 0 ? date('Y-m-d H:i:s', $calc['event_start_ts']) : 'n/a' ) . ")\n";
+        $debug_output .= "  now_ts: " . current_time('timestamp') . " (" . date('Y-m-d H:i:s', current_time('timestamp')) . ")\n";
+        if ( isset( $calc['cfg'] ) && is_array( $calc['cfg'] ) ) {
+            $debug_output .= "\n=== CONFIG ===\n";
+            $debug_output .= "  cfg.enabled: " . ( empty( $calc['cfg']['enabled'] ) ? 'FALSE' : 'TRUE' ) . "\n";
+            $debug_output .= "  cfg.steps_count: " . ( isset( $calc['cfg']['steps'] ) ? count( $calc['cfg']['steps'] ) : 0 ) . "\n";
+            if ( isset( $calc['cfg']['steps'] ) && is_array( $calc['cfg']['steps'] ) && count( $calc['cfg']['steps'] ) > 0 ) {
+                foreach ( $calc['cfg']['steps'] as $idx => $s ) {
+                    $debug_output .= "    step[{$idx}]: min_days={$s['min_days_before']}, type={$s['type']}, value={$s['value']}\n";
+                }
+            }
+            if ( isset( $calc['cfg']['_debug_meta'] ) && is_array( $calc['cfg']['_debug_meta'] ) ) {
+                $debug_output .= "\n=== RAW META VALUES ===\n";
+                foreach ( $calc['cfg']['_debug_meta'] as $key => $val ) {
+                    $display_val = $val;
+                    if ( is_string( $val ) && strlen( $val ) > 100 ) {
+                        $display_val = substr( $val, 0, 100 ) . '... (truncated)';
+                    }
+                    $debug_output .= "  {$key}: " . var_export( $display_val, true ) . "\n";
+                }
+            }
+        }
+        if ( isset( $calc['step'] ) && is_array( $calc['step'] ) ) {
+            $debug_output .= "\n=== SELECTED STEP ===\n";
+            $debug_output .= "  type: " . ( $calc['step']['type'] ?? 'null' ) . "\n";
+            $debug_output .= "  value: " . ( $calc['step']['value'] ?? 'null' ) . "\n";
+            $debug_output .= "  min_days_before: " . ( $calc['step']['min_days_before'] ?? 'null' ) . "\n";
+        } else {
+            $debug_output .= "\n=== SELECTED STEP ===\n";
+            $debug_output .= "  NO MATCHING STEP FOUND (days_before doesn't match any step's min_days_before)\n";
+        }
+        $debug_output .= "-->\n";
+
         // Only show if EB is active and has discount > 0
         if ( empty( $calc['enabled'] ) || empty( $calc['pct'] ) || $calc['pct'] <= 0 ) {
-            return '';
+            return $debug_output; // Return debug comment even when stripe doesn't show
         }
 
         // Extract data
@@ -328,7 +367,14 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         $text_deadline = str_replace( '{date}', $deadline_date, $text_deadline );
         $text_deadline = str_replace( '{days}', $days_left, $text_deadline );
 
+        // Get dynamic form ID from settings
+        $form_id = 48; // Default fallback
+        if ( class_exists( '\TC_BF\Admin\Settings' ) ) {
+            $form_id = (int) \TC_BF\Admin\Settings::get_form_id();
+        }
+
         // Inline CSS (self-contained, no external dependencies)
+        // IMPORTANT: Form ID is now dynamic based on active GF form
         $css = <<<CSS
 <style>
 .single-sc_event .single-post-header.with-thumb {
@@ -392,8 +438,8 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         font-size: 13px;
     }
 }
-/* Enhanced Field 179 - EB Discount */
-#field_48_179 .gfield_label {
+/* Enhanced Field 179 - EB Discount (form ID: {$form_id}) */
+#field_{$form_id}_179 .gfield_label {
     display: none !important;
 }
 .tcbf-eb-enhanced {
@@ -455,12 +501,12 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         font-size: 18px;
     }
 }
-/* Enhanced Field 180 - Partner Discount */
-#field_48_180 .gfield_label {
+/* Enhanced Field 180 - Partner Discount (form ID: {$form_id}) */
+#field_{$form_id}_180 .gfield_label {
     display: none !important;
 }
 /* Hide field 182 banner (replaced by enhanced field 180) */
-#field_48_182 {
+#field_{$form_id}_182 {
     display: none !important;
 }
 .tcbf-partner-enhanced {
