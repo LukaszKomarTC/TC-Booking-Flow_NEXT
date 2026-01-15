@@ -393,6 +393,74 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
         font-size: 13px;
     }
 }
+/* Enhanced Field 180 - Partner Discount */
+#field_48_180 .gfield_label {
+    display: none !important;
+}
+/* Hide field 182 banner (replaced by enhanced field 180) */
+#field_48_182 {
+    display: none !important;
+}
+.tcbf-partner-enhanced {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border-left: 4px solid #22c55e;
+    padding: 16px 20px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.tcbf-partner-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tcbf-partner-icon {
+    font-size: 24px;
+    color: #22c55e;
+    line-height: 1;
+}
+.tcbf-partner-code {
+    font-size: 18px;
+    font-weight: 700;
+    color: #14532d;
+    letter-spacing: 0.5px;
+}
+.tcbf-partner-info {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.tcbf-partner-pct {
+    font-size: 14px;
+    color: #166534;
+    font-weight: 500;
+}
+.tcbf-partner-amt {
+    font-size: 20px;
+    font-weight: 700;
+    color: #14532d;
+}
+@media (max-width: 768px) {
+    .tcbf-partner-enhanced {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+    .tcbf-partner-icon {
+        font-size: 20px;
+    }
+    .tcbf-partner-code {
+        font-size: 16px;
+    }
+    .tcbf-partner-pct {
+        font-size: 13px;
+    }
+    .tcbf-partner-amt {
+        font-size: 18px;
+    }
+}
 </style>
 CSS;
 
