@@ -9,13 +9,17 @@ require_once TC_BF_PATH . 'includes/Support/Logger.php';
 require_once TC_BF_PATH . 'includes/Domain/EventConfig.php';
 require_once TC_BF_PATH . 'includes/Domain/Ledger.php';
 require_once TC_BF_PATH . 'includes/Domain/PartnerResolver.php';
+require_once TC_BF_PATH . 'includes/Domain/Entry_State.php';
+require_once TC_BF_PATH . 'includes/Domain/Entry_Expiry_Job.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Partner.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Validation.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Rounding.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_JS.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_View_Filters.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Pack_Grouping.php';
 
 /**
  * TC Booking Flow Plugin Main Class (Orchestrator)
@@ -121,6 +125,10 @@ final class Plugin {
 			$rounding = new \TC_BF\Integrations\GravityForms\GF_Discount_Rounding();
 			$rounding->init();
 		}
+		// GravityView filters: show only paid participants
+		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_View_Filters') ) {
+			\TC_BF\Integrations\GravityForms\GF_View_Filters::init();
+		}
 
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
@@ -140,6 +148,16 @@ final class Plugin {
 		// ---- Cart display: show booking meta to the customer
 		add_filter('woocommerce_get_item_data', [ $this, 'woo_cart_item_data' ], 20, 2);
 
+		// ---- Pack Grouping: atomic cart behavior for participation + rental
+		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
+			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
+		}
+
+		// ---- Entry Expiry Job: scheduled cron to expire abandoned carts
+		if ( class_exists('\\TC_BF\\Domain\\Entry_Expiry_Job') ) {
+			\TC_BF\Domain\Entry_Expiry_Job::init();
+		}
+
 		// ---- Order item meta: persist booking meta to line items (your pasted snippet)
 		add_action('woocommerce_checkout_create_order_line_item', [ $this, 'woo_checkout_create_order_line_item' ], 20, 4);
 
@@ -148,6 +166,19 @@ final class Plugin {
 
 		// ---- Ledger: write EB + partner ledger on order (snapshot-driven)
 		add_action('woocommerce_checkout_order_processed', [ $this, 'eb_write_order_ledger' ], 40, 3);
+
+		// ---- Entry State: set checkout guard when order is being created
+		add_action('woocommerce_checkout_order_processed', [ $this, 'entry_state_set_checkout_guard' ], 5, 3);
+
+		// ---- Entry State: mark entries as paid when payment succeeds
+		add_action('woocommerce_payment_complete', [ $this, 'entry_state_mark_paid' ], 25, 1);
+		add_action('woocommerce_order_status_processing', [ $this, 'entry_state_mark_paid' ], 25, 2);
+		add_action('woocommerce_order_status_completed', [ $this, 'entry_state_mark_paid' ], 25, 2);
+
+		// ---- Entry State: handle failed/cancelled/refunded orders
+		add_action('woocommerce_order_status_failed', [ $this, 'entry_state_mark_payment_failed' ], 10, 2);
+		add_action('woocommerce_order_status_cancelled', [ $this, 'entry_state_mark_cancelled' ], 10, 2);
+		add_action('woocommerce_order_status_refunded', [ $this, 'entry_state_mark_refunded' ], 10, 2);
 
 		// ---- GF notifications: custom event + fire on successful payment (parity with legacy snippets)
 		add_filter('gform_notification_events', [ $this, 'gf_register_notification_events' ], 10, 1);
@@ -715,6 +746,11 @@ final class Plugin {
 		// Mark GF entry only if we added at least the participation line
 		if ( $added_part ) {
 			$this->gf_entry_mark_cart_added($entry_id);
+
+			// Mark entry as in_cart (Phase 2: Entry State)
+			if ( class_exists('\\TC_BF\\Domain\\Entry_State') ) {
+				\TC_BF\Domain\Entry_State::mark_in_cart( $entry_id );
+			}
 		}
 	}
 
@@ -954,6 +990,253 @@ final class Plugin {
 
 	public function eb_write_order_ledger( $order_id, $posted_data, $order ) {
 		Integrations\WooCommerce\Woo_OrderMeta::eb_write_order_ledger($order_id, $posted_data, $order);
+	}
+
+	// ========================================================================
+	// Entry State Management (Phase 2)
+	// ========================================================================
+
+	/**
+	 * Set checkout guard when order is being created
+	 *
+	 * Prevents cart clearing during checkout from marking entries as removed.
+	 *
+	 * @param int   $order_id    Order ID
+	 * @param array $posted_data Posted data
+	 * @param object $order      WC_Order instance
+	 */
+	public function entry_state_set_checkout_guard( int $order_id, array $posted_data, $order ) : void {
+
+		if ( ! $order || ! method_exists( $order, 'get_items' ) ) {
+			return;
+		}
+
+		// Extract entry IDs from order items and set checkout guard
+		$entry_ids = [];
+		foreach ( $order->get_items() as $item ) {
+			if ( ! method_exists( $item, 'get_meta' ) ) {
+				continue;
+			}
+
+			// Try to get entry_id from pack metadata or booking meta
+			$group_id = $item->get_meta( 'tc_group_id', true );
+			if ( ! $group_id ) {
+				// Fallback: try booking meta
+				$booking = $item->get_meta( 'booking', true );
+				if ( is_array( $booking ) && isset( $booking[ self::BK_ENTRY_ID ] ) ) {
+					$group_id = (int) $booking[ self::BK_ENTRY_ID ];
+				}
+			}
+
+			if ( $group_id > 0 ) {
+				$entry_ids[] = (int) $group_id;
+			}
+		}
+
+		$entry_ids = array_unique( $entry_ids );
+
+		// Set checkout guard for all entries
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+			foreach ( $entry_ids as $entry_id ) {
+				\TC_BF\Integrations\WooCommerce\Pack_Grouping::mark_checkout_in_progress( $entry_id );
+			}
+		}
+
+		$this->log( 'entry_state.checkout_guard.set', [
+			'order_id'   => $order_id,
+			'entry_ids'  => $entry_ids,
+		] );
+	}
+
+	/**
+	 * Mark entries as paid when payment succeeds
+	 *
+	 * @param int    $order_id    Order ID
+	 * @param object $maybe_order Optional order object (for status hooks)
+	 */
+	public function entry_state_mark_paid( int $order_id, $maybe_order = null ) : void {
+
+		if ( $order_id <= 0 ) {
+			return;
+		}
+
+		$order = $maybe_order && is_object( $maybe_order ) ? $maybe_order : wc_get_order( $order_id );
+		if ( ! $order || ! method_exists( $order, 'get_items' ) ) {
+			return;
+		}
+
+		// Only mark as paid if order is actually paid
+		if ( ! $order->is_paid() && ! in_array( $order->get_status(), [ 'processing', 'completed' ], true ) ) {
+			return;
+		}
+
+		// Extract entry IDs from order items
+		$entry_ids = [];
+		foreach ( $order->get_items() as $item ) {
+			if ( ! method_exists( $item, 'get_meta' ) ) {
+				continue;
+			}
+
+			$group_id = $item->get_meta( 'tc_group_id', true );
+			if ( ! $group_id ) {
+				$booking = $item->get_meta( 'booking', true );
+				if ( is_array( $booking ) && isset( $booking[ self::BK_ENTRY_ID ] ) ) {
+					$group_id = (int) $booking[ self::BK_ENTRY_ID ];
+				}
+			}
+
+			if ( $group_id > 0 ) {
+				$entry_ids[] = (int) $group_id;
+			}
+		}
+
+		$entry_ids = array_unique( $entry_ids );
+
+		// Mark entries as paid
+		if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+			foreach ( $entry_ids as $entry_id ) {
+				\TC_BF\Domain\Entry_State::mark_paid( $entry_id, $order_id );
+			}
+		}
+
+		// Clear checkout guards
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+			foreach ( $entry_ids as $entry_id ) {
+				\TC_BF\Integrations\WooCommerce\Pack_Grouping::clear_checkout_guard( $entry_id );
+			}
+		}
+
+		$this->log( 'entry_state.mark_paid', [
+			'order_id'   => $order_id,
+			'entry_ids'  => $entry_ids,
+		] );
+	}
+
+	/**
+	 * Mark entries as payment_failed when order payment fails
+	 *
+	 * @param int    $order_id    Order ID
+	 * @param object $maybe_order Optional order object
+	 */
+	public function entry_state_mark_payment_failed( int $order_id, $maybe_order = null ) : void {
+
+		if ( $order_id <= 0 ) {
+			return;
+		}
+
+		$order = $maybe_order && is_object( $maybe_order ) ? $maybe_order : wc_get_order( $order_id );
+		if ( ! $order || ! method_exists( $order, 'get_items' ) ) {
+			return;
+		}
+
+		$entry_ids = $this->extract_entry_ids_from_order( $order );
+
+		if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+			foreach ( $entry_ids as $entry_id ) {
+				\TC_BF\Domain\Entry_State::mark_payment_failed( $entry_id, $order_id );
+			}
+		}
+
+		$this->log( 'entry_state.payment_failed', [
+			'order_id'   => $order_id,
+			'entry_ids'  => $entry_ids,
+		] );
+	}
+
+	/**
+	 * Mark entries as cancelled when order is cancelled
+	 *
+	 * @param int    $order_id    Order ID
+	 * @param object $maybe_order Optional order object
+	 */
+	public function entry_state_mark_cancelled( int $order_id, $maybe_order = null ) : void {
+
+		if ( $order_id <= 0 ) {
+			return;
+		}
+
+		$order = $maybe_order && is_object( $maybe_order ) ? $maybe_order : wc_get_order( $order_id );
+		if ( ! $order || ! method_exists( $order, 'get_items' ) ) {
+			return;
+		}
+
+		$entry_ids = $this->extract_entry_ids_from_order( $order );
+
+		if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+			foreach ( $entry_ids as $entry_id ) {
+				\TC_BF\Domain\Entry_State::mark_cancelled( $entry_id, $order_id );
+			}
+		}
+
+		$this->log( 'entry_state.cancelled', [
+			'order_id'   => $order_id,
+			'entry_ids'  => $entry_ids,
+		] );
+	}
+
+	/**
+	 * Mark entries as refunded when order is refunded
+	 *
+	 * @param int    $order_id    Order ID
+	 * @param object $maybe_order Optional order object
+	 */
+	public function entry_state_mark_refunded( int $order_id, $maybe_order = null ) : void {
+
+		if ( $order_id <= 0 ) {
+			return;
+		}
+
+		$order = $maybe_order && is_object( $maybe_order ) ? $maybe_order : wc_get_order( $order_id );
+		if ( ! $order || ! method_exists( $order, 'get_items' ) ) {
+			return;
+		}
+
+		$entry_ids = $this->extract_entry_ids_from_order( $order );
+
+		if ( class_exists( '\\TC_BF\\Domain\\Entry_State' ) ) {
+			foreach ( $entry_ids as $entry_id ) {
+				\TC_BF\Domain\Entry_State::mark_refunded( $entry_id, $order_id );
+			}
+		}
+
+		$this->log( 'entry_state.refunded', [
+			'order_id'   => $order_id,
+			'entry_ids'  => $entry_ids,
+		] );
+	}
+
+	/**
+	 * Extract entry IDs from order items
+	 *
+	 * @param object $order WC_Order instance
+	 * @return array Array of entry IDs
+	 */
+	private function extract_entry_ids_from_order( $order ) : array {
+
+		if ( ! $order || ! method_exists( $order, 'get_items' ) ) {
+			return [];
+		}
+
+		$entry_ids = [];
+		foreach ( $order->get_items() as $item ) {
+			if ( ! method_exists( $item, 'get_meta' ) ) {
+				continue;
+			}
+
+			$group_id = $item->get_meta( 'tc_group_id', true );
+			if ( ! $group_id ) {
+				$booking = $item->get_meta( 'booking', true );
+				if ( is_array( $booking ) && isset( $booking[ self::BK_ENTRY_ID ] ) ) {
+					$group_id = (int) $booking[ self::BK_ENTRY_ID ];
+				}
+			}
+
+			if ( $group_id > 0 ) {
+				$entry_ids[] = (int) $group_id;
+			}
+		}
+
+		return array_unique( $entry_ids );
 	}
 
 }
