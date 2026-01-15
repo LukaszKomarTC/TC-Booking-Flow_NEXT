@@ -99,19 +99,23 @@ final class GF_JS {
 		// Process qTranslateX shortcodes server-side
 		$title = '[:en]Partner Discount Applied[:es]Descuento Partner Aplicado[:]';
 		$discount_label = '[:en]discount[:es]descuento[:]';
+		$eb_label = '[:en]Early Booking[:es]Reserva Anticipada[:]';
 
 		// Use qTranslateX helper if available (from sc-event-template-functions.php)
 		if ( function_exists( 'tc_sc_event_tr' ) ) {
 			$title = tc_sc_event_tr( $title );
 			$discount_label = tc_sc_event_tr( $discount_label );
+			$eb_label = tc_sc_event_tr( $eb_label );
 		} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage' ) ) {
 			$title = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $title );
 			$discount_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $discount_label );
+			$eb_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $eb_label );
 		}
 
 		return [
 			'title'          => $title,
 			'discount_label' => $discount_label,
+			'eb_label'       => $eb_label,
 		];
 	}
 
@@ -145,6 +149,7 @@ final class GF_JS {
 		// Translated strings (qTranslateX processed server-side)
 		$banner_title = isset( $i18n['title'] ) ? esc_js( $i18n['title'] ) : 'Partner Discount Applied';
 		$discount_label = isset( $i18n['discount_label'] ) ? esc_js( $i18n['discount_label'] ) : 'discount';
+		$eb_label = isset( $i18n['eb_label'] ) ? esc_js( $i18n['eb_label'] ) : 'Early Booking';
 
 		// IMPORTANT: this is raw JS (no <script> wrapper). GF will wrap it.
 		return "window.tcBfPartnerMap = window.tcBfPartnerMap || {};\n"
@@ -210,6 +215,7 @@ final class GF_JS {
 			. "  }\n"
 			. "  var bannerTitle = '" . $banner_title . "';\n"
 			. "  var discountLabel = '" . $discount_label . "';\n"
+			. "  var ebLabel = '" . $eb_label . "';\n"
 			. "  function updatePartnerBanner(data, code){\n"
 			. "    var banner = qs('#tcbf-partner-banner-'+fid);\n"
 			. "    if(!banner) return;\n"
@@ -253,6 +259,29 @@ final class GF_JS {
 			. "      enhanced.style.display = 'none';\n"
 			. "    }\n"
 			. "  }\n"
+			. "  function enhanceField179(){\n"
+			. "    var field179 = qs('#field_'+fid+'_179');\n"
+			. "    if(!field179) return;\n"
+			. "    var container = qs('.ginput_container', field179);\n"
+			. "    if(!container) return;\n"
+			. "    var enhanced = qs('.tcbf-eb-enhanced', container);\n"
+			. "    if(!enhanced){\n"
+			. "      enhanced = document.createElement('div');\n"
+			. "      enhanced.className = 'tcbf-eb-enhanced';\n"
+			. "      container.appendChild(enhanced);\n"
+			. "      var wrapper = qs('.ginput_product_price_wrapper', field179);\n"
+			. "      if(wrapper) wrapper.style.display = 'none';\n"
+			. "    }\n"
+			. "    var ebPct = parseLocaleFloat((qs('#input_'+fid+'_172')||{}).value||0);\n"
+			. "    if(ebPct > 0){\n"
+			. "      var amountSpan = qs('#input_'+fid+'_179');\n"
+			. "      var amount = amountSpan ? amountSpan.textContent : '';\n"
+			. "      enhanced.innerHTML = '<div class=\"tcbf-eb-badge\"><span class=\"tcbf-eb-icon\">⏰</span><span class=\"tcbf-eb-text\">'+ebLabel.toUpperCase()+'</span></div><div class=\"tcbf-eb-info\"><div class=\"tcbf-eb-pct\">'+fmtPct(ebPct)+'% '+discountLabel+'</div><div class=\"tcbf-eb-amt\">'+amount+'</div></div>';\n"
+			. "      enhanced.style.display = 'flex';\n"
+			. "    } else {\n"
+			. "      enhanced.style.display = 'none';\n"
+			. "    }\n"
+			. "  }\n"
 			. "  function isPartnerProgramEnabled(){\n"
 			. "    // Visibility is handled by GF conditional logic; this is only a guard.\n"
 			. "    try{\n"
@@ -284,6 +313,7 @@ final class GF_JS {
 			. "        toggleSummary(null, '');\n"
 			. "        updatePartnerBanner(null, '');\n"
 			. "        enhanceField180(null, '');\n"
+			. "        setTimeout(enhanceField179, 50);\n"
 			. "        return;\n"
 			. "      }\n"
 			. "      var map = (window.tcBfPartnerMap && window.tcBfPartnerMap[fid]) ? window.tcBfPartnerMap[fid] : {};\n"
@@ -326,6 +356,7 @@ final class GF_JS {
 			. "      if(changed && typeof window.gformCalculateTotalPrice === 'function'){\n"
 			. "        try{ window.gformCalculateTotalPrice(fid); }catch(e){}\n"
 			. "      }\n"
+			. "      setTimeout(enhanceField179, 50);\n"
 			. "    } finally {\n"
 			. "      applyPartnerInProgress = false;\n"
 			. "    }\n"
