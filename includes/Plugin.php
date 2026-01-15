@@ -9,6 +9,7 @@ require_once TC_BF_PATH . 'includes/Support/Logger.php';
 require_once TC_BF_PATH . 'includes/Domain/EventConfig.php';
 require_once TC_BF_PATH . 'includes/Domain/Ledger.php';
 require_once TC_BF_PATH . 'includes/Domain/PartnerResolver.php';
+require_once TC_BF_PATH . 'includes/Domain/Entry_State.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Partner.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Validation.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Rounding.php';
@@ -16,6 +17,7 @@ require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_JS.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Pack_Grouping.php';
 
 /**
  * TC Booking Flow Plugin Main Class (Orchestrator)
@@ -139,6 +141,11 @@ final class Plugin {
 
 		// ---- Cart display: show booking meta to the customer
 		add_filter('woocommerce_get_item_data', [ $this, 'woo_cart_item_data' ], 20, 2);
+
+		// ---- Pack Grouping: atomic cart behavior for participation + rental
+		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
+			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
+		}
 
 		// ---- Order item meta: persist booking meta to line items (your pasted snippet)
 		add_action('woocommerce_checkout_create_order_line_item', [ $this, 'woo_checkout_create_order_line_item' ], 20, 4);
