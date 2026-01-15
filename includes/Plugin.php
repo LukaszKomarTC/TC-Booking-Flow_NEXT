@@ -10,6 +10,7 @@ require_once TC_BF_PATH . 'includes/Domain/EventConfig.php';
 require_once TC_BF_PATH . 'includes/Domain/Ledger.php';
 require_once TC_BF_PATH . 'includes/Domain/PartnerResolver.php';
 require_once TC_BF_PATH . 'includes/Domain/Entry_State.php';
+require_once TC_BF_PATH . 'includes/Domain/Entry_Expiry_Job.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Partner.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Validation.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Rounding.php';
@@ -145,6 +146,11 @@ final class Plugin {
 		// ---- Pack Grouping: atomic cart behavior for participation + rental
 		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
 			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
+		}
+
+		// ---- Entry Expiry Job: scheduled cron to expire abandoned carts
+		if ( class_exists('\\TC_BF\\Domain\\Entry_Expiry_Job') ) {
+			\TC_BF\Domain\Entry_Expiry_Job::init();
 		}
 
 		// ---- Order item meta: persist booking meta to line items (your pasted snippet)
