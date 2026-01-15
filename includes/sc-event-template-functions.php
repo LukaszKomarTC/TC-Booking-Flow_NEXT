@@ -405,11 +405,31 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
     border-left: 4px solid #22c55e;
     padding: 16px 20px;
-    border-radius: 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
+    position: relative;
+    margin: 20px 0;
+}
+.tcbf-partner-enhanced:before,
+.tcbf-partner-enhanced:after {
+    content: "";
+    display: block;
+    height: 10px;
+    width: 100%;
+    position: absolute;
+    left: 0;
+    background: radial-gradient(circle, transparent 0%, transparent 50%, #f0fdf4 50%);
+    background-size: 20px 20px;
+    background-position: 0 5px;
+}
+.tcbf-partner-enhanced:before {
+    top: -10px;
+}
+.tcbf-partner-enhanced:after {
+    bottom: -10px;
+    transform: rotate(180deg);
 }
 .tcbf-partner-badge {
     display: flex;
