@@ -45,67 +45,60 @@ final class GF_View_Filters {
 	 *
 	 * This runs when GravityView queries entries for display.
 	 *
-	 * Note: GravityView passes parameters in different orders depending on version.
-	 * We handle this flexibly by accepting mixed types.
+	 * Official filter signature:
+	 * apply_filters( 'gravityview_search_criteria', $criteria, $form_ids, $criteria['context_view_id'] );
 	 *
-	 * @param array  $search_criteria Current search criteria
-	 * @param mixed  $param2          Could be form_id (int), form (array), or view object
-	 * @param mixed  $param3          Could be view object or other data
-	 * @return array Modified search criteria
+	 * @param array    $criteria        Full criteria array with keys: search_criteria, sorting, paging, cache, context_view_id
+	 * @param int|array $form_ids       Form ID(s) being queried (can be single int or array of ints)
+	 * @param int      $context_view_id View ID from context
+	 * @return array Modified criteria array
 	 */
-	public static function filter_gravityview_paid_only( $search_criteria, $param2 = null, $param3 = null ) : array {
+	public static function filter_gravityview_paid_only( $criteria, $form_ids = null, $context_view_id = 0 ) : array {
 
-		// Ensure we have an array for search criteria
-		if ( ! is_array( $search_criteria ) ) {
-			$search_criteria = [];
+		// Ensure we have an array for criteria
+		if ( ! is_array( $criteria ) ) {
+			$criteria = [];
 		}
 
-		// Try to determine the view object from parameters
-		$view = null;
-		$form_id = 0;
-
-		// Check if param3 is the view object
-		if ( is_object( $param3 ) ) {
-			$view = $param3;
-		} elseif ( is_object( $param2 ) ) {
-			$view = $param2;
+		// Ensure search_criteria sub-array exists
+		if ( ! isset( $criteria['search_criteria'] ) || ! is_array( $criteria['search_criteria'] ) ) {
+			$criteria['search_criteria'] = [];
 		}
 
-		// Try to extract form_id
-		if ( is_int( $param2 ) ) {
-			$form_id = $param2;
-		} elseif ( is_array( $param2 ) && isset( $param2['id'] ) ) {
-			$form_id = (int) $param2['id'];
-		}
+		// Get view ID for checking if filtering is enabled
+		$view_id = $context_view_id > 0 ? $context_view_id : ( isset( $criteria['context_view_id'] ) ? (int) $criteria['context_view_id'] : 0 );
 
 		// Check if filtering is enabled for this view
-		if ( $view && ! self::is_filtering_enabled_for_view( $view ) ) {
-			return $search_criteria;
+		if ( $view_id > 0 && ! self::is_filtering_enabled_for_view_id( $view_id ) ) {
+			return $criteria;
 		}
 
-		// Add tcbf_state = 'paid' to field filters
-		if ( ! isset( $search_criteria['field_filters'] ) || ! is_array( $search_criteria['field_filters'] ) ) {
-			$search_criteria['field_filters'] = [];
+		// Ensure field_filters array exists
+		if ( ! isset( $criteria['search_criteria']['field_filters'] ) || ! is_array( $criteria['search_criteria']['field_filters'] ) ) {
+			$criteria['search_criteria']['field_filters'] = [];
 		}
 
 		// Ensure mode is set
-		if ( ! isset( $search_criteria['field_filters']['mode'] ) ) {
-			$search_criteria['field_filters']['mode'] = 'all';
+		if ( ! isset( $criteria['search_criteria']['field_filters']['mode'] ) ) {
+			$criteria['search_criteria']['field_filters']['mode'] = 'all';
 		}
 
 		// Add paid state filter
-		$search_criteria['field_filters'][] = [
+		$criteria['search_criteria']['field_filters'][] = [
 			'key'   => \TC_BF\Domain\Entry_State::META_STATE,
 			'value' => \TC_BF\Domain\Entry_State::STATE_PAID,
 		];
 
+		// Extract form_id for logging (handle both int and array)
+		$form_id = is_array( $form_ids ) ? ( ! empty( $form_ids ) ? (int) $form_ids[0] : 0 ) : (int) $form_ids;
+
 		\TC_BF\Support\Logger::log( 'gf_view.filter_applied', [
 			'form_id' => $form_id,
-			'view_id' => ( $view && method_exists( $view, 'get_view_id' ) ) ? $view->get_view_id() : 0,
+			'view_id' => $view_id,
 			'filter'  => 'paid_only',
 		] );
 
-		return $search_criteria;
+		return $criteria;
 	}
 
 	/**
@@ -175,6 +168,27 @@ final class GF_View_Filters {
 
 		if ( $view_id <= 0 ) {
 			// If we can't determine view ID, apply filter by default for safety
+			return true;
+		}
+
+		// Check view meta
+		$enabled = get_post_meta( $view_id, self::VIEW_META_ENABLE_FILTER, true );
+
+		// Default: enabled (show only paid participants)
+		// Can be disabled per view if needed for admin purposes
+		return $enabled !== 'no';
+	}
+
+	/**
+	 * Check if filtering is enabled for a GravityView view by ID
+	 *
+	 * @param int $view_id GravityView post ID
+	 * @return bool Filtering enabled
+	 */
+	private static function is_filtering_enabled_for_view_id( int $view_id ) : bool {
+
+		if ( $view_id <= 0 ) {
+			// If no view ID, apply filter by default for safety
 			return true;
 		}
 
