@@ -335,9 +335,9 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     margin-bottom: 0 !important;
 }
 @keyframes tcbf-shake {
-    0%, 25%, 100% { transform: rotate(0deg); }
-    2.5%, 7.5%, 12.5%, 17.5%, 22.5% { transform: rotate(-10deg); }
-    5%, 10%, 15%, 20% { transform: rotate(10deg); }
+    0%, 60%, 100% { transform: rotate(0deg); }
+    1%, 3%, 5%, 7%, 9%, 11%, 13%, 15%, 17%, 19%, 21%, 23%, 25%, 27%, 29%, 31%, 33%, 35%, 37%, 39%, 41%, 43%, 45%, 47%, 49%, 51%, 53%, 55%, 57%, 59% { transform: rotate(-10deg); }
+    2%, 4%, 6%, 8%, 10%, 12%, 14%, 16%, 18%, 20%, 22%, 24%, 26%, 28%, 30%, 32%, 34%, 36%, 38%, 40%, 42%, 44%, 46%, 48%, 50%, 52%, 54%, 56%, 58% { transform: rotate(10deg); }
 }
 .tcbf-eb-stripe {
     background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
@@ -356,7 +356,7 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     font-size: 32px;
     line-height: 1;
     flex-shrink: 0;
-    animation: tcbf-shake 2s ease-in-out infinite;
+    animation: tcbf-shake 5s ease-in-out infinite;
 }
 .tcbf-eb-stripe__content {
     flex: 1;
@@ -391,6 +391,74 @@ if ( ! function_exists('tc_sc_event_render_eb_stripe') ) {
     }
     .tcbf-eb-stripe__deadline {
         font-size: 13px;
+    }
+}
+/* Enhanced Field 180 - Partner Discount */
+#field_48_180 .gfield_label {
+    display: none !important;
+}
+/* Hide field 182 banner (replaced by enhanced field 180) */
+#field_48_182 {
+    display: none !important;
+}
+.tcbf-partner-enhanced {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border-left: 4px solid #22c55e;
+    padding: 16px 20px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.tcbf-partner-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tcbf-partner-icon {
+    font-size: 24px;
+    color: #22c55e;
+    line-height: 1;
+}
+.tcbf-partner-code {
+    font-size: 18px;
+    font-weight: 700;
+    color: #14532d;
+    letter-spacing: 0.5px;
+}
+.tcbf-partner-info {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.tcbf-partner-pct {
+    font-size: 14px;
+    color: #166534;
+    font-weight: 500;
+}
+.tcbf-partner-amt {
+    font-size: 20px;
+    font-weight: 700;
+    color: #14532d;
+}
+@media (max-width: 768px) {
+    .tcbf-partner-enhanced {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+    .tcbf-partner-icon {
+        font-size: 20px;
+    }
+    .tcbf-partner-code {
+        font-size: 16px;
+    }
+    .tcbf-partner-pct {
+        font-size: 13px;
+    }
+    .tcbf-partner-amt {
+        font-size: 18px;
     }
 }
 </style>
