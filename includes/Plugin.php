@@ -1254,8 +1254,8 @@ final class Plugin {
 			}
 		}
 
-		// Note: Booking Date, Duration, Size are hidden for child items via JavaScript
-		// (see output_pack_grouping_js function)
+		// Note: Booking Date, Duration, Size are filtered out for child items in
+		// Woo.php::woo_cart_item_data() so they never appear in orders/emails
 
 		return $display_key;
 	}
@@ -1434,50 +1434,14 @@ final class Plugin {
 		echo "    });\n";
 		echo "  }\n";
 		echo "  \n";
-		echo "  function hideChildItemMeta() {\n";
-		echo "    // Hide specific meta fields (Booking Date, Duration, Size) for child items (rentals in pack)\n";
-		echo "    var childRows = $('.tcbf-pack-role-child');\n";
-		echo "    \n";
-		echo "    childRows.each(function() {\n";
-		echo "      var \$row = $(this);\n";
-		echo "      var \$meta = \$row.find('.wc-item-meta-list li, dl.variation dt');\n";
-		echo "      \n";
-		echo "      \$meta.each(function() {\n";
-		echo "        var \$label = $(this);\n";
-		echo "        var text = \$label.text().toLowerCase();\n";
-		echo "        \n";
-		echo "        // Hide if label matches booking date, duration, or size\n";
-		echo "        if (text.indexOf('booking date') >= 0 || \n";
-		echo "            text.indexOf('fecha de la reserva') >= 0 || \n";
-		echo "            text.indexOf('duration') >= 0 || \n";
-		echo "            text.indexOf('duración') >= 0 || \n";
-		echo "            text.indexOf('size') >= 0 || \n";
-		echo "            text.indexOf('talla') >= 0) {\n";
-		echo "          \n";
-		echo "          // For dt/dd pairs\n";
-		echo "          if (\$label.is('dt')) {\n";
-		echo "            \$label.next('dd').hide();\n";
-		echo "            \$label.hide();\n";
-		echo "          }\n";
-		echo "          // For li elements\n";
-		echo "          else if (\$label.is('li')) {\n";
-		echo "            \$label.hide();\n";
-		echo "          }\n";
-		echo "        }\n";
-		echo "      });\n";
-		echo "    });\n";
-		echo "  }\n";
-		echo "  \n";
 		echo "  $(document).ready(function() {\n";
 		echo "    initPackGrouping();\n";
-		echo "    hideChildItemMeta();\n";
 		echo "  });\n";
 		echo "  \n";
 		echo "  // Re-run after cart updates (AJAX)\n";
 		echo "  $(document.body).on('updated_cart_totals updated_checkout', function() {\n";
 		echo "    console.log('Cart updated, re-initializing pack grouping');\n";
 		echo "    initPackGrouping();\n";
-		echo "    hideChildItemMeta();\n";
 		echo "  });\n";
 		echo "  \n";
 		echo "})(jQuery);\n";

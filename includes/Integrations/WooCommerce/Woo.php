@@ -105,7 +105,32 @@ final class Woo {
 
 		// Get scope and pack role to determine which fields to show
 		$scope = isset($booking[\TC_BF\Plugin::BK_SCOPE]) ? (string) $booking[\TC_BF\Plugin::BK_SCOPE] : '';
-		$is_pack_parent = isset($cart_item['tc_group_role']) && $cart_item['tc_group_role'] === 'parent';
+		$role = isset($cart_item['tc_group_role']) ? $cart_item['tc_group_role'] : '';
+		$is_pack_parent = $role === 'parent';
+
+		// For child items (rentals in pack), filter out WooCommerce Bookings auto-generated fields
+		// that should only appear on parent items (Booking Date, Duration, Size)
+		if ( $role === 'child' ) {
+			$filtered_data = [];
+			foreach ( $item_data as $data ) {
+				$name = isset( $data['name'] ) ? $data['name'] : '';
+				$name_lower = strtolower( $name );
+
+				// Skip these fields for child items
+				if ( strpos( $name_lower, 'booking date' ) !== false ||
+				     strpos( $name_lower, 'fecha de la reserva' ) !== false ||
+				     strpos( $name_lower, 'booking dates' ) !== false ||
+				     strpos( $name_lower, 'duration' ) !== false ||
+				     strpos( $name_lower, 'duración' ) !== false ||
+				     strpos( $name_lower, 'size' ) !== false ||
+				     strpos( $name_lower, 'talla' ) !== false ) {
+					continue; // Skip this field
+				}
+
+				$filtered_data[] = $data;
+			}
+			$item_data = $filtered_data;
+		}
 
 		// Event title - ONLY show for participation items, not for rentals
 		if ( $scope !== 'rental' && ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
