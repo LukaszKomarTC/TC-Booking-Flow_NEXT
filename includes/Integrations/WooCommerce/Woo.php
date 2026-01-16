@@ -107,8 +107,8 @@ final class Woo {
 		$scope = isset($booking[\TC_BF\Plugin::BK_SCOPE]) ? (string) $booking[\TC_BF\Plugin::BK_SCOPE] : '';
 		$is_pack_parent = isset($cart_item['tc_group_role']) && $cart_item['tc_group_role'] === 'parent';
 
-		// Event title (show for both participation and rental)
-		if ( ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
+		// Event title - ONLY show for participation items, not for rentals
+		if ( $scope !== 'rental' && ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
 			$item_data[] = [
 				"name"  => __("Event", "tc-booking-flow"),
 				"value" => wc_clean((string) $booking[\TC_BF\Plugin::BK_EVENT_TITLE]),
