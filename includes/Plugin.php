@@ -484,6 +484,14 @@ final class Plugin {
 		$first = (string) rgar($entry, (string) self::GF_FIELD_FIRST_NAME);
 		$last  = (string) rgar($entry, (string) self::GF_FIELD_LAST_NAME);
 
+		$this->log('gf.participant_fields', [
+			'entry_id' => $entry_id,
+			'first_name' => $first,
+			'last_name' => $last,
+			'first_name_field' => self::GF_FIELD_FIRST_NAME,
+			'last_name_field' => self::GF_FIELD_LAST_NAME,
+		]);
+
 		// coupon code (partner)
 		$coupon_code = trim((string) rgar($entry, (string) self::GF_FIELD_COUPON_CODE));
 		$coupon_code = $coupon_code ? wc_format_coupon_code($coupon_code) : '';
@@ -1315,9 +1323,25 @@ final class Plugin {
 		$participant = '';
 
 		if ( $group_id > 0 ) {
-			// Get participant name for floating badge
+			// Try multiple sources for participant name
 			if ( ! empty( $cart_item['booking']['_participant'] ) ) {
 				$participant = wc_clean( (string) $cart_item['booking']['_participant'] );
+			}
+			// Fallback: try without underscore (legacy)
+			elseif ( ! empty( $cart_item['booking']['participant'] ) ) {
+				$participant = wc_clean( (string) $cart_item['booking']['participant'] );
+			}
+
+			// Debug logging
+			if ( $this->is_debug() ) {
+				$this->log('pack.metadata.output', [
+					'group_id' => $group_id,
+					'role' => $role,
+					'participant' => $participant,
+					'booking_keys' => array_keys( $cart_item['booking'] ?? [] ),
+					'has_participant_underscore' => isset( $cart_item['booking']['_participant'] ),
+					'has_participant_no_underscore' => isset( $cart_item['booking']['participant'] ),
+				]);
 			}
 
 			// Output hidden div with pack metadata
@@ -1325,6 +1349,7 @@ final class Plugin {
 			echo 'data-pack-group="' . esc_attr( $group_id ) . '" ';
 			echo 'data-pack-role="' . esc_attr( $role ) . '" ';
 			echo 'data-pack-participant="' . esc_attr( $participant ) . '">';
+			echo '<!-- DEBUG: participant=' . esc_html( $participant ) . ' role=' . esc_html( $role ) . ' -->';
 			echo '</div>';
 		}
 	}
@@ -1357,16 +1382,28 @@ final class Plugin {
 		echo "    packItems.each(function() {\n";
 		echo "      var \$row = $(this);\n";
 		echo "      var \$meta = \$row.find('.tcbf-pack-meta');\n";
-		echo "      if (\$meta.length === 0) return;\n";
+		echo "      if (\$meta.length === 0) {\n";
+		echo "        console.log('No .tcbf-pack-meta found in row');\n";
+		echo "        return;\n";
+		echo "      }\n";
 		echo "      \n";
 		echo "      var groupId = \$meta.attr('data-pack-group');\n";
+		echo "      var role = \$meta.attr('data-pack-role');\n";
+		echo "      var participant = \$meta.attr('data-pack-participant') || '';\n";
+		echo "      \n";
+		echo "      console.log('Found meta - Group: ' + groupId + ', Role: ' + role + ', Participant: \"' + participant + '\"');\n";
+		echo "      \n";
 		echo "      if (!groupId) return;\n";
 		echo "      \n";
 		echo "      if (!groups[groupId]) {\n";
 		echo "        groups[groupId] = {\n";
 		echo "          items: [],\n";
-		echo "          participant: \$meta.attr('data-pack-participant') || ''\n";
+		echo "          participant: participant\n";
 		echo "        };\n";
+		echo "      }\n";
+		echo "      // If we haven't found a participant yet and this item has one, use it\n";
+		echo "      if (!groups[groupId].participant && participant) {\n";
+		echo "        groups[groupId].participant = participant;\n";
 		echo "      }\n";
 		echo "      groups[groupId].items.push(this);\n";
 		echo "    });\n";
