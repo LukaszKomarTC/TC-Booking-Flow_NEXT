@@ -115,29 +115,8 @@ final class Woo {
 			];
 		}
 
-		// Participant - show with special styling for pack parents (participation items)
-		if ( ! empty($booking["_participant"]) ) {
-			$participant_name = wc_clean((string) $booking["_participant"]);
-
-			// For pack parent items, show participant as a prominent badge
-			if ( $is_pack_parent ) {
-				$participant_html = '<div class="tcbf-participant-badge">';
-				$participant_html .= '<span class="tcbf-participant-badge__icon">👤</span>';
-				$participant_html .= '<span class="tcbf-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
-				$participant_html .= '</div>';
-
-				$item_data[] = [
-					"name"  => __("Participant", "tc-booking-flow"),
-					"value" => $participant_html,
-				];
-			} else {
-				// For non-pack items or rentals, show as plain text
-				$item_data[] = [
-					"name"  => __("Participant", "tc-booking-flow"),
-					"value" => $participant_name,
-				];
-			}
-		}
+		// Participant name: Now shown as floating badge over pack group (via JavaScript in Plugin.php)
+		// Not displayed in cart item meta to avoid duplication
 
 		// Type field: HIDDEN (per user requirement - hide for both participation and rental in cart)
 		// (kept as order meta via woo_checkout_create_order_line_item)
