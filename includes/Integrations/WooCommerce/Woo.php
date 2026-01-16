@@ -129,6 +129,18 @@ final class Woo {
 			];
 		}
 
+		// "Own" bicycle label for participation items without rental
+		if ( $scope !== 'rental' && empty($booking["_bicycle"]) ) {
+			$own_label = '[:en]Own[:es]Propia[:]';
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$own_label = tc_sc_event_tr( $own_label );
+			}
+			$item_data[] = [
+				"name"  => __("Bicycle", "tc-booking-flow"),
+				"value" => $own_label,
+			];
+		}
+
 		// Note: Booking date, Duration, Size are automatically added by WooCommerce Bookings
 		// We'll filter those out via woocommerce_hidden_order_itemmeta for cart display
 
