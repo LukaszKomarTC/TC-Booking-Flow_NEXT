@@ -109,8 +109,12 @@ final class Woo {
 
 		// Event title - ONLY show for participation items, not for rentals
 		if ( $scope !== 'rental' && ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
+			$event_label = '[:en]Event[:es]Evento[:]';
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$event_label = tc_sc_event_tr( $event_label );
+			}
 			$item_data[] = [
-				"name"  => __("Event", "tc-booking-flow"),
+				"name"  => $event_label,
 				"value" => wc_clean((string) $booking[\TC_BF\Plugin::BK_EVENT_TITLE]),
 			];
 		}
@@ -123,26 +127,54 @@ final class Woo {
 
 		// Bicycle label (rental line only)
 		if ( $scope === 'rental' && ! empty($booking["_bicycle"]) ) {
+			$bicycle_label = '[:es]Bicicleta[:en]Bicycle[:]';
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$bicycle_label = tc_sc_event_tr( $bicycle_label );
+			}
 			$item_data[] = [
-				"name"  => __("Bike", "tc-booking-flow"),
+				"name"  => $bicycle_label,
 				"value" => wc_clean((string) $booking["_bicycle"]),
 			];
 		}
 
 		// "Own" bicycle label for participation items without rental
 		if ( $scope !== 'rental' && empty($booking["_bicycle"]) ) {
+			$bicycle_label = '[:es]Bicicleta[:en]Bicycle[:]';
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$bicycle_label = tc_sc_event_tr( $bicycle_label );
+			}
 			$own_label = '[:en]Own[:es]Propia[:]';
 			if ( function_exists( 'tc_sc_event_tr' ) ) {
 				$own_label = tc_sc_event_tr( $own_label );
 			}
 			$item_data[] = [
-				"name"  => __("Bicycle", "tc-booking-flow"),
+				"name"  => $bicycle_label,
 				"value" => $own_label,
 			];
 		}
 
 		// Note: Booking date, Duration, Size are automatically added by WooCommerce Bookings
 		// We'll filter those out via woocommerce_hidden_order_itemmeta for cart display
+
+		// "Included in pack" badge for rental items in pack (child role) - shown at bottom
+		$role = isset($cart_item['tc_group_role']) ? $cart_item['tc_group_role'] : '';
+		if ( $role === 'child' ) {
+			$pack_label = '[:en]Included in pack[:es]Incluido en el pack[:]';
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$pack_label = tc_sc_event_tr( $pack_label );
+			}
+			// Use display: 'pack_badge' to apply special styling
+			$badge_html = '<span class="tcbf-pack-badge-inline">';
+			$badge_html .= '<span class="tcbf-pack-badge-inline__icon">📦</span>';
+			$badge_html .= '<span class="tcbf-pack-badge-inline__text">' . esc_html( $pack_label ) . '</span>';
+			$badge_html .= '</span>';
+
+			$item_data[] = [
+				"name"  => '',
+				"value" => $badge_html,
+				"display" => 'pack_badge',
+			];
+		}
 
 		return $item_data;
 	}

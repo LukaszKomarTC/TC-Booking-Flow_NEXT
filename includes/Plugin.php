@@ -999,12 +999,17 @@ final class Plugin {
 			echo "  padding-bottom: 20px !important;\n";
 			echo "}\n";
 
+			echo "tr.tcbf-pack-header {\n";
+			echo "  display: table-row;\n";
+			echo "}\n";
+
 			echo "tr.tcbf-pack-header td {\n";
-			echo "  padding: 12px 0 0 0 !important;\n";
+			echo "  width: 100%;\n";
+			echo "  text-align: center !important;\n";
+			echo "  padding-bottom: 5px !important;\n";
 			echo "  border: none !important;\n";
 			echo "  background: transparent !important;\n";
 			echo "  border-bottom: none !important;\n";
-			echo "  text-align: center;\n";
 			echo "}\n";
 
 			echo ".tcbf-pack-participant-badge {\n";
@@ -1236,22 +1241,21 @@ final class Plugin {
 	 * @return string Empty string to hide, original key to show
 	 */
 	public function woo_filter_cart_meta_labels( $display_key, $meta = null, $item = null ) {
-		// Hide WooCommerce Bookings auto-generated fields from cart/checkout display
-		$hidden_keys = [
-			'Booking Date',
-			'Booking Dates',
-			'Duration',
-			'Size',
+		// Always hide these fields regardless of item type
+		$always_hidden = [
 			'Persons',
 			'Resource',
 		];
 
-		// Check if this is a hidden key
-		foreach ( $hidden_keys as $hidden ) {
+		// Check if this should always be hidden
+		foreach ( $always_hidden as $hidden ) {
 			if ( stripos( $display_key, $hidden ) !== false ) {
 				return ''; // Return empty string to hide
 			}
 		}
+
+		// Note: Booking Date, Duration, Size are hidden for child items via JavaScript
+		// (see output_pack_grouping_js function)
 
 		return $display_key;
 	}
@@ -1267,27 +1271,22 @@ final class Plugin {
 	public function woo_add_pack_badge_to_title( $product_name, $cart_item, $cart_item_key ) {
 		// Check if this is a child item (rental in pack)
 		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+		$scope = '';
+		$event_id = 0;
 
-		if ( $role === 'child' ) {
-			// Multilingual badge label with qTranslate support
-			$label = '[:en]Included in pack[:es]Incluido en el pack[:]';
+		// Get scope and event ID from booking data
+		if ( ! empty( $cart_item['booking'] ) && is_array( $cart_item['booking'] ) ) {
+			$booking = $cart_item['booking'];
+			$scope = isset( $booking[ self::BK_SCOPE ] ) ? (string) $booking[ self::BK_SCOPE ] : '';
+			$event_id = isset( $booking[ self::BK_EVENT_ID ] ) ? (int) $booking[ self::BK_EVENT_ID ] : 0;
+		}
 
-			// Translate if qTranslate or custom tc_sc_event_tr function available
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$label = tc_sc_event_tr( $label );
-			} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFound' ) ) {
-				$label = qtranxf_useCurrentLanguageIfNotFound( $label );
-			} elseif ( function_exists( 'qtrans_useCurrentLanguageIfNotFound' ) ) {
-				$label = qtrans_useCurrentLanguageIfNotFound( $label );
+		// For participation items (parent or no pack), make title link to event
+		if ( $scope !== 'rental' && $event_id > 0 ) {
+			$event_url = get_permalink( $event_id );
+			if ( $event_url ) {
+				$product_name = '<a href="' . esc_url( $event_url ) . '">' . $product_name . '</a>';
 			}
-
-			// Add grey semi-transparent badge inline with title
-			$badge = ' <span class="tcbf-pack-badge-inline">';
-			$badge .= '<span class="tcbf-pack-badge-inline__icon">📦</span>';
-			$badge .= '<span class="tcbf-pack-badge-inline__text">' . esc_html( $label ) . '</span>';
-			$badge .= '</span>';
-
-			$product_name .= $badge;
 		}
 
 		return $product_name;
@@ -1435,14 +1434,50 @@ final class Plugin {
 		echo "    });\n";
 		echo "  }\n";
 		echo "  \n";
+		echo "  function hideChildItemMeta() {\n";
+		echo "    // Hide specific meta fields (Booking Date, Duration, Size) for child items (rentals in pack)\n";
+		echo "    var childRows = $('.tcbf-pack-role-child');\n";
+		echo "    \n";
+		echo "    childRows.each(function() {\n";
+		echo "      var \$row = $(this);\n";
+		echo "      var \$meta = \$row.find('.wc-item-meta-list li, dl.variation dt');\n";
+		echo "      \n";
+		echo "      \$meta.each(function() {\n";
+		echo "        var \$label = $(this);\n";
+		echo "        var text = \$label.text().toLowerCase();\n";
+		echo "        \n";
+		echo "        // Hide if label matches booking date, duration, or size\n";
+		echo "        if (text.indexOf('booking date') >= 0 || \n";
+		echo "            text.indexOf('fecha de la reserva') >= 0 || \n";
+		echo "            text.indexOf('duration') >= 0 || \n";
+		echo "            text.indexOf('duración') >= 0 || \n";
+		echo "            text.indexOf('size') >= 0 || \n";
+		echo "            text.indexOf('talla') >= 0) {\n";
+		echo "          \n";
+		echo "          // For dt/dd pairs\n";
+		echo "          if (\$label.is('dt')) {\n";
+		echo "            \$label.next('dd').hide();\n";
+		echo "            \$label.hide();\n";
+		echo "          }\n";
+		echo "          // For li elements\n";
+		echo "          else if (\$label.is('li')) {\n";
+		echo "            \$label.hide();\n";
+		echo "          }\n";
+		echo "        }\n";
+		echo "      });\n";
+		echo "    });\n";
+		echo "  }\n";
+		echo "  \n";
 		echo "  $(document).ready(function() {\n";
 		echo "    initPackGrouping();\n";
+		echo "    hideChildItemMeta();\n";
 		echo "  });\n";
 		echo "  \n";
 		echo "  // Re-run after cart updates (AJAX)\n";
 		echo "  $(document.body).on('updated_cart_totals updated_checkout', function() {\n";
 		echo "    console.log('Cart updated, re-initializing pack grouping');\n";
 		echo "    initPackGrouping();\n";
+		echo "    hideChildItemMeta();\n";
 		echo "  });\n";
 		echo "  \n";
 		echo "})(jQuery);\n";
