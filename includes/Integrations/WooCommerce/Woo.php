@@ -103,7 +103,11 @@ final class Woo {
 		if ( empty($cart_item["booking"]) || ! is_array($cart_item["booking"]) ) return $item_data;
 		$booking = (array) $cart_item["booking"];
 
-		// Event title
+		// Get scope and pack role to determine which fields to show
+		$scope = isset($booking[\TC_BF\Plugin::BK_SCOPE]) ? (string) $booking[\TC_BF\Plugin::BK_SCOPE] : '';
+		$is_pack_parent = isset($cart_item['tc_group_role']) && $cart_item['tc_group_role'] === 'parent';
+
+		// Event title (show for both participation and rental)
 		if ( ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
 			$item_data[] = [
 				"name"  => __("Event", "tc-booking-flow"),
@@ -111,31 +115,43 @@ final class Woo {
 			];
 		}
 
-		// Participant
+		// Participant - show with special styling for pack parents (participation items)
 		if ( ! empty($booking["_participant"]) ) {
-			$item_data[] = [
-				"name"  => __("Participant", "tc-booking-flow"),
-				"value" => wc_clean((string) $booking["_participant"]),
-			];
+			$participant_name = wc_clean((string) $booking["_participant"]);
+
+			// For pack parent items, show participant as a prominent badge
+			if ( $is_pack_parent ) {
+				$participant_html = '<div class="tcbf-participant-badge">';
+				$participant_html .= '<span class="tcbf-participant-badge__icon">👤</span>';
+				$participant_html .= '<span class="tcbf-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
+				$participant_html .= '</div>';
+
+				$item_data[] = [
+					"name"  => __("Participant", "tc-booking-flow"),
+					"value" => $participant_html,
+				];
+			} else {
+				// For non-pack items or rentals, show as plain text
+				$item_data[] = [
+					"name"  => __("Participant", "tc-booking-flow"),
+					"value" => $participant_name,
+				];
+			}
 		}
 
-		// Scope (participation/rental)
-		if ( ! empty($booking[\TC_BF\Plugin::BK_SCOPE]) ) {
-			$scope = (string) $booking[\TC_BF\Plugin::BK_SCOPE];
-			$label = $scope === "rental" ? __("Rental", "tc-booking-flow") : __("Participation", "tc-booking-flow");
-			$item_data[] = [
-				"name"  => __("Type", "tc-booking-flow"),
-				"value" => wc_clean($label),
-			];
-		}
+		// Type field: HIDDEN (per user requirement - hide for both participation and rental in cart)
+		// (kept as order meta via woo_checkout_create_order_line_item)
 
 		// Bicycle label (rental line only)
-		if ( ! empty($booking["_bicycle"]) ) {
+		if ( $scope === 'rental' && ! empty($booking["_bicycle"]) ) {
 			$item_data[] = [
 				"name"  => __("Bike", "tc-booking-flow"),
 				"value" => wc_clean((string) $booking["_bicycle"]),
 			];
 		}
+
+		// Note: Booking date, Duration, Size are automatically added by WooCommerce Bookings
+		// We'll filter those out via woocommerce_hidden_order_itemmeta for cart display
 
 		return $item_data;
 	}

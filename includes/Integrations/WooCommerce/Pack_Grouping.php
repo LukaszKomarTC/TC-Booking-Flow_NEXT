@@ -356,11 +356,29 @@ final class Pack_Grouping {
 		$role = isset( $cart_item[ self::META_GROUP_ROLE ] ) ? $cart_item[ self::META_GROUP_ROLE ] : '';
 		$group_id = isset( $cart_item[ self::META_GROUP_ID ] ) ? $cart_item[ self::META_GROUP_ID ] : '';
 
-		// Add "Included" label for child items
+		// Add styled "Included in pack" badge for child items (rentals)
 		if ( $role === self::ROLE_CHILD ) {
+			// Multilingual badge label with qTranslate support
+			$label = '[:en]Included in pack[:es]Incluido en el pack[:]';
+
+			// Translate if qTranslate or custom tc_sc_event_tr function available
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$label = tc_sc_event_tr( $label );
+			} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFound' ) ) {
+				$label = qtranxf_useCurrentLanguageIfNotFound( $label );
+			} elseif ( function_exists( 'qtrans_useCurrentLanguageIfNotFound' ) ) {
+				$label = qtrans_useCurrentLanguageIfNotFound( $label );
+			}
+
+			// Output styled badge HTML
+			$badge_html = '<div class="tcbf-pack-badge">';
+			$badge_html .= '<span class="tcbf-pack-badge__icon">📦</span>';
+			$badge_html .= '<span class="tcbf-pack-badge__text">' . esc_html( $label ) . '</span>';
+			$badge_html .= '</div>';
+
 			$item_data[] = [
 				'name'    => '',
-				'value'   => '<em>' . __( 'Included in pack', 'tc-booking-flow' ) . '</em>',
+				'value'   => $badge_html,
 				'display' => '',
 			];
 		}
