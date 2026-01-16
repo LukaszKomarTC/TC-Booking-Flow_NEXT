@@ -60,8 +60,8 @@ final class Plugin {
 	const GF_FIELD_BIKE_169      = 169;
 
 	// Optional participant fields used in your snippet (keep compatible)
-	const GF_FIELD_FIRST_NAME    = 9;
-	const GF_FIELD_LAST_NAME     = 10;
+	const GF_FIELD_FIRST_NAME    = '2.3'; // Name field - First Name subfield
+	const GF_FIELD_LAST_NAME     = '2.6'; // Name field - Last Name subfield
 
 	// Optional rental type select field (used in your validation snippet)
 	// Values like: ROAD / MTB / eMTB / GRAVEL (sometimes prefixed by labels)
