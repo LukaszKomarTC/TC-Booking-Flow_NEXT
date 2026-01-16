@@ -979,6 +979,7 @@ final class Plugin {
 			echo "  position: relative;\n";
 			echo "  background: rgba(61, 97, 170, 0.02);\n";
 			echo "  border-left: 3px solid rgba(61, 97, 170, 0.15);\n";
+			echo "  margin-bottom: 16px;\n";
 			echo "}\n";
 			echo "tbody.tcbf-pack-group td {\n";
 			echo "  padding-left: 8px !important;\n";
@@ -998,9 +999,11 @@ final class Plugin {
 			echo "}\n";
 
 			echo "tr.tcbf-pack-header td {\n";
-			echo "  padding: 0 !important;\n";
+			echo "  padding: 12px 0 0 0 !important;\n";
 			echo "  border: none !important;\n";
 			echo "  background: transparent !important;\n";
+			echo "  border-bottom: none !important;\n";
+			echo "  text-align: center;\n";
 			echo "}\n";
 
 			echo ".tcbf-pack-participant-badge {\n";
@@ -1013,7 +1016,6 @@ final class Plugin {
 			echo "  font-size: 13px;\n";
 			echo "  font-weight: 600;\n";
 			echo "  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);\n";
-			echo "  margin: 12px 0 8px 0;\n";
 			echo "}\n";
 
 			echo ".tcbf-pack-participant-badge__icon {\n";
