@@ -149,6 +149,10 @@ final class Plugin {
 		// ---- Cart display: show booking meta to the customer
 		add_filter('woocommerce_get_item_data', [ $this, 'woo_cart_item_data' ], 20, 2);
 
+		// ---- Cart display: show EB discount badge after item name
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
+		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
+
 		// ---- Pack Grouping: atomic cart behavior for participation + rental
 		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
 			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
@@ -887,12 +891,16 @@ final class Plugin {
 	}
 
 	/**
-	 * Output CSS for enhanced form fields (EB and Partner discount).
-	 * Runs in wp_head on single-sc_event pages to ensure styles are always available.
+	 * Output CSS for enhanced form fields, cart badges, and coupon styling.
+	 * Runs in wp_head on single-sc_event, cart, and checkout pages.
 	 */
 	public function output_form_field_css() : void {
 		if ( is_admin() ) return;
-		if ( ! is_singular('sc_event') ) return;
+
+		$is_event = is_singular('sc_event');
+		$is_cart = is_cart() || is_checkout();
+
+		if ( ! $is_event && ! $is_cart ) return;
 
 		// Get dynamic form ID
 		$form_id = (int) Admin\Settings::get_form_id();
@@ -940,6 +948,83 @@ final class Plugin {
 		echo "  .tcbf-eb-pct, .tcbf-partner-pct { font-size: 13px; }\n";
 		echo "  .tcbf-eb-amt, .tcbf-partner-amt { font-size: 18px; }\n";
 		echo "}\n";
+
+		// Cart-specific styling
+		if ( $is_cart ) {
+			echo "\n/* Cart EB Discount Badge */\n";
+			echo ".tcbf-cart-eb-badge {\n";
+			echo "  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);\n";
+			echo "  color: #ffffff;\n";
+			echo "  padding: 6px 12px;\n";
+			echo "  border-radius: 4px;\n";
+			echo "  font-size: 13px;\n";
+			echo "  font-weight: 600;\n";
+			echo "  display: inline-flex;\n";
+			echo "  align-items: center;\n";
+			echo "  gap: 8px;\n";
+			echo "  margin-top: 8px;\n";
+			echo "  line-height: 1.3;\n";
+			echo "}\n";
+			echo ".tcbf-cart-eb-badge__icon {\n";
+			echo "  font-size: 16px;\n";
+			echo "  line-height: 1;\n";
+			echo "}\n";
+			echo ".tcbf-cart-eb-badge__text {\n";
+			echo "  white-space: nowrap;\n";
+			echo "}\n";
+
+			echo "\n/* Partner Coupon Styling in Cart Totals */\n";
+			echo ".cart_totals .coupon,\n";
+			echo ".woocommerce-cart-form .coupon,\n";
+			echo ".woocommerce-checkout-review-order .coupon {\n";
+			echo "  /* Target partner coupons specifically */\n";
+			echo "}\n";
+
+			echo "/* Style partner coupon rows in cart totals */\n";
+			echo ".cart_totals tr.cart-discount,\n";
+			echo ".woocommerce-checkout-review-order tr.cart-discount {\n";
+			echo "  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);\n";
+			echo "}\n";
+
+			echo ".cart_totals tr.cart-discount th,\n";
+			echo ".woocommerce-checkout-review-order tr.cart-discount th {\n";
+			echo "  color: #14532d !important;\n";
+			echo "  font-weight: 600;\n";
+			echo "  padding: 12px !important;\n";
+			echo "}\n";
+
+			echo ".cart_totals tr.cart-discount td,\n";
+			echo ".woocommerce-checkout-review-order tr.cart-discount td {\n";
+			echo "  color: #14532d !important;\n";
+			echo "  font-weight: 700;\n";
+			echo "  padding: 12px !important;\n";
+			echo "}\n";
+
+			echo ".cart_totals tr.cart-discount .woocommerce-remove-coupon,\n";
+			echo ".woocommerce-checkout-review-order tr.cart-discount .woocommerce-remove-coupon {\n";
+			echo "  color: #22c55e !important;\n";
+			echo "  text-decoration: none;\n";
+			echo "  font-weight: 600;\n";
+			echo "}\n";
+
+			echo ".cart_totals tr.cart-discount .woocommerce-remove-coupon:hover,\n";
+			echo ".woocommerce-checkout-review-order tr.cart-discount .woocommerce-remove-coupon:hover {\n";
+			echo "  color: #16a34a !important;\n";
+			echo "}\n";
+
+			echo "\n/* Mobile responsive */\n";
+			echo "@media (max-width: 768px) {\n";
+			echo "  .tcbf-cart-eb-badge {\n";
+			echo "    padding: 5px 10px;\n";
+			echo "    font-size: 12px;\n";
+			echo "    gap: 6px;\n";
+			echo "  }\n";
+			echo "  .tcbf-cart-eb-badge__icon {\n";
+			echo "    font-size: 14px;\n";
+			echo "  }\n";
+			echo "}\n";
+		}
+
 		echo "</style>\n";
 		echo "<!-- /TC Booking Flow: Enhanced Field CSS -->\n";
 	}
@@ -999,6 +1084,71 @@ final class Plugin {
 
 	public function woo_cart_item_data( array $item_data, array $cart_item ) : array {
 		return Integrations\WooCommerce\Woo::woo_cart_item_data($item_data, $cart_item);
+	}
+
+	/**
+	 * Display EB discount badge after cart item name.
+	 * Shows percentage and amount saved with EB gradient styling.
+	 */
+	public function woo_cart_item_eb_badge( $cart_item, $cart_item_key = null ) {
+		// Handle both cart and mini-cart signatures
+		if ( is_string( $cart_item ) ) {
+			// woocommerce_after_mini_cart_item_name passes ($item_html, $cart_item, $cart_item_key)
+			// But we're hooked as ($cart_item, $cart_item_key), so first param is HTML, second is actual cart_item
+			// Let's swap them
+			$temp = $cart_item;
+			$cart_item = $cart_item_key;
+			$cart_item_key = $temp;
+		}
+
+		if ( empty( $cart_item['booking'] ) || ! is_array( $cart_item['booking'] ) ) {
+			return;
+		}
+
+		$booking = (array) $cart_item['booking'];
+
+		// Check if EB is applied to this item
+		$eligible = ! empty( $booking[self::BK_EB_ELIGIBLE] );
+		if ( ! $eligible ) {
+			return;
+		}
+
+		$pct = isset( $booking[self::BK_EB_PCT] ) ? (float) $booking[self::BK_EB_PCT] : 0.0;
+		$amt = isset( $booking[self::BK_EB_AMOUNT] ) ? (float) $booking[self::BK_EB_AMOUNT] : 0.0;
+
+		// If we have a percentage, calculate the actual discount amount
+		if ( $pct > 0 && $amt <= 0 ) {
+			$base = isset( $booking[self::BK_EB_BASE] ) ? (float) $booking[self::BK_EB_BASE] : 0.0;
+			if ( $base > 0 ) {
+				$amt = Support\Money::money_round( $base * ( $pct / 100 ) );
+			}
+		}
+
+		if ( $pct <= 0 && $amt <= 0 ) {
+			return;
+		}
+
+		// Format the discount amount
+		$amount_formatted = wc_price( $amt );
+
+		// Multilingual label
+		$label = '[:en]EB discount[:es]Descuento RA[:]';
+		if ( function_exists( 'tc_sc_event_tr' ) ) {
+			$label = tc_sc_event_tr( $label );
+		}
+
+		// Output the badge
+		echo '<div class="tcbf-cart-eb-badge">';
+		echo '<span class="tcbf-cart-eb-badge__icon">⏰</span>';
+		echo '<span class="tcbf-cart-eb-badge__text">';
+
+		if ( $pct > 0 ) {
+			echo esc_html( number_format_i18n( $pct, 0 ) ) . '% | ';
+		}
+
+		echo wp_kses_post( $amount_formatted ) . ' ' . esc_html( $label );
+		echo '</span>';
+		echo '</div>';
 	}
 
 	private function localize_text( string $text ) : string {
