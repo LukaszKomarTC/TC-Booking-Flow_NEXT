@@ -347,42 +347,16 @@ final class Pack_Grouping {
 	/**
 	 * Add visual indicators to cart items (e.g., "Included in pack")
 	 *
+	 * Note: The "Included in pack" badge is now shown inline with the product title
+	 * via the woocommerce_cart_item_name filter in Plugin.php, not here in the meta section.
+	 *
 	 * @param array $item_data Existing item data
 	 * @param array $cart_item Cart item
 	 * @return array Modified item data
 	 */
 	public static function add_pack_visual_indicators( array $item_data, array $cart_item ) : array {
 
-		$role = isset( $cart_item[ self::META_GROUP_ROLE ] ) ? $cart_item[ self::META_GROUP_ROLE ] : '';
-		$group_id = isset( $cart_item[ self::META_GROUP_ID ] ) ? $cart_item[ self::META_GROUP_ID ] : '';
-
-		// Add styled "Included in pack" badge for child items (rentals)
-		if ( $role === self::ROLE_CHILD ) {
-			// Multilingual badge label with qTranslate support
-			$label = '[:en]Included in pack[:es]Incluido en el pack[:]';
-
-			// Translate if qTranslate or custom tc_sc_event_tr function available
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$label = tc_sc_event_tr( $label );
-			} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFound' ) ) {
-				$label = qtranxf_useCurrentLanguageIfNotFound( $label );
-			} elseif ( function_exists( 'qtrans_useCurrentLanguageIfNotFound' ) ) {
-				$label = qtrans_useCurrentLanguageIfNotFound( $label );
-			}
-
-			// Output styled badge HTML
-			$badge_html = '<div class="tcbf-pack-badge">';
-			$badge_html .= '<span class="tcbf-pack-badge__icon">📦</span>';
-			$badge_html .= '<span class="tcbf-pack-badge__text">' . esc_html( $label ) . '</span>';
-			$badge_html .= '</div>';
-
-			$item_data[] = [
-				'name'    => '',
-				'value'   => $badge_html,
-				'display' => '',
-			];
-		}
-
+		// Badge now shown inline with product title - nothing to add here
 		return $item_data;
 	}
 

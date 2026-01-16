@@ -156,6 +156,15 @@ final class Plugin {
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 
+		// ---- Cart display: add "Included in pack" badge to product title
+		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
+
+		// ---- Cart display: add pack grouping classes and data attributes to cart items
+		add_filter('woocommerce_cart_item_class', [ $this, 'woo_add_pack_classes_to_cart_item' ], 10, 3);
+
+		// ---- Cart display: output pack grouping JavaScript
+		add_action('wp_footer', [ $this, 'output_pack_grouping_js' ], 50);
+
 		// ---- Pack Grouping: atomic cart behavior for participation + rental
 		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
 			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
@@ -955,32 +964,46 @@ final class Plugin {
 		// Cart-specific styling
 		if ( $is_cart ) {
 			echo "\n/* ===== Pack Grouping Visual Styles ===== */\n";
-			echo ".tcbf-pack-group {\n";
+			echo "tbody.tcbf-pack-group {\n";
 			echo "  position: relative;\n";
 			echo "  background: rgba(61, 97, 170, 0.02);\n";
-			echo "  border: 1px solid rgba(61, 97, 170, 0.08);\n";
-			echo "  border-radius: 8px;\n";
-			echo "  padding: 16px;\n";
-			echo "  margin: 8px 0;\n";
+			echo "  border-left: 3px solid rgba(61, 97, 170, 0.15);\n";
+			echo "}\n";
+
+			echo "tbody.tcbf-pack-group tr.tcbf-pack-item td {\n";
+			echo "  border-top: 1px dashed rgba(61, 97, 170, 0.08) !important;\n";
+			echo "}\n";
+
+			echo "tbody.tcbf-pack-group tr.tcbf-pack-item:first-of-type td {\n";
+			echo "  padding-top: 20px !important;\n";
+			echo "}\n";
+
+			echo "tbody.tcbf-pack-group tr.tcbf-pack-item:last-of-type td {\n";
+			echo "  padding-bottom: 20px !important;\n";
+			echo "}\n";
+
+			echo "tr.tcbf-pack-header td {\n";
+			echo "  padding: 0 !important;\n";
+			echo "  border: none !important;\n";
+			echo "  background: transparent !important;\n";
 			echo "}\n";
 
 			echo ".tcbf-pack-participant-badge {\n";
-			echo "  position: absolute;\n";
-			echo "  top: -12px;\n";
-			echo "  left: 16px;\n";
+			echo "  display: inline-block;\n";
 			echo "  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);\n";
 			echo "  border: 1px solid rgba(61, 97, 170, 0.2);\n";
 			echo "  color: #3d61aa;\n";
-			echo "  padding: 4px 12px;\n";
+			echo "  padding: 6px 14px;\n";
 			echo "  border-radius: 12px;\n";
-			echo "  font-size: 12px;\n";
+			echo "  font-size: 13px;\n";
 			echo "  font-weight: 600;\n";
 			echo "  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);\n";
-			echo "  z-index: 1;\n";
+			echo "  margin: 12px 0 8px 0;\n";
 			echo "}\n";
 
 			echo ".tcbf-pack-participant-badge__icon {\n";
-			echo "  margin-right: 4px;\n";
+			echo "  font-size: 14px;\n";
+			echo "  margin-right: 6px;\n";
 			echo "}\n";
 
 			echo "\n/* ===== Cart Item Footer (for EB badges) ===== */\n";
@@ -995,40 +1018,44 @@ final class Plugin {
 			echo ".tcbf-cart-eb-badge {\n";
 			echo "  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);\n";
 			echo "  color: #ffffff;\n";
-			echo "  padding: 6px 12px;\n";
-			echo "  border-radius: 4px;\n";
-			echo "  font-size: 13px;\n";
+			echo "  padding: 8px 14px;\n";
+			echo "  border-radius: 6px;\n";
+			echo "  font-size: 14px;\n";
 			echo "  font-weight: 600;\n";
 			echo "  display: inline-flex;\n";
 			echo "  align-items: center;\n";
-			echo "  gap: 8px;\n";
+			echo "  gap: 10px;\n";
 			echo "  line-height: 1.3;\n";
 			echo "  align-self: flex-start;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__icon {\n";
-			echo "  font-size: 16px;\n";
+			echo "  font-size: 24px;\n";
 			echo "  line-height: 1;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__text {\n";
 			echo "  white-space: nowrap;\n";
 			echo "}\n";
 
-			echo "\n/* Included in Pack Badge */\n";
-			echo ".tcbf-pack-badge {\n";
-			echo "  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);\n";
-			echo "  color: #78350f;\n";
-			echo "  padding: 4px 10px;\n";
+			echo "\n/* Inline Pack Badge (in product title) */\n";
+			echo ".tcbf-pack-badge-inline {\n";
+			echo "  background: rgba(107, 114, 128, 0.12);\n";
+			echo "  color: rgba(55, 65, 81, 0.7);\n";
+			echo "  padding: 3px 8px;\n";
 			echo "  border-radius: 4px;\n";
 			echo "  font-size: 11px;\n";
-			echo "  font-weight: 600;\n";
+			echo "  font-weight: 500;\n";
 			echo "  display: inline-flex;\n";
 			echo "  align-items: center;\n";
-			echo "  gap: 6px;\n";
-			echo "  margin-top: 6px;\n";
-			echo "  align-self: flex-start;\n";
+			echo "  gap: 4px;\n";
+			echo "  margin-left: 8px;\n";
+			echo "  vertical-align: middle;\n";
 			echo "}\n";
-			echo ".tcbf-pack-badge__icon {\n";
-			echo "  font-size: 12px;\n";
+			echo ".tcbf-pack-badge-inline__icon {\n";
+			echo "  font-size: 11px;\n";
+			echo "  opacity: 0.7;\n";
+			echo "}\n";
+			echo ".tcbf-pack-badge-inline__text {\n";
+			echo "  font-style: italic;\n";
 			echo "}\n";
 
 			echo "\n/* Participant Badge (for pack parent items) */\n";
@@ -1094,12 +1121,12 @@ final class Plugin {
 			echo "\n/* Mobile responsive */\n";
 			echo "@media (max-width: 768px) {\n";
 			echo "  .tcbf-cart-eb-badge {\n";
-			echo "    padding: 5px 10px;\n";
-			echo "    font-size: 12px;\n";
-			echo "    gap: 6px;\n";
+			echo "    padding: 6px 12px;\n";
+			echo "    font-size: 13px;\n";
+			echo "    gap: 8px;\n";
 			echo "  }\n";
 			echo "  .tcbf-cart-eb-badge__icon {\n";
-			echo "    font-size: 14px;\n";
+			echo "    font-size: 20px;\n";
 			echo "  }\n";
 			echo "  .tcbf-pack-participant-badge {\n";
 			echo "    font-size: 11px;\n";
@@ -1107,6 +1134,11 @@ final class Plugin {
 			echo "  }\n";
 			echo "  .tcbf-pack-group {\n";
 			echo "    padding: 12px;\n";
+			echo "  }\n";
+			echo "  .tcbf-pack-badge-inline {\n";
+			echo "    font-size: 10px;\n";
+			echo "    padding: 2px 6px;\n";
+			echo "    margin-left: 6px;\n";
 			echo "  }\n";
 			echo "}\n";
 		}
@@ -1200,6 +1232,127 @@ final class Plugin {
 		}
 
 		return $display_key;
+	}
+
+	/**
+	 * Add "Included in pack" badge to product title for child items (rentals).
+	 *
+	 * @param string $product_name Product name HTML
+	 * @param array  $cart_item    Cart item data
+	 * @param string $cart_item_key Cart item key
+	 * @return string Modified product name with badge
+	 */
+	public function woo_add_pack_badge_to_title( $product_name, $cart_item, $cart_item_key ) {
+		// Check if this is a child item (rental in pack)
+		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+
+		if ( $role === 'child' ) {
+			// Multilingual badge label with qTranslate support
+			$label = '[:en]Included in pack[:es]Incluido en el pack[:]';
+
+			// Translate if qTranslate or custom tc_sc_event_tr function available
+			if ( function_exists( 'tc_sc_event_tr' ) ) {
+				$label = tc_sc_event_tr( $label );
+			} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFound' ) ) {
+				$label = qtranxf_useCurrentLanguageIfNotFound( $label );
+			} elseif ( function_exists( 'qtrans_useCurrentLanguageIfNotFound' ) ) {
+				$label = qtrans_useCurrentLanguageIfNotFound( $label );
+			}
+
+			// Add grey semi-transparent badge inline with title
+			$badge = ' <span class="tcbf-pack-badge-inline">';
+			$badge .= '<span class="tcbf-pack-badge-inline__icon">📦</span>';
+			$badge .= '<span class="tcbf-pack-badge-inline__text">' . esc_html( $label ) . '</span>';
+			$badge .= '</span>';
+
+			$product_name .= $badge;
+		}
+
+		return $product_name;
+	}
+
+	/**
+	 * Add pack grouping classes and data attributes to cart item rows.
+	 *
+	 * @param string $class         Cart item class
+	 * @param array  $cart_item     Cart item data
+	 * @param string $cart_item_key Cart item key
+	 * @return string Modified class with pack data attributes
+	 */
+	public function woo_add_pack_classes_to_cart_item( $class, $cart_item, $cart_item_key ) {
+		$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+		$participant = '';
+
+		if ( $group_id > 0 ) {
+			$class .= ' tcbf-pack-item';
+			$class .= ' tcbf-pack-group-' . $group_id;
+			$class .= ' tcbf-pack-role-' . $role;
+
+			// Get participant name for floating badge
+			if ( ! empty( $cart_item['booking']['_participant'] ) ) {
+				$participant = wc_clean( (string) $cart_item['booking']['_participant'] );
+			}
+
+			// Add data attributes for JavaScript grouping
+			$class .= '" data-pack-group="' . esc_attr( $group_id );
+			$class .= '" data-pack-role="' . esc_attr( $role );
+			$class .= '" data-pack-participant="' . esc_attr( $participant );
+		}
+
+		return $class;
+	}
+
+	/**
+	 * Output JavaScript to visually group pack items in cart.
+	 *
+	 * Groups consecutive cart items that belong to the same pack and adds
+	 * a floating participant badge over the group.
+	 */
+	public function output_pack_grouping_js() : void {
+		if ( ! is_cart() && ! is_checkout() ) {
+			return;
+		}
+
+		echo "\n<!-- TC Booking Flow: Pack Grouping Script -->\n";
+		echo "<script id=\"tc-bf-pack-grouping\">\n";
+		echo "(function($) {\n";
+		echo "  'use strict';\n";
+		echo "  $(document).ready(function() {\n";
+		echo "    // Find all pack items\n";
+		echo "    var packItems = $('.tcbf-pack-item');\n";
+		echo "    if (packItems.length === 0) return;\n";
+		echo "\n";
+		echo "    // Group items by pack ID\n";
+		echo "    var groups = {};\n";
+		echo "    packItems.each(function() {\n";
+		echo "      var groupId = $(this).attr('data-pack-group');\n";
+		echo "      if (!groupId) return;\n";
+		echo "      if (!groups[groupId]) groups[groupId] = [];\n";
+		echo "      groups[groupId].push(this);\n";
+		echo "    });\n";
+		echo "\n";
+		echo "    // Wrap each group and add participant badge\n";
+		echo "    $.each(groups, function(groupId, items) {\n";
+		echo "      if (items.length === 0) return;\n";
+		echo "      \n";
+		echo "      var participant = $(items[0]).attr('data-pack-participant') || '';\n";
+		echo "      \n";
+		echo "      // Wrap items in pack group container\n";
+		echo "      var wrapper = $('<tbody class=\"tcbf-pack-group\" data-pack-group=\"' + groupId + '\"></tbody>');\n";
+		echo "      $(items[0]).before(wrapper);\n";
+		echo "      $(items).each(function() { wrapper.append(this); });\n";
+		echo "      \n";
+		echo "      // Add floating participant badge if participant name exists\n";
+		echo "      if (participant) {\n";
+		echo "        var badge = $('<tr class=\"tcbf-pack-header\"><td colspan=\"6\"><div class=\"tcbf-pack-participant-badge\"><span class=\"tcbf-pack-participant-badge__icon\">👤</span> ' + participant + '</div></td></tr>');\n";
+		echo "        wrapper.prepend(badge);\n";
+		echo "      }\n";
+		echo "    });\n";
+		echo "  });\n";
+		echo "})(jQuery);\n";
+		echo "</script>\n";
+		echo "<!-- /TC Booking Flow: Pack Grouping Script -->\n";
 	}
 
 	/**
