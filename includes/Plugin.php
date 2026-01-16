@@ -159,8 +159,11 @@ final class Plugin {
 		// ---- Cart display: add "Included in pack" badge to product title
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
 
-		// ---- Cart display: add pack grouping classes and data attributes to cart items
+		// ---- Cart display: add pack grouping classes to cart items
 		add_filter('woocommerce_cart_item_class', [ $this, 'woo_add_pack_classes_to_cart_item' ], 10, 3);
+
+		// ---- Cart display: output pack metadata for JavaScript
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_output_pack_metadata' ], 5, 2);
 
 		// ---- Cart display: output pack grouping JavaScript
 		add_action('wp_footer', [ $this, 'output_pack_grouping_js' ], 50);
@@ -1018,19 +1021,22 @@ final class Plugin {
 			echo ".tcbf-cart-eb-badge {\n";
 			echo "  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);\n";
 			echo "  color: #ffffff;\n";
-			echo "  padding: 8px 14px;\n";
-			echo "  border-radius: 6px;\n";
-			echo "  font-size: 14px;\n";
+			echo "  padding: 4px 7px;\n";
+			echo "  border-radius: 0;\n";
+			echo "  font-size: 10px;\n";
 			echo "  font-weight: 600;\n";
 			echo "  display: inline-flex;\n";
 			echo "  align-items: center;\n";
-			echo "  gap: 10px;\n";
+			echo "  gap: 6px;\n";
 			echo "  line-height: 1.3;\n";
 			echo "  align-self: flex-start;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__icon {\n";
-			echo "  font-size: 24px;\n";
+			echo "  font-size: 0.7em;\n";
 			echo "  line-height: 1;\n";
+			echo "  display: inline-block;\n";
+			echo "  width: 1.2em;\n";
+			echo "  text-align: center;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__text {\n";
 			echo "  white-space: nowrap;\n";
@@ -1121,12 +1127,13 @@ final class Plugin {
 			echo "\n/* Mobile responsive */\n";
 			echo "@media (max-width: 768px) {\n";
 			echo "  .tcbf-cart-eb-badge {\n";
-			echo "    padding: 6px 12px;\n";
-			echo "    font-size: 13px;\n";
-			echo "    gap: 8px;\n";
+			echo "    padding: 3px 6px;\n";
+			echo "    font-size: 9px;\n";
+			echo "    gap: 4px;\n";
 			echo "  }\n";
 			echo "  .tcbf-cart-eb-badge__icon {\n";
-			echo "    font-size: 20px;\n";
+			echo "    font-size: 0.7em;\n";
+			echo "    width: 1.2em;\n";
 			echo "  }\n";
 			echo "  .tcbf-pack-participant-badge {\n";
 			echo "    font-size: 11px;\n";
@@ -1272,35 +1279,50 @@ final class Plugin {
 	}
 
 	/**
-	 * Add pack grouping classes and data attributes to cart item rows.
+	 * Add pack grouping classes to cart item rows.
 	 *
 	 * @param string $class         Cart item class
 	 * @param array  $cart_item     Cart item data
 	 * @param string $cart_item_key Cart item key
-	 * @return string Modified class with pack data attributes
+	 * @return string Modified class
 	 */
 	public function woo_add_pack_classes_to_cart_item( $class, $cart_item, $cart_item_key ) {
 		$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
 		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
-		$participant = '';
 
 		if ( $group_id > 0 ) {
 			$class .= ' tcbf-pack-item';
 			$class .= ' tcbf-pack-group-' . $group_id;
 			$class .= ' tcbf-pack-role-' . $role;
+		}
 
+		return $class;
+	}
+
+	/**
+	 * Output hidden pack metadata for JavaScript to read.
+	 *
+	 * @param array  $cart_item     Cart item data
+	 * @param string $cart_item_key Cart item key
+	 */
+	public function woo_output_pack_metadata( $cart_item, $cart_item_key ) {
+		$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+		$participant = '';
+
+		if ( $group_id > 0 ) {
 			// Get participant name for floating badge
 			if ( ! empty( $cart_item['booking']['_participant'] ) ) {
 				$participant = wc_clean( (string) $cart_item['booking']['_participant'] );
 			}
 
-			// Add data attributes for JavaScript grouping
-			$class .= '" data-pack-group="' . esc_attr( $group_id );
-			$class .= '" data-pack-role="' . esc_attr( $role );
-			$class .= '" data-pack-participant="' . esc_attr( $participant );
+			// Output hidden div with pack metadata
+			echo '<div class="tcbf-pack-meta" style="display:none;" ';
+			echo 'data-pack-group="' . esc_attr( $group_id ) . '" ';
+			echo 'data-pack-role="' . esc_attr( $role ) . '" ';
+			echo 'data-pack-participant="' . esc_attr( $participant ) . '">';
+			echo '</div>';
 		}
-
-		return $class;
 	}
 
 	/**
@@ -1318,38 +1340,64 @@ final class Plugin {
 		echo "<script id=\"tc-bf-pack-grouping\">\n";
 		echo "(function($) {\n";
 		echo "  'use strict';\n";
-		echo "  $(document).ready(function() {\n";
+		echo "  \n";
+		echo "  function initPackGrouping() {\n";
 		echo "    // Find all pack items\n";
 		echo "    var packItems = $('.tcbf-pack-item');\n";
 		echo "    if (packItems.length === 0) return;\n";
-		echo "\n";
-		echo "    // Group items by pack ID\n";
+		echo "    \n";
+		echo "    console.log('Found ' + packItems.length + ' pack items');\n";
+		echo "    \n";
+		echo "    // Group items by pack ID (read from hidden metadata)\n";
 		echo "    var groups = {};\n";
 		echo "    packItems.each(function() {\n";
-		echo "      var groupId = $(this).attr('data-pack-group');\n";
-		echo "      if (!groupId) return;\n";
-		echo "      if (!groups[groupId]) groups[groupId] = [];\n";
-		echo "      groups[groupId].push(this);\n";
-		echo "    });\n";
-		echo "\n";
-		echo "    // Wrap each group and add participant badge\n";
-		echo "    $.each(groups, function(groupId, items) {\n";
-		echo "      if (items.length === 0) return;\n";
+		echo "      var \$row = $(this);\n";
+		echo "      var \$meta = \$row.find('.tcbf-pack-meta');\n";
+		echo "      if (\$meta.length === 0) return;\n";
 		echo "      \n";
-		echo "      var participant = $(items[0]).attr('data-pack-participant') || '';\n";
+		echo "      var groupId = \$meta.attr('data-pack-group');\n";
+		echo "      if (!groupId) return;\n";
+		echo "      \n";
+		echo "      if (!groups[groupId]) {\n";
+		echo "        groups[groupId] = {\n";
+		echo "          items: [],\n";
+		echo "          participant: \$meta.attr('data-pack-participant') || ''\n";
+		echo "        };\n";
+		echo "      }\n";
+		echo "      groups[groupId].items.push(this);\n";
+		echo "    });\n";
+		echo "    \n";
+		echo "    console.log('Found ' + Object.keys(groups).length + ' pack groups');\n";
+		echo "    \n";
+		echo "    // Wrap each group and add participant badge\n";
+		echo "    $.each(groups, function(groupId, groupData) {\n";
+		echo "      if (groupData.items.length === 0) return;\n";
+		echo "      \n";
+		echo "      console.log('Processing group ' + groupId + ' with participant: ' + groupData.participant);\n";
 		echo "      \n";
 		echo "      // Wrap items in pack group container\n";
 		echo "      var wrapper = $('<tbody class=\"tcbf-pack-group\" data-pack-group=\"' + groupId + '\"></tbody>');\n";
-		echo "      $(items[0]).before(wrapper);\n";
-		echo "      $(items).each(function() { wrapper.append(this); });\n";
+		echo "      $(groupData.items[0]).before(wrapper);\n";
+		echo "      $(groupData.items).each(function() { wrapper.append(this); });\n";
 		echo "      \n";
 		echo "      // Add floating participant badge if participant name exists\n";
-		echo "      if (participant) {\n";
-		echo "        var badge = $('<tr class=\"tcbf-pack-header\"><td colspan=\"6\"><div class=\"tcbf-pack-participant-badge\"><span class=\"tcbf-pack-participant-badge__icon\">👤</span> ' + participant + '</div></td></tr>');\n";
+		echo "      if (groupData.participant) {\n";
+		echo "        var badge = $('<tr class=\"tcbf-pack-header\"><td colspan=\"6\"><div class=\"tcbf-pack-participant-badge\"><span class=\"tcbf-pack-participant-badge__icon\">👤</span> ' + groupData.participant + '</div></td></tr>');\n";
 		echo "        wrapper.prepend(badge);\n";
 		echo "      }\n";
 		echo "    });\n";
+		echo "  }\n";
+		echo "  \n";
+		echo "  $(document).ready(function() {\n";
+		echo "    initPackGrouping();\n";
 		echo "  });\n";
+		echo "  \n";
+		echo "  // Re-run after cart updates (AJAX)\n";
+		echo "  $(document.body).on('updated_cart_totals updated_checkout', function() {\n";
+		echo "    console.log('Cart updated, re-initializing pack grouping');\n";
+		echo "    initPackGrouping();\n";
+		echo "  });\n";
+		echo "  \n";
 		echo "})(jQuery);\n";
 		echo "</script>\n";
 		echo "<!-- /TC Booking Flow: Pack Grouping Script -->\n";
