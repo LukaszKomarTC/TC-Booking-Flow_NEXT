@@ -149,6 +149,9 @@ final class Plugin {
 		// ---- Cart display: show booking meta to the customer
 		add_filter('woocommerce_get_item_data', [ $this, 'woo_cart_item_data' ], 20, 2);
 
+		// ---- Cart display: hide WooCommerce Bookings meta fields we don't want to show
+		add_filter('woocommerce_order_item_display_meta_key', [ $this, 'woo_filter_cart_meta_labels' ], 10, 3);
+
 		// ---- Cart display: show EB discount badge after item name
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
@@ -951,6 +954,43 @@ final class Plugin {
 
 		// Cart-specific styling
 		if ( $is_cart ) {
+			echo "\n/* ===== Pack Grouping Visual Styles ===== */\n";
+			echo ".tcbf-pack-group {\n";
+			echo "  position: relative;\n";
+			echo "  background: rgba(61, 97, 170, 0.02);\n";
+			echo "  border: 1px solid rgba(61, 97, 170, 0.08);\n";
+			echo "  border-radius: 8px;\n";
+			echo "  padding: 16px;\n";
+			echo "  margin: 8px 0;\n";
+			echo "}\n";
+
+			echo ".tcbf-pack-participant-badge {\n";
+			echo "  position: absolute;\n";
+			echo "  top: -12px;\n";
+			echo "  left: 16px;\n";
+			echo "  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);\n";
+			echo "  border: 1px solid rgba(61, 97, 170, 0.2);\n";
+			echo "  color: #3d61aa;\n";
+			echo "  padding: 4px 12px;\n";
+			echo "  border-radius: 12px;\n";
+			echo "  font-size: 12px;\n";
+			echo "  font-weight: 600;\n";
+			echo "  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);\n";
+			echo "  z-index: 1;\n";
+			echo "}\n";
+
+			echo ".tcbf-pack-participant-badge__icon {\n";
+			echo "  margin-right: 4px;\n";
+			echo "}\n";
+
+			echo "\n/* ===== Cart Item Footer (for EB badges) ===== */\n";
+			echo ".tcbf-cart-item-footer {\n";
+			echo "  margin-top: 12px;\n";
+			echo "  display: flex;\n";
+			echo "  flex-direction: column;\n";
+			echo "  gap: 8px;\n";
+			echo "}\n";
+
 			echo "\n/* Cart EB Discount Badge */\n";
 			echo ".tcbf-cart-eb-badge {\n";
 			echo "  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);\n";
@@ -962,8 +1002,8 @@ final class Plugin {
 			echo "  display: inline-flex;\n";
 			echo "  align-items: center;\n";
 			echo "  gap: 8px;\n";
-			echo "  margin-top: 8px;\n";
 			echo "  line-height: 1.3;\n";
+			echo "  align-self: flex-start;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__icon {\n";
 			echo "  font-size: 16px;\n";
@@ -971,6 +1011,45 @@ final class Plugin {
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__text {\n";
 			echo "  white-space: nowrap;\n";
+			echo "}\n";
+
+			echo "\n/* Included in Pack Badge */\n";
+			echo ".tcbf-pack-badge {\n";
+			echo "  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);\n";
+			echo "  color: #78350f;\n";
+			echo "  padding: 4px 10px;\n";
+			echo "  border-radius: 4px;\n";
+			echo "  font-size: 11px;\n";
+			echo "  font-weight: 600;\n";
+			echo "  display: inline-flex;\n";
+			echo "  align-items: center;\n";
+			echo "  gap: 6px;\n";
+			echo "  margin-top: 6px;\n";
+			echo "  align-self: flex-start;\n";
+			echo "}\n";
+			echo ".tcbf-pack-badge__icon {\n";
+			echo "  font-size: 12px;\n";
+			echo "}\n";
+
+			echo "\n/* Participant Badge (for pack parent items) */\n";
+			echo ".tcbf-participant-badge {\n";
+			echo "  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);\n";
+			echo "  color: #312e81;\n";
+			echo "  padding: 6px 12px;\n";
+			echo "  border-radius: 6px;\n";
+			echo "  font-size: 13px;\n";
+			echo "  font-weight: 600;\n";
+			echo "  display: inline-flex;\n";
+			echo "  align-items: center;\n";
+			echo "  gap: 8px;\n";
+			echo "  border: 1px solid rgba(99, 102, 241, 0.2);\n";
+			echo "}\n";
+			echo ".tcbf-participant-badge__icon {\n";
+			echo "  font-size: 16px;\n";
+			echo "  line-height: 1;\n";
+			echo "}\n";
+			echo ".tcbf-participant-badge__text {\n";
+			echo "  line-height: 1.3;\n";
 			echo "}\n";
 
 			echo "\n/* Partner Coupon Styling in Cart Totals */\n";
@@ -1021,6 +1100,13 @@ final class Plugin {
 			echo "  }\n";
 			echo "  .tcbf-cart-eb-badge__icon {\n";
 			echo "    font-size: 14px;\n";
+			echo "  }\n";
+			echo "  .tcbf-pack-participant-badge {\n";
+			echo "    font-size: 11px;\n";
+			echo "    padding: 3px 10px;\n";
+			echo "  }\n";
+			echo "  .tcbf-pack-group {\n";
+			echo "    padding: 12px;\n";
 			echo "  }\n";
 			echo "}\n";
 		}
@@ -1087,15 +1173,46 @@ final class Plugin {
 	}
 
 	/**
+	 * Filter cart meta field labels to hide WooCommerce Bookings fields we don't want to show.
+	 * Hide: Booking date, Duration, Size (but keep them as order meta for admin).
+	 *
+	 * @param string $display_key  Meta key display label
+	 * @param object $meta         Meta object
+	 * @param object $item         Order/cart item
+	 * @return string Empty string to hide, original key to show
+	 */
+	public function woo_filter_cart_meta_labels( $display_key, $meta = null, $item = null ) {
+		// Hide WooCommerce Bookings auto-generated fields from cart/checkout display
+		$hidden_keys = [
+			'Booking Date',
+			'Booking Dates',
+			'Duration',
+			'Size',
+			'Persons',
+			'Resource',
+		];
+
+		// Check if this is a hidden key
+		foreach ( $hidden_keys as $hidden ) {
+			if ( stripos( $display_key, $hidden ) !== false ) {
+				return ''; // Return empty string to hide
+			}
+		}
+
+		return $display_key;
+	}
+
+	/**
 	 * Display EB discount badge after cart item name.
 	 * Shows percentage and amount saved with EB gradient styling.
 	 */
 	public function woo_cart_item_eb_badge( $cart_item, $cart_item_key = null ) {
 		// Handle both cart and mini-cart signatures
-		if ( is_string( $cart_item ) ) {
-			// woocommerce_after_mini_cart_item_name passes ($item_html, $cart_item, $cart_item_key)
-			// But we're hooked as ($cart_item, $cart_item_key), so first param is HTML, second is actual cart_item
-			// Let's swap them
+		// Mini-cart passes ($cart_item_key, $cart_item) — reversed!
+		// Cart passes ($cart_item, $cart_item_key)
+		// Detect by checking if first param has 'booking' key (cart item array) or not (string key)
+		if ( is_string( $cart_item ) && is_array( $cart_item_key ) ) {
+			// Mini-cart signature: swap parameters
 			$temp = $cart_item;
 			$cart_item = $cart_item_key;
 			$cart_item_key = $temp;
@@ -1137,7 +1254,8 @@ final class Plugin {
 			$label = tc_sc_event_tr( $label );
 		}
 
-		// Output the badge
+		// Output the badge - wrapped in container for positioning
+		echo '<div class="tcbf-cart-item-footer">';
 		echo '<div class="tcbf-cart-eb-badge">';
 		echo '<span class="tcbf-cart-eb-badge__icon">⏰</span>';
 		echo '<span class="tcbf-cart-eb-badge__text">';
@@ -1148,6 +1266,7 @@ final class Plugin {
 
 		echo wp_kses_post( $amount_formatted ) . ' ' . esc_html( $label );
 		echo '</span>';
+		echo '</div>';
 		echo '</div>';
 	}
 
