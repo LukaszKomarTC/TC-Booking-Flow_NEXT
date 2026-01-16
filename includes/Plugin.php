@@ -976,10 +976,11 @@ final class Plugin {
 		if ( $is_cart ) {
 			echo "\n/* ===== Pack Grouping Visual Styles ===== */\n";
 			echo "tbody.tcbf-pack-group {\n";
+			echo "  display: block;\n";
+			echo "  margin-bottom: 16px;\n";
 			echo "  position: relative;\n";
 			echo "  background: rgba(61, 97, 170, 0.02);\n";
 			echo "  border-left: 3px solid rgba(61, 97, 170, 0.15);\n";
-			echo "  margin-bottom: 16px;\n";
 			echo "}\n";
 			echo "tbody.tcbf-pack-group td {\n";
 			echo "  padding-left: 8px !important;\n";
