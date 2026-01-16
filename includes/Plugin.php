@@ -972,6 +972,10 @@ final class Plugin {
 			echo "  background: rgba(61, 97, 170, 0.02);\n";
 			echo "  border-left: 3px solid rgba(61, 97, 170, 0.15);\n";
 			echo "}\n";
+			echo "tbody.tcbf-pack-group td {\n";
+			echo "  padding-left: 8px !important;\n";
+			echo "  padding-right: 8px !important;\n";
+			echo "}\n";
 
 			echo "tbody.tcbf-pack-group tr.tcbf-pack-item td {\n";
 			echo "  border-top: 1px dashed rgba(61, 97, 170, 0.08) !important;\n";
@@ -1032,10 +1036,10 @@ final class Plugin {
 			echo "  align-self: flex-start;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__icon {\n";
-			echo "  font-size: 0.7em;\n";
+			echo "  font-size: 1.2em;\n";
 			echo "  line-height: 1;\n";
 			echo "  display: inline-block;\n";
-			echo "  width: 1.2em;\n";
+			echo "  width: 1em;\n";
 			echo "  text-align: center;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__text {\n";
@@ -1132,8 +1136,8 @@ final class Plugin {
 			echo "    gap: 4px;\n";
 			echo "  }\n";
 			echo "  .tcbf-cart-eb-badge__icon {\n";
-			echo "    font-size: 0.7em;\n";
-			echo "    width: 1.2em;\n";
+			echo "    font-size: 1.2em;\n";
+			echo "    width: 1em;\n";
 			echo "  }\n";
 			echo "  .tcbf-pack-participant-badge {\n";
 			echo "    font-size: 11px;\n";
@@ -1373,7 +1377,7 @@ final class Plugin {
 		echo "    $.each(groups, function(groupId, groupData) {\n";
 		echo "      if (groupData.items.length === 0) return;\n";
 		echo "      \n";
-		echo "      console.log('Processing group ' + groupId + ' with participant: ' + groupData.participant);\n";
+		echo "      console.log('Processing group ' + groupId + ' with participant: \"' + groupData.participant + '\"');\n";
 		echo "      \n";
 		echo "      // Wrap items in pack group container\n";
 		echo "      var wrapper = $('<tbody class=\"tcbf-pack-group\" data-pack-group=\"' + groupId + '\"></tbody>');\n";
@@ -1381,9 +1385,12 @@ final class Plugin {
 		echo "      $(groupData.items).each(function() { wrapper.append(this); });\n";
 		echo "      \n";
 		echo "      // Add floating participant badge if participant name exists\n";
-		echo "      if (groupData.participant) {\n";
+		echo "      if (groupData.participant && groupData.participant.trim() !== '') {\n";
+		echo "        console.log('Adding participant badge for: ' + groupData.participant);\n";
 		echo "        var badge = $('<tr class=\"tcbf-pack-header\"><td colspan=\"6\"><div class=\"tcbf-pack-participant-badge\"><span class=\"tcbf-pack-participant-badge__icon\">👤</span> ' + groupData.participant + '</div></td></tr>');\n";
 		echo "        wrapper.prepend(badge);\n";
+		echo "      } else {\n";
+		echo "        console.log('No participant name found for group ' + groupId);\n";
 		echo "      }\n";
 		echo "    });\n";
 		echo "  }\n";
