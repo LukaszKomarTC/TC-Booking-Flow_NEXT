@@ -103,105 +103,147 @@ final class Woo {
 		if ( empty($cart_item["booking"]) || ! is_array($cart_item["booking"]) ) return $item_data;
 		$booking = (array) $cart_item["booking"];
 
-		// Get scope and pack role to determine which fields to show
+		// Get scope, role, and group ID
 		$scope = isset($booking[\TC_BF\Plugin::BK_SCOPE]) ? (string) $booking[\TC_BF\Plugin::BK_SCOPE] : '';
 		$role = isset($cart_item['tc_group_role']) ? $cart_item['tc_group_role'] : '';
-		$is_pack_parent = $role === 'parent';
+		$group_id = isset($cart_item['tc_group_id']) ? (int) $cart_item['tc_group_id'] : 0;
 
-		// For child items (rentals in pack), filter out WooCommerce Bookings auto-generated fields
-		// that should only appear on parent items (Booking Date, Duration, Size)
-		if ( $role === 'child' ) {
+		// Use Pack_Grouping helpers for clean code
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+			$scope = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_scope( $cart_item );
+			$role = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_role( $cart_item );
+			$group_id = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_group_id( $cart_item );
+		}
+
+		// ==================================================================
+		// PARENT ITEM (Participation) - Show minimal, essential info
+		// ==================================================================
+		if ( $scope !== 'rental' ) {
+			// Event title
+			if ( ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
+				$item_data[] = [
+					"name"  => self::translate('[:en]Event[:es]Evento[:]'),
+					"value" => wc_clean((string) $booking[\TC_BF\Plugin::BK_EVENT_TITLE]),
+				];
+			}
+
+			// Booking date (kept for parent, filtered for child below)
+			// WooCommerce Bookings will add this automatically
+
+			// "Own bike" - ONLY if this pack has NO rental child
+			if ( $group_id > 0 && class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+				$has_rental = \TC_BF\Integrations\WooCommerce\Pack_Grouping::pack_has_rental_child( $group_id );
+
+				if ( !$has_rental ) {
+					$item_data[] = [
+						"name"  => self::translate('[:es]Bicicleta[:en]Bicycle[:]'),
+						"value" => self::translate('[:en]Own[:es]Propia[:]'),
+					];
+				}
+			}
+		}
+
+		// ==================================================================
+		// CHILD ITEM (Rental) - Show size only, filter out duplicates
+		// ==================================================================
+		if ( $scope === 'rental' ) {
+			// Filter out WooCommerce Bookings auto-fields that duplicate parent info
 			$filtered_data = [];
 			foreach ( $item_data as $data ) {
 				$name = isset( $data['name'] ) ? $data['name'] : '';
 				$name_lower = strtolower( $name );
 
-				// Skip these fields for child items
+				// Skip date, duration, persons, resource (duplicates or irrelevant)
 				if ( strpos( $name_lower, 'booking date' ) !== false ||
 				     strpos( $name_lower, 'fecha de la reserva' ) !== false ||
 				     strpos( $name_lower, 'booking dates' ) !== false ||
 				     strpos( $name_lower, 'duration' ) !== false ||
 				     strpos( $name_lower, 'duración' ) !== false ||
-				     strpos( $name_lower, 'size' ) !== false ||
-				     strpos( $name_lower, 'talla' ) !== false ) {
+				     strpos( $name_lower, 'persons' ) !== false ||
+				     strpos( $name_lower, 'personas' ) !== false ||
+				     strpos( $name_lower, 'resource' ) !== false ||
+				     strpos( $name_lower, 'recurso' ) !== false ) {
 					continue; // Skip this field
 				}
 
 				$filtered_data[] = $data;
 			}
 			$item_data = $filtered_data;
+
+			// Add size field (normalized to single token like S, M, L, XL)
+			$size = self::extract_size_from_booking( $booking );
+			if ( $size ) {
+				$item_data[] = [
+					"name"  => self::translate('[:es]Talla[:en]Size[:]'),
+					"value" => $size,
+				];
+			}
 		}
 
-		// Event title - ONLY show for participation items, not for rentals
-		if ( $scope !== 'rental' && ! empty($booking[\TC_BF\Plugin::BK_EVENT_TITLE]) ) {
-			$event_label = '[:en]Event[:es]Evento[:]';
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$event_label = tc_sc_event_tr( $event_label );
-			}
-			$item_data[] = [
-				"name"  => $event_label,
-				"value" => wc_clean((string) $booking[\TC_BF\Plugin::BK_EVENT_TITLE]),
-			];
-		}
-
-		// Participant name: Now shown as floating badge over pack group (via JavaScript in Plugin.php)
-		// Not displayed in cart item meta to avoid duplication
-
-		// Type field: HIDDEN (per user requirement - hide for both participation and rental in cart)
-		// (kept as order meta via woo_checkout_create_order_line_item)
-
-		// Bicycle label (rental line only)
-		if ( $scope === 'rental' && ! empty($booking["_bicycle"]) ) {
-			$bicycle_label = '[:es]Bicicleta[:en]Bicycle[:]';
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$bicycle_label = tc_sc_event_tr( $bicycle_label );
-			}
-			$item_data[] = [
-				"name"  => $bicycle_label,
-				"value" => wc_clean((string) $booking["_bicycle"]),
-			];
-		}
-
-		// "Own" bicycle label for participation items without rental
-		if ( $scope !== 'rental' && empty($booking["_bicycle"]) ) {
-			$bicycle_label = '[:es]Bicicleta[:en]Bicycle[:]';
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$bicycle_label = tc_sc_event_tr( $bicycle_label );
-			}
-			$own_label = '[:en]Own[:es]Propia[:]';
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$own_label = tc_sc_event_tr( $own_label );
-			}
-			$item_data[] = [
-				"name"  => $bicycle_label,
-				"value" => $own_label,
-			];
-		}
-
-		// Note: Booking date, Duration, Size are automatically added by WooCommerce Bookings
-		// We'll filter those out via woocommerce_hidden_order_itemmeta for cart display
-
-		// "Included in pack" badge for rental items in pack (child role) - shown at bottom
-		$role = isset($cart_item['tc_group_role']) ? $cart_item['tc_group_role'] : '';
-		if ( $role === 'child' ) {
-			$pack_label = '[:en]Included in pack[:es]Incluido en el pack[:]';
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$pack_label = tc_sc_event_tr( $pack_label );
-			}
-			// Use display: 'pack_badge' to apply special styling
-			$badge_html = '<span class="tcbf-pack-badge-inline">';
-			$badge_html .= '<span class="tcbf-pack-badge-inline__icon">📦</span>';
-			$badge_html .= '<span class="tcbf-pack-badge-inline__text">' . esc_html( $pack_label ) . '</span>';
-			$badge_html .= '</span>';
-
-			$item_data[] = [
-				"name"  => '',
-				"value" => $badge_html,
-				"display" => 'pack_badge',
-			];
-		}
+		// Participant name: Now shown via hook (woocommerce_after_cart_item_name)
+		// Pack badge: Now shown via hook (woocommerce_after_cart_item_name)
 
 		return $item_data;
+	}
+
+	/**
+	 * Translate qTranslate strings using available translation functions
+	 *
+	 * Supports tc_sc_event_tr, qTranslate-X, and legacy qTranslate.
+	 *
+	 * @param string $text Text to translate (qTranslate format: [:en]text[:es]texto[:])
+	 * @return string Translated text
+	 */
+	public static function translate( string $text ) : string {
+		if ( $text === '' ) return '';
+
+		// Try tc_sc_event_tr first (custom function)
+		if ( function_exists( 'tc_sc_event_tr' ) ) {
+			return tc_sc_event_tr( $text );
+		}
+
+		// Fall back to localize_text (qTranslate support)
+		return self::localize_text( $text );
+	}
+
+	/**
+	 * Extract and normalize size from booking data
+	 *
+	 * Returns a single token (S, M, L, XL, etc.) extracted from resource name.
+	 *
+	 * @param array $booking Booking data
+	 * @return string Size token (empty string if not found)
+	 */
+	private static function extract_size_from_booking( array $booking ) : string {
+		// Try resource ID (WooCommerce Bookings uses this for size variants)
+		$resource_id = 0;
+
+		if ( isset( $booking['wc_bookings_field_resource'] ) ) {
+			$resource_id = (int) $booking['wc_bookings_field_resource'];
+		} elseif ( isset( $booking['resource_id'] ) ) {
+			$resource_id = (int) $booking['resource_id'];
+		}
+
+		if ( $resource_id <= 0 ) {
+			return '';
+		}
+
+		// Get resource post
+		$resource = get_post( $resource_id );
+		if ( ! $resource || ! isset( $resource->post_title ) ) {
+			return '';
+		}
+
+		$resource_name = $resource->post_title;
+
+		// Try to extract size token (S, M, L, XL, XXL, etc.)
+		// Match patterns like "Size S", "Talla M", "S", "M", etc.
+		if ( preg_match( '/\b(XXL|XL|[SMLX])\b/i', $resource_name, $matches ) ) {
+			return strtoupper( $matches[1] );
+		}
+
+		// Fallback: return full resource name if no pattern matched
+		return $resource_name;
 	}
 
 	/**

@@ -156,7 +156,10 @@ final class Plugin {
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 
-		// ---- Cart display: add "Included in pack" badge to product title
+		// ---- Cart display: render participant and pack badges after item name
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 15, 2);
+
+		// ---- Cart display: add event link to participation items
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
 
 		// ---- Cart display: add pack grouping classes to cart items
@@ -580,6 +583,11 @@ final class Plugin {
 			$cart_item_meta_part['booking']['_participant'] = $participant_name;
 		}
 
+		// Hidden meta fields (prefixed with _ to hide from cart/order display)
+		$cart_item_meta_part['_tcbf_event_id']         = $event_id;
+		$cart_item_meta_part['_tcbf_gf_entry_id']      = $entry_id;
+		$cart_item_meta_part['_tcbf_participant_name'] = $participant_name;
+		$cart_item_meta_part['_tcbf_scope']            = 'participation';
 
 		// EB snapshot fields for participation
 		$eligible_part = ! empty($cfg['enabled']) && ! empty($cfg['participation_enabled']);
@@ -728,6 +736,13 @@ final class Plugin {
 					$cart_item_meta_rental['booking']['_bicycle'] = $bicycle_label;
 				}
 
+				// Hidden meta fields (prefixed with _ to hide from cart/order display)
+				$cart_item_meta_rental['_tcbf_event_id']         = $event_id;
+				$cart_item_meta_rental['_tcbf_gf_entry_id']      = $entry_id;
+				$cart_item_meta_rental['_tcbf_participant_name'] = $participant_name;
+				$cart_item_meta_rental['_tcbf_scope']            = 'rental';
+				$cart_item_meta_rental['_tcbf_bike_product_id']  = $product_id_bicycle;
+				$cart_item_meta_rental['_tcbf_resource_id']      = $resource_id_bicycle;
 
 				// EB snapshot fields for rental (distributed amounts computed above)
 				$cart_item_meta_rental['booking'][self::BK_EB_ELIGIBLE] = $eligible_rental ? 1 : 0;
@@ -974,54 +989,17 @@ final class Plugin {
 
 		// Cart-specific styling
 		if ( $is_cart ) {
-			echo "\n/* ===== Pack Grouping Visual Styles ===== */\n";
-			echo "tbody.tcbf-pack-group {\n";
-			echo "  display: block;\n";
-			echo "  margin-bottom: 16px;\n";
-			echo "  position: relative;\n";
-			echo "  background: rgba(61, 97, 170, 0.02);\n";
-			echo "  border-left: 3px solid rgba(61, 97, 170, 0.15);\n";
-			echo "}\n";
-			echo "tbody.tcbf-pack-group td {\n";
-			echo "  padding-left: 8px !important;\n";
-			echo "  padding-right: 8px !important;\n";
-			echo "}\n";
-
-			echo "tbody.tcbf-pack-group tr.tcbf-pack-item td {\n";
-			echo "  border-top: 1px dashed rgba(61, 97, 170, 0.08) !important;\n";
-			echo "}\n";
-
-			echo "tbody.tcbf-pack-group tr.tcbf-pack-item:first-of-type td {\n";
-			echo "  padding-top: 20px !important;\n";
-			echo "}\n";
-
-			echo "tbody.tcbf-pack-group tr.tcbf-pack-item:last-of-type td {\n";
-			echo "  padding-bottom: 20px !important;\n";
-			echo "}\n";
-
-			echo "tr.tcbf-pack-header {\n";
-			echo "  display: table-row;\n";
-			echo "}\n";
-
-			echo "tr.tcbf-pack-header td {\n";
-			echo "  width: 100%;\n";
-			echo "  text-align: center !important;\n";
-			echo "  padding-bottom: 5px !important;\n";
-			echo "  border: none !important;\n";
-			echo "  background: transparent !important;\n";
-			echo "  border-bottom: none !important;\n";
-			echo "}\n";
-
+			echo "\n/* ===== Pack Badge Styles ===== */\n";
 			echo ".tcbf-pack-participant-badge {\n";
 			echo "  display: inline-block;\n";
-			echo "  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);\n";
-			echo "  border: 1px solid rgba(61, 97, 170, 0.2);\n";
-			echo "  color: #3d61aa;\n";
-			echo "  padding: 6px 14px;\n";
-			echo "  border-radius: 12px;\n";
+			echo "  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);\n";
+			echo "  color: #312e81;\n";
+			echo "  padding: 6px 12px;\n";
+			echo "  border-radius: 6px;\n";
 			echo "  font-size: 13px;\n";
 			echo "  font-weight: 600;\n";
-			echo "  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);\n";
+			echo "  margin-top: 8px;\n";
+			echo "  border: 1px solid rgba(99, 102, 241, 0.2);\n";
 			echo "}\n";
 
 			echo ".tcbf-pack-participant-badge__icon {\n";
@@ -1261,12 +1239,88 @@ final class Plugin {
 	}
 
 	/**
-	 * Add "Included in pack" badge to product title for child items (rentals).
+	 * Render participant and pack badges after cart item name.
+	 *
+	 * Displays:
+	 * - Participant badge for parent items (participation)
+	 * - "Included in pack" badge for child items (rental)
+	 *
+	 * @param array  $cart_item     Cart item data
+	 * @param string $cart_item_key Cart item key
+	 */
+	public function woo_render_pack_badges( $cart_item, $cart_item_key ) {
+		if ( empty( $cart_item['booking'] ) || ! is_array( $cart_item['booking'] ) ) {
+			return;
+		}
+
+		// Get pack data using Pack_Grouping helpers
+		$group_id = 0;
+		$role = '';
+		$scope = '';
+
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+			$group_id = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_group_id( $cart_item );
+			$role = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_role( $cart_item );
+			$scope = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_scope( $cart_item );
+		} else {
+			// Fallback to direct access
+			$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+			$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+			$booking = $cart_item['booking'];
+			$scope = isset( $booking[ self::BK_SCOPE ] ) ? (string) $booking[ self::BK_SCOPE ] : '';
+		}
+
+		// Skip if not part of a pack
+		if ( $group_id <= 0 ) {
+			return;
+		}
+
+		// ==================================================================
+		// PARENT ITEM (Participation) - Show participant badge
+		// ==================================================================
+		if ( $role === 'parent' && $scope !== 'rental' ) {
+			$participant_name = '';
+
+			if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+				$participant_name = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_participant_name( $cart_item );
+			} else {
+				// Fallback
+				if ( isset( $cart_item['_tcbf_participant_name'] ) ) {
+					$participant_name = $cart_item['_tcbf_participant_name'];
+				} elseif ( isset( $cart_item['booking']['_participant'] ) ) {
+					$participant_name = $cart_item['booking']['_participant'];
+				}
+			}
+
+			if ( $participant_name ) {
+				echo '<div class="tcbf-pack-participant-badge">';
+				echo '<span class="tcbf-pack-participant-badge__icon">👤</span>';
+				echo '<span class="tcbf-pack-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
+				echo '</div>';
+			}
+		}
+
+		// ==================================================================
+		// CHILD ITEM (Rental) - Show "Included in pack" badge
+		// ==================================================================
+		if ( $role === 'child' && $scope === 'rental' ) {
+			// Multilingual text
+			$badge_text = Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack[:en]Included in pack[:]' );
+
+			echo '<div class="tcbf-pack-badge-inline">';
+			echo '<span class="tcbf-pack-badge-inline__icon">📦</span>';
+			echo '<span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span>';
+			echo '</div>';
+		}
+	}
+
+	/**
+	 * Add event link to participation items (formerly added pack badge to title).
 	 *
 	 * @param string $product_name Product name HTML
 	 * @param array  $cart_item    Cart item data
 	 * @param string $cart_item_key Cart item key
-	 * @return string Modified product name with badge
+	 * @return string Modified product name with event link
 	 */
 	public function woo_add_pack_badge_to_title( $product_name, $cart_item, $cart_item_key ) {
 		// Check if this is a child item (rental in pack)
@@ -1357,96 +1411,13 @@ final class Plugin {
 	}
 
 	/**
-	 * Output JavaScript to visually group pack items in cart.
+	 * Output JavaScript for pack grouping
 	 *
-	 * Groups consecutive cart items that belong to the same pack and adds
-	 * a floating participant badge over the group.
+	 * REMOVED: DOM manipulation approach caused layout issues.
+	 * Pack grouping now handled via CSS classes (see woo_add_pack_classes).
 	 */
 	public function output_pack_grouping_js() : void {
-		if ( ! is_cart() && ! is_checkout() ) {
-			return;
-		}
-
-		echo "\n<!-- TC Booking Flow: Pack Grouping Script -->\n";
-		echo "<script id=\"tc-bf-pack-grouping\">\n";
-		echo "(function($) {\n";
-		echo "  'use strict';\n";
-		echo "  \n";
-		echo "  function initPackGrouping() {\n";
-		echo "    // Find all pack items\n";
-		echo "    var packItems = $('.tcbf-pack-item');\n";
-		echo "    if (packItems.length === 0) return;\n";
-		echo "    \n";
-		echo "    console.log('Found ' + packItems.length + ' pack items');\n";
-		echo "    \n";
-		echo "    // Group items by pack ID (read from hidden metadata)\n";
-		echo "    var groups = {};\n";
-		echo "    packItems.each(function() {\n";
-		echo "      var \$row = $(this);\n";
-		echo "      var \$meta = \$row.find('.tcbf-pack-meta');\n";
-		echo "      if (\$meta.length === 0) {\n";
-		echo "        console.log('No .tcbf-pack-meta found in row');\n";
-		echo "        return;\n";
-		echo "      }\n";
-		echo "      \n";
-		echo "      var groupId = \$meta.attr('data-pack-group');\n";
-		echo "      var role = \$meta.attr('data-pack-role');\n";
-		echo "      var participant = \$meta.attr('data-pack-participant') || '';\n";
-		echo "      \n";
-		echo "      console.log('Found meta - Group: ' + groupId + ', Role: ' + role + ', Participant: \"' + participant + '\"');\n";
-		echo "      \n";
-		echo "      if (!groupId) return;\n";
-		echo "      \n";
-		echo "      if (!groups[groupId]) {\n";
-		echo "        groups[groupId] = {\n";
-		echo "          items: [],\n";
-		echo "          participant: participant\n";
-		echo "        };\n";
-		echo "      }\n";
-		echo "      // If we haven't found a participant yet and this item has one, use it\n";
-		echo "      if (!groups[groupId].participant && participant) {\n";
-		echo "        groups[groupId].participant = participant;\n";
-		echo "      }\n";
-		echo "      groups[groupId].items.push(this);\n";
-		echo "    });\n";
-		echo "    \n";
-		echo "    console.log('Found ' + Object.keys(groups).length + ' pack groups');\n";
-		echo "    \n";
-		echo "    // Wrap each group and add participant badge\n";
-		echo "    $.each(groups, function(groupId, groupData) {\n";
-		echo "      if (groupData.items.length === 0) return;\n";
-		echo "      \n";
-		echo "      console.log('Processing group ' + groupId + ' with participant: \"' + groupData.participant + '\"');\n";
-		echo "      \n";
-		echo "      // Wrap items in pack group container\n";
-		echo "      var wrapper = $('<tbody class=\"tcbf-pack-group\" data-pack-group=\"' + groupId + '\"></tbody>');\n";
-		echo "      $(groupData.items[0]).before(wrapper);\n";
-		echo "      $(groupData.items).each(function() { wrapper.append(this); });\n";
-		echo "      \n";
-		echo "      // Add floating participant badge if participant name exists\n";
-		echo "      if (groupData.participant && groupData.participant.trim() !== '') {\n";
-		echo "        console.log('Adding participant badge for: ' + groupData.participant);\n";
-		echo "        var badge = $('<tr class=\"tcbf-pack-header\"><td colspan=\"6\"><div class=\"tcbf-pack-participant-badge\"><span class=\"tcbf-pack-participant-badge__icon\">👤</span> ' + groupData.participant + '</div></td></tr>');\n";
-		echo "        wrapper.prepend(badge);\n";
-		echo "      } else {\n";
-		echo "        console.log('No participant name found for group ' + groupId);\n";
-		echo "      }\n";
-		echo "    });\n";
-		echo "  }\n";
-		echo "  \n";
-		echo "  $(document).ready(function() {\n";
-		echo "    initPackGrouping();\n";
-		echo "  });\n";
-		echo "  \n";
-		echo "  // Re-run after cart updates (AJAX)\n";
-		echo "  $(document.body).on('updated_cart_totals updated_checkout', function() {\n";
-		echo "    console.log('Cart updated, re-initializing pack grouping');\n";
-		echo "    initPackGrouping();\n";
-		echo "  });\n";
-		echo "  \n";
-		echo "})(jQuery);\n";
-		echo "</script>\n";
-		echo "<!-- /TC Booking Flow: Pack Grouping Script -->\n";
+		// Intentionally empty - pack grouping now CSS-based
 	}
 
 	/**
