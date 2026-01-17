@@ -580,6 +580,11 @@ final class Plugin {
 			$cart_item_meta_part['booking']['_participant'] = $participant_name;
 		}
 
+		// Hidden meta fields (prefixed with _ to hide from cart/order display)
+		$cart_item_meta_part['_tcbf_event_id']         = $event_id;
+		$cart_item_meta_part['_tcbf_gf_entry_id']      = $entry_id;
+		$cart_item_meta_part['_tcbf_participant_name'] = $participant_name;
+		$cart_item_meta_part['_tcbf_scope']            = 'participation';
 
 		// EB snapshot fields for participation
 		$eligible_part = ! empty($cfg['enabled']) && ! empty($cfg['participation_enabled']);
@@ -728,6 +733,13 @@ final class Plugin {
 					$cart_item_meta_rental['booking']['_bicycle'] = $bicycle_label;
 				}
 
+				// Hidden meta fields (prefixed with _ to hide from cart/order display)
+				$cart_item_meta_rental['_tcbf_event_id']         = $event_id;
+				$cart_item_meta_rental['_tcbf_gf_entry_id']      = $entry_id;
+				$cart_item_meta_rental['_tcbf_participant_name'] = $participant_name;
+				$cart_item_meta_rental['_tcbf_scope']            = 'rental';
+				$cart_item_meta_rental['_tcbf_bike_product_id']  = $product_id_bicycle;
+				$cart_item_meta_rental['_tcbf_resource_id']      = $resource_id_bicycle;
 
 				// EB snapshot fields for rental (distributed amounts computed above)
 				$cart_item_meta_rental['booking'][self::BK_EB_ELIGIBLE] = $eligible_rental ? 1 : 0;

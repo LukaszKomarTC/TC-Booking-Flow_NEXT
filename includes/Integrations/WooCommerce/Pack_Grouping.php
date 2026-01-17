@@ -552,4 +552,92 @@ final class Pack_Grouping {
 			'group_id' => $group_id,
 		] );
 	}
+
+	/* ================================================================
+	 * Helper Functions - Clean accessors for pack metadata
+	 * ================================================================ */
+
+	/**
+	 * Get group ID from cart item
+	 *
+	 * @param array $cart_item Cart item data
+	 * @return int Group ID (0 if not set)
+	 */
+	public static function get_group_id( array $cart_item ) : int {
+		return isset( $cart_item[ self::META_GROUP_ID ] ) ? (int) $cart_item[ self::META_GROUP_ID ] : 0;
+	}
+
+	/**
+	 * Get group role from cart item
+	 *
+	 * @param array $cart_item Cart item data
+	 * @return string Role ('parent', 'child', or empty string)
+	 */
+	public static function get_role( array $cart_item ) : string {
+		return isset( $cart_item[ self::META_GROUP_ROLE ] ) ? $cart_item[ self::META_GROUP_ROLE ] : '';
+	}
+
+	/**
+	 * Get scope from cart item (participation/rental)
+	 *
+	 * @param array $cart_item Cart item data
+	 * @return string Scope ('participation', 'rental', or empty string)
+	 */
+	public static function get_scope( array $cart_item ) : string {
+		if ( isset( $cart_item['booking'][\TC_BF\Plugin::BK_SCOPE] ) ) {
+			return (string) $cart_item['booking'][\TC_BF\Plugin::BK_SCOPE];
+		}
+		return '';
+	}
+
+	/**
+	 * Check if a pack has a rental child item
+	 *
+	 * Scans the entire cart to determine if any rental (child) item
+	 * exists with the given group ID.
+	 *
+	 * @param int $group_id Group ID to check
+	 * @return bool True if pack has rental child, false otherwise
+	 */
+	public static function pack_has_rental_child( int $group_id ) : bool {
+		if ( $group_id <= 0 ) {
+			return false;
+		}
+
+		$cart = WC()->cart;
+		if ( ! $cart ) {
+			return false;
+		}
+
+		foreach ( $cart->get_cart() as $item ) {
+			if ( self::get_group_id( $item ) === $group_id &&
+			     self::get_role( $item ) === self::ROLE_CHILD &&
+			     self::get_scope( $item ) === 'rental' ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get participant name from cart item
+	 *
+	 * @param array $cart_item Cart item data
+	 * @return string Participant name (empty string if not set)
+	 */
+	public static function get_participant_name( array $cart_item ) : string {
+		// Try hidden meta first
+		if ( isset( $cart_item['_tcbf_participant_name'] ) ) {
+			return (string) $cart_item['_tcbf_participant_name'];
+		}
+
+		// Fallback to booking meta
+		if ( isset( $cart_item['booking']['_participant'] ) ) {
+			return (string) $cart_item['booking']['_participant'];
+		}
+
+		return '';
+	}
 }
+
