@@ -1089,13 +1089,13 @@ final class Plugin {
 			echo "\n/* Parent item styling */\n";
 			echo ".tcbf-pack-role-parent {\n";
 			echo "  background: rgba(224, 231, 255, 0.15) !important;\n";
-			echo "  border-left: 3px solid #6366f1 !important;\n";
+			echo "  box-shadow: inset 3px 0 0 #6366f1 !important;\n";
 			echo "}\n";
 
 			echo "\n/* Child item styling */\n";
 			echo ".tcbf-pack-role-child {\n";
 			echo "  background: rgba(243, 244, 246, 0.4) !important;\n";
-			echo "  border-left: 3px solid #d1d5db !important;\n";
+			echo "  box-shadow: inset 3px 0 0 #d1d5db !important;\n";
 			echo "  padding-left: 20px !important;\n";
 			echo "}\n";
 
@@ -1125,9 +1125,14 @@ final class Plugin {
 			echo "  min-width: 0;\n";
 			echo "}\n";
 			echo "\n";
-			echo "/* Participant badge: block-level, allows wrapping, no thumbnail interference */\n";
-			echo ".tcbf-pack-participant-badge {\n";
+			echo "/* Product title link: force block to push badge to new line */\n";
+			echo ".woocommerce-cart-form__contents td.product-name a {\n";
 			echo "  display: block;\n";
+			echo "}\n";
+			echo "\n";
+			echo "/* Participant badge: inline-flex for pill appearance (like desktop) */\n";
+			echo ".tcbf-pack-participant-badge {\n";
+			echo "  display: inline-flex;\n";
 			echo "  margin-top: 6px;\n";
 			echo "  font-size: 12px !important;\n";
 			echo "  font-weight: 400;\n";
