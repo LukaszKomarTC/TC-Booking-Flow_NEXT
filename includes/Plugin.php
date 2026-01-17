@@ -162,14 +162,8 @@ final class Plugin {
 		// ---- Cart display: add event link to participation items
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
 
-		// ---- Cart display: add pack grouping classes to cart items
+		// ---- Cart display: add pack grouping classes to cart items (CSS-based grouping)
 		add_filter('woocommerce_cart_item_class', [ $this, 'woo_add_pack_classes_to_cart_item' ], 10, 3);
-
-		// ---- Cart display: output pack metadata for JavaScript
-		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_output_pack_metadata' ], 5, 2);
-
-		// ---- Cart display: output pack grouping JavaScript
-		add_action('wp_footer', [ $this, 'output_pack_grouping_js' ], 50);
 
 		// ---- Pack Grouping: atomic cart behavior for participation + rental
 		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
@@ -1083,6 +1077,45 @@ final class Plugin {
 			echo "  line-height: 1.3;\n";
 			echo "}\n";
 
+			echo "\n/* ===== Pack Grouping Visual Styles (CSS-based) ===== */\n";
+			echo "/* Visual grouping for pack items using only CSS classes */\n";
+			echo ".tcbf-pack-item {\n";
+			echo "  position: relative;\n";
+			echo "}\n";
+
+			echo "\n/* Parent item styling */\n";
+			echo ".tcbf-pack-role-parent {\n";
+			echo "  background: rgba(224, 231, 255, 0.15) !important;\n";
+			echo "  border-left: 3px solid #6366f1 !important;\n";
+			echo "}\n";
+
+			echo "\n/* Child item styling */\n";
+			echo ".tcbf-pack-role-child {\n";
+			echo "  background: rgba(243, 244, 246, 0.4) !important;\n";
+			echo "  border-left: 3px solid #d1d5db !important;\n";
+			echo "  padding-left: 20px !important;\n";
+			echo "}\n";
+
+			echo "\n/* Add visual connection between parent and child */\n";
+			echo ".tcbf-pack-role-child::before {\n";
+			echo "  content: '';\n";
+			echo "  position: absolute;\n";
+			echo "  left: 8px;\n";
+			echo "  top: 50%;\n";
+			echo "  width: 8px;\n";
+			echo "  height: 2px;\n";
+			echo "  background: #d1d5db;\n";
+			echo "}\n";
+
+			echo "\n/* Scope-specific refinements */\n";
+			echo ".tcbf-pack-scope-participation.tcbf-pack-role-parent {\n";
+			echo "  font-weight: 500;\n";
+			echo "}\n";
+
+			echo ".tcbf-pack-scope-rental.tcbf-pack-role-child {\n";
+			echo "  opacity: 0.92;\n";
+			echo "}\n";
+
 			echo "\n/* Partner Coupon Styling in Cart Totals */\n";
 			echo ".cart_totals .coupon,\n";
 			echo ".woocommerce-cart-form .coupon,\n";
@@ -1349,75 +1382,51 @@ final class Plugin {
 	/**
 	 * Add pack grouping classes to cart item rows.
 	 *
+	 * Adds CSS classes for visual grouping without DOM manipulation:
+	 * - tcbf-pack-item: All pack items
+	 * - tcbf-pack-group-{id}: Group by entry ID
+	 * - tcbf-pack-role-{parent|child}: Item role in pack
+	 * - tcbf-pack-scope-{participation|rental}: Item scope
+	 *
 	 * @param string $class         Cart item class
 	 * @param array  $cart_item     Cart item data
 	 * @param string $cart_item_key Cart item key
 	 * @return string Modified class
 	 */
 	public function woo_add_pack_classes_to_cart_item( $class, $cart_item, $cart_item_key ) {
-		$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
-		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+		// Use Pack_Grouping helpers for clean data access
+		$group_id = 0;
+		$role = '';
+		$scope = '';
 
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+			$group_id = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_group_id( $cart_item );
+			$role = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_role( $cart_item );
+			$scope = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_scope( $cart_item );
+		} else {
+			// Fallback to direct access
+			$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+			$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+			if ( ! empty( $cart_item['booking'] ) && is_array( $cart_item['booking'] ) ) {
+				$scope = isset( $cart_item['booking'][ self::BK_SCOPE ] ) ? (string) $cart_item['booking'][ self::BK_SCOPE ] : '';
+			}
+		}
+
+		// Only add classes if this item is part of a pack
 		if ( $group_id > 0 ) {
 			$class .= ' tcbf-pack-item';
 			$class .= ' tcbf-pack-group-' . $group_id;
-			$class .= ' tcbf-pack-role-' . $role;
+
+			if ( $role ) {
+				$class .= ' tcbf-pack-role-' . $role;
+			}
+
+			if ( $scope ) {
+				$class .= ' tcbf-pack-scope-' . $scope;
+			}
 		}
 
 		return $class;
-	}
-
-	/**
-	 * Output hidden pack metadata for JavaScript to read.
-	 *
-	 * @param array  $cart_item     Cart item data
-	 * @param string $cart_item_key Cart item key
-	 */
-	public function woo_output_pack_metadata( $cart_item, $cart_item_key ) {
-		$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
-		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
-		$participant = '';
-
-		if ( $group_id > 0 ) {
-			// Try multiple sources for participant name
-			if ( ! empty( $cart_item['booking']['_participant'] ) ) {
-				$participant = wc_clean( (string) $cart_item['booking']['_participant'] );
-			}
-			// Fallback: try without underscore (legacy)
-			elseif ( ! empty( $cart_item['booking']['participant'] ) ) {
-				$participant = wc_clean( (string) $cart_item['booking']['participant'] );
-			}
-
-			// Debug logging
-			if ( $this->is_debug() ) {
-				$this->log('pack.metadata.output', [
-					'group_id' => $group_id,
-					'role' => $role,
-					'participant' => $participant,
-					'booking_keys' => array_keys( $cart_item['booking'] ?? [] ),
-					'has_participant_underscore' => isset( $cart_item['booking']['_participant'] ),
-					'has_participant_no_underscore' => isset( $cart_item['booking']['participant'] ),
-				]);
-			}
-
-			// Output hidden div with pack metadata
-			echo '<div class="tcbf-pack-meta" style="display:none;" ';
-			echo 'data-pack-group="' . esc_attr( $group_id ) . '" ';
-			echo 'data-pack-role="' . esc_attr( $role ) . '" ';
-			echo 'data-pack-participant="' . esc_attr( $participant ) . '">';
-			echo '<!-- DEBUG: participant=' . esc_html( $participant ) . ' role=' . esc_html( $role ) . ' -->';
-			echo '</div>';
-		}
-	}
-
-	/**
-	 * Output JavaScript for pack grouping
-	 *
-	 * REMOVED: DOM manipulation approach caused layout issues.
-	 * Pack grouping now handled via CSS classes (see woo_add_pack_classes).
-	 */
-	public function output_pack_grouping_js() : void {
-		// Intentionally empty - pack grouping now CSS-based
 	}
 
 	/**
