@@ -194,7 +194,7 @@ final class Woo {
 	 * @param string $text Text to translate (qTranslate format: [:en]text[:es]texto[:])
 	 * @return string Translated text
 	 */
-	private static function translate( string $text ) : string {
+	public static function translate( string $text ) : string {
 		if ( $text === '' ) return '';
 
 		// Try tc_sc_event_tr first (custom function)

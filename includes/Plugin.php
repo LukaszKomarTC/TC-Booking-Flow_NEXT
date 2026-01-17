@@ -156,7 +156,10 @@ final class Plugin {
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
 
-		// ---- Cart display: add "Included in pack" badge to product title
+		// ---- Cart display: render participant and pack badges after item name
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 15, 2);
+
+		// ---- Cart display: add event link to participation items
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
 
 		// ---- Cart display: add pack grouping classes to cart items
@@ -1236,12 +1239,88 @@ final class Plugin {
 	}
 
 	/**
-	 * Add "Included in pack" badge to product title for child items (rentals).
+	 * Render participant and pack badges after cart item name.
+	 *
+	 * Displays:
+	 * - Participant badge for parent items (participation)
+	 * - "Included in pack" badge for child items (rental)
+	 *
+	 * @param array  $cart_item     Cart item data
+	 * @param string $cart_item_key Cart item key
+	 */
+	public function woo_render_pack_badges( $cart_item, $cart_item_key ) {
+		if ( empty( $cart_item['booking'] ) || ! is_array( $cart_item['booking'] ) ) {
+			return;
+		}
+
+		// Get pack data using Pack_Grouping helpers
+		$group_id = 0;
+		$role = '';
+		$scope = '';
+
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+			$group_id = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_group_id( $cart_item );
+			$role = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_role( $cart_item );
+			$scope = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_scope( $cart_item );
+		} else {
+			// Fallback to direct access
+			$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+			$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+			$booking = $cart_item['booking'];
+			$scope = isset( $booking[ self::BK_SCOPE ] ) ? (string) $booking[ self::BK_SCOPE ] : '';
+		}
+
+		// Skip if not part of a pack
+		if ( $group_id <= 0 ) {
+			return;
+		}
+
+		// ==================================================================
+		// PARENT ITEM (Participation) - Show participant badge
+		// ==================================================================
+		if ( $role === 'parent' && $scope !== 'rental' ) {
+			$participant_name = '';
+
+			if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+				$participant_name = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_participant_name( $cart_item );
+			} else {
+				// Fallback
+				if ( isset( $cart_item['_tcbf_participant_name'] ) ) {
+					$participant_name = $cart_item['_tcbf_participant_name'];
+				} elseif ( isset( $cart_item['booking']['_participant'] ) ) {
+					$participant_name = $cart_item['booking']['_participant'];
+				}
+			}
+
+			if ( $participant_name ) {
+				echo '<div class="tcbf-pack-participant-badge">';
+				echo '<span class="tcbf-pack-participant-badge__icon">👤</span>';
+				echo '<span class="tcbf-pack-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
+				echo '</div>';
+			}
+		}
+
+		// ==================================================================
+		// CHILD ITEM (Rental) - Show "Included in pack" badge
+		// ==================================================================
+		if ( $role === 'child' && $scope === 'rental' ) {
+			// Multilingual text
+			$badge_text = Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack[:en]Included in pack[:]' );
+
+			echo '<div class="tcbf-pack-badge-inline">';
+			echo '<span class="tcbf-pack-badge-inline__icon">📦</span>';
+			echo '<span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span>';
+			echo '</div>';
+		}
+	}
+
+	/**
+	 * Add event link to participation items (formerly added pack badge to title).
 	 *
 	 * @param string $product_name Product name HTML
 	 * @param array  $cart_item    Cart item data
 	 * @param string $cart_item_key Cart item key
-	 * @return string Modified product name with badge
+	 * @return string Modified product name with event link
 	 */
 	public function woo_add_pack_badge_to_title( $product_name, $cart_item, $cart_item_key ) {
 		// Check if this is a child item (rental in pack)
