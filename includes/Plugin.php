@@ -1116,6 +1116,39 @@ final class Plugin {
 			echo "  opacity: 0.92;\n";
 			echo "}\n";
 
+			echo "\n/* ===== Pack UI Polish (Phase 9A) ===== */\n";
+			echo "/* Participant badge: smaller + one-line for most names */\n";
+			echo ".tcbf-pack-participant-badge {\n";
+			echo "  white-space: nowrap;\n";
+			echo "  font-size: 12px !important;\n";
+			echo "  padding: 4px 10px !important;\n";
+			echo "  gap: 6px;\n";
+			echo "  max-width: 100%;\n";
+			echo "  overflow: hidden;\n";
+			echo "  text-overflow: ellipsis;\n";
+			echo "}\n";
+
+			echo "\n/* Child 'Included in pack' badge: remove left margin, add top */\n";
+			echo ".tcbf-pack-role-child .tcbf-pack-badge-inline {\n";
+			echo "  margin-left: 0 !important;\n";
+			echo "  margin-top: 6px;\n";
+			echo "  display: inline-flex;\n";
+			echo "}\n";
+
+			echo "\n/* Give price/subtotal breathing room from right edge */\n";
+			echo ".woocommerce-cart-form__contents td.product-price,\n";
+			echo ".woocommerce-cart-form__contents td.product-subtotal {\n";
+			echo "  padding-right: 14px !important;\n";
+			echo "}\n";
+
+			echo "\n/* Visual separation between packs: space above each parent */\n";
+			echo ".woocommerce-cart-form__contents tbody tr.tcbf-pack-role-parent {\n";
+			echo "  border-top: 12px solid transparent;\n";
+			echo "}\n";
+			echo ".woocommerce-cart-form__contents tbody tr.tcbf-pack-role-parent:first-of-type {\n";
+			echo "  border-top: 0;\n";
+			echo "}\n";
+
 			echo "\n/* Partner Coupon Styling in Cart Totals */\n";
 			echo ".cart_totals .coupon,\n";
 			echo ".woocommerce-cart-form .coupon,\n";
@@ -1176,7 +1209,31 @@ final class Plugin {
 			echo "  .tcbf-pack-badge-inline {\n";
 			echo "    font-size: 10px;\n";
 			echo "    padding: 2px 6px;\n";
-			echo "    margin-left: 6px;\n";
+			echo "    margin-left: 0;\n";
+			echo "  }\n";
+			echo "}\n";
+
+			echo "\n/* Mobile fixes for Shopkeeper theme (Phase 9A) */\n";
+			echo "@media (max-width: 576px) {\n";
+			echo "  /* Parent row: pad away from violet border */\n";
+			echo "  tr.tcbf-pack-role-parent > td:not(.product-remove) {\n";
+			echo "    padding-left: 12px !important;\n";
+			echo "  }\n";
+			echo "\n";
+			echo "  /* Fix squeezed price/subtotal cells */\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-price,\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-subtotal {\n";
+			echo "    display: table-cell !important;\n";
+			echo "    width: 1%;\n";
+			echo "    white-space: nowrap;\n";
+			echo "    text-align: right;\n";
+			echo "    vertical-align: middle;\n";
+			echo "  }\n";
+			echo "\n";
+			echo "  /* Hide responsive labels for price/subtotal to reclaim space */\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-price::before,\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-subtotal::before {\n";
+			echo "    display: none !important;\n";
 			echo "  }\n";
 			echo "}\n";
 		}
