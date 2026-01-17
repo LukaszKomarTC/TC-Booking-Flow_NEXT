@@ -68,8 +68,8 @@ final class Plugin {
 	const GF_FIELD_RENTAL_TYPE   = 106;
 
 	// Optional participant notification checkbox (admin/partner operational field)
-	// Checkbox: "Send email confirmation to participant"
-	const GF_FIELD_NOTIFY_PARTICIPANT = 118;
+	// Checkbox: "Send email confirmation to participant" (input ID, not field ID)
+	const GF_FIELD_NOTIFY_PARTICIPANT = '118.1';
 
 	// Per-event config meta
 	const META_EB_ENABLED                = 'tc_ebd_enabled';
@@ -1180,6 +1180,7 @@ final class Plugin {
 			echo "  justify-content: center;\n";
 			echo "  margin-top: 6px;\n";
 			echo "  margin-left: 8px;\n";
+			echo "  padding: 4px;\n";
 			echo "  width: 22px;\n";
 			echo "  height: 22px;\n";
 			echo "  border-radius: 999px;\n";
