@@ -152,15 +152,18 @@ final class Plugin {
 		// ---- Cart display: hide WooCommerce Bookings meta fields we don't want to show
 		add_filter('woocommerce_order_item_display_meta_key', [ $this, 'woo_filter_cart_meta_labels' ], 10, 3);
 
-		// ---- Cart display: show EB discount badge after item name
-		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
-		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
+		// ---- Cart display: render participant and pack badges after item name (priority 10 = shows first)
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 10, 2);
 
-		// ---- Cart display: render participant and pack badges after item name
-		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 15, 2);
+		// ---- Cart display: show EB discount badge after item name (priority 15 = shows after participant badge)
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
+		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
 
-		// ---- Cart display: add event link to participation items
+		// ---- Cart display: add event link to participation items (title)
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
+
+		// ---- Cart display: add event link to parent thumbnails
+		add_filter('woocommerce_cart_item_thumbnail', [ $this, 'woo_link_parent_thumbnail' ], 10, 3);
 
 		// ---- Cart display: add pack grouping classes to cart items (CSS-based grouping)
 		add_filter('woocommerce_cart_item_class', [ $this, 'woo_add_pack_classes_to_cart_item' ], 10, 3);
@@ -1434,6 +1437,46 @@ final class Plugin {
 		}
 
 		return $product_name;
+	}
+
+	/**
+	 * Add event link to parent item thumbnails (Phase 9B).
+	 *
+	 * Makes parent thumbnails clickable with event permalink,
+	 * matching the title link behavior for consistency.
+	 *
+	 * @param string $thumbnail     Thumbnail HTML
+	 * @param array  $cart_item     Cart item data
+	 * @param string $cart_item_key Cart item key
+	 * @return string Modified thumbnail HTML with link
+	 */
+	public function woo_link_parent_thumbnail( $thumbnail, $cart_item, $cart_item_key ) {
+		// Only process pack parent items
+		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+
+		// Skip if not a parent item
+		if ( $role !== 'parent' ) {
+			return $thumbnail;
+		}
+
+		// Get event ID from booking data
+		$event_id = 0;
+		if ( ! empty( $cart_item['booking'] ) && is_array( $cart_item['booking'] ) ) {
+			$event_id = isset( $cart_item['booking'][ self::BK_EVENT_ID ] ) ? (int) $cart_item['booking'][ self::BK_EVENT_ID ] : 0;
+		}
+
+		// If we have an event, wrap thumbnail with link
+		if ( $event_id > 0 ) {
+			$event_url = get_permalink( $event_id );
+			if ( $event_url ) {
+				// Check if thumbnail is already wrapped in a link (avoid double-wrapping)
+				if ( strpos( $thumbnail, '<a ' ) === false ) {
+					$thumbnail = '<a href="' . esc_url( $event_url ) . '">' . $thumbnail . '</a>';
+				}
+			}
+		}
+
+		return $thumbnail;
 	}
 
 	/**
