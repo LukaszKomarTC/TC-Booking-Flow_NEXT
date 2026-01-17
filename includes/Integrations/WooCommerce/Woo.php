@@ -181,25 +181,8 @@ final class Woo {
 		// Note: Booking date, Duration, Size are automatically added by WooCommerce Bookings
 		// We'll filter those out via woocommerce_hidden_order_itemmeta for cart display
 
-		// "Included in pack" badge for rental items in pack (child role) - shown at bottom
-		$role = isset($cart_item['tc_group_role']) ? $cart_item['tc_group_role'] : '';
-		if ( $role === 'child' ) {
-			$pack_label = '[:en]Included in pack[:es]Incluido en el pack[:]';
-			if ( function_exists( 'tc_sc_event_tr' ) ) {
-				$pack_label = tc_sc_event_tr( $pack_label );
-			}
-			// Use display: 'pack_badge' to apply special styling
-			$badge_html = '<span class="tcbf-pack-badge-inline">';
-			$badge_html .= '<span class="tcbf-pack-badge-inline__icon">📦</span>';
-			$badge_html .= '<span class="tcbf-pack-badge-inline__text">' . esc_html( $pack_label ) . '</span>';
-			$badge_html .= '</span>';
-
-			$item_data[] = [
-				"name"  => '',
-				"value" => $badge_html,
-				"display" => 'pack_badge',
-			];
-		}
+		// "Included in pack" badge removed from meta - now rendered via hook in Plugin.php
+		// (see woo_render_pack_badges method)
 
 		return $item_data;
 	}
