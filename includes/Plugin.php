@@ -152,15 +152,18 @@ final class Plugin {
 		// ---- Cart display: hide WooCommerce Bookings meta fields we don't want to show
 		add_filter('woocommerce_order_item_display_meta_key', [ $this, 'woo_filter_cart_meta_labels' ], 10, 3);
 
-		// ---- Cart display: show EB discount badge after item name
-		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
-		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 10, 2);
+		// ---- Cart display: render participant and pack badges after item name (priority 10 = shows first)
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 10, 2);
 
-		// ---- Cart display: render participant and pack badges after item name
-		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 15, 2);
+		// ---- Cart display: show EB discount badge after item name (priority 15 = shows after participant badge)
+		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
+		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
 
-		// ---- Cart display: add event link to participation items
+		// ---- Cart display: add event link to participation items (title)
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
+
+		// ---- Cart display: add event link to parent thumbnails
+		add_filter('woocommerce_cart_item_thumbnail', [ $this, 'woo_link_parent_thumbnail' ], 10, 3);
 
 		// ---- Cart display: add pack grouping classes to cart items (CSS-based grouping)
 		add_filter('woocommerce_cart_item_class', [ $this, 'woo_add_pack_classes_to_cart_item' ], 10, 3);
@@ -1116,6 +1119,39 @@ final class Plugin {
 			echo "  opacity: 0.92;\n";
 			echo "}\n";
 
+			echo "\n/* ===== Pack UI Polish (Phase 9A) ===== */\n";
+			echo "/* Participant badge: smaller + one-line for most names */\n";
+			echo ".tcbf-pack-participant-badge {\n";
+			echo "  white-space: nowrap;\n";
+			echo "  font-size: 12px !important;\n";
+			echo "  padding: 4px 10px !important;\n";
+			echo "  gap: 6px;\n";
+			echo "  max-width: 100%;\n";
+			echo "  overflow: hidden;\n";
+			echo "  text-overflow: ellipsis;\n";
+			echo "}\n";
+
+			echo "\n/* Child 'Included in pack' badge: remove left margin, add top */\n";
+			echo ".tcbf-pack-role-child .tcbf-pack-badge-inline {\n";
+			echo "  margin-left: 0 !important;\n";
+			echo "  margin-top: 6px;\n";
+			echo "  display: inline-flex;\n";
+			echo "}\n";
+
+			echo "\n/* Give price/subtotal breathing room from right edge */\n";
+			echo ".woocommerce-cart-form__contents td.product-price,\n";
+			echo ".woocommerce-cart-form__contents td.product-subtotal {\n";
+			echo "  padding-right: 14px !important;\n";
+			echo "}\n";
+
+			echo "\n/* Visual separation between packs: space above each parent */\n";
+			echo ".woocommerce-cart-form__contents tbody tr.tcbf-pack-role-parent {\n";
+			echo "  border-top: 12px solid transparent;\n";
+			echo "}\n";
+			echo ".woocommerce-cart-form__contents tbody tr.tcbf-pack-role-parent:first-of-type {\n";
+			echo "  border-top: 0;\n";
+			echo "}\n";
+
 			echo "\n/* Partner Coupon Styling in Cart Totals */\n";
 			echo ".cart_totals .coupon,\n";
 			echo ".woocommerce-cart-form .coupon,\n";
@@ -1176,7 +1212,31 @@ final class Plugin {
 			echo "  .tcbf-pack-badge-inline {\n";
 			echo "    font-size: 10px;\n";
 			echo "    padding: 2px 6px;\n";
-			echo "    margin-left: 6px;\n";
+			echo "    margin-left: 0;\n";
+			echo "  }\n";
+			echo "}\n";
+
+			echo "\n/* Mobile fixes for Shopkeeper theme (Phase 9A) */\n";
+			echo "@media (max-width: 576px) {\n";
+			echo "  /* Parent row: pad away from violet border */\n";
+			echo "  tr.tcbf-pack-role-parent > td:not(.product-remove) {\n";
+			echo "    padding-left: 12px !important;\n";
+			echo "  }\n";
+			echo "\n";
+			echo "  /* Fix squeezed price/subtotal cells */\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-price,\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-subtotal {\n";
+			echo "    display: table-cell !important;\n";
+			echo "    width: 1%;\n";
+			echo "    white-space: nowrap;\n";
+			echo "    text-align: right;\n";
+			echo "    vertical-align: middle;\n";
+			echo "  }\n";
+			echo "\n";
+			echo "  /* Hide responsive labels for price/subtotal to reclaim space */\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-price::before,\n";
+			echo "  .woocommerce-cart .shop_table_responsive tr.cart_item td.product-subtotal::before {\n";
+			echo "    display: none !important;\n";
 			echo "  }\n";
 			echo "}\n";
 		}
@@ -1377,6 +1437,46 @@ final class Plugin {
 		}
 
 		return $product_name;
+	}
+
+	/**
+	 * Add event link to parent item thumbnails (Phase 9B).
+	 *
+	 * Makes parent thumbnails clickable with event permalink,
+	 * matching the title link behavior for consistency.
+	 *
+	 * @param string $thumbnail     Thumbnail HTML
+	 * @param array  $cart_item     Cart item data
+	 * @param string $cart_item_key Cart item key
+	 * @return string Modified thumbnail HTML with link
+	 */
+	public function woo_link_parent_thumbnail( $thumbnail, $cart_item, $cart_item_key ) {
+		// Only process pack parent items
+		$role = isset( $cart_item['tc_group_role'] ) ? $cart_item['tc_group_role'] : '';
+
+		// Skip if not a parent item
+		if ( $role !== 'parent' ) {
+			return $thumbnail;
+		}
+
+		// Get event ID from booking data
+		$event_id = 0;
+		if ( ! empty( $cart_item['booking'] ) && is_array( $cart_item['booking'] ) ) {
+			$event_id = isset( $cart_item['booking'][ self::BK_EVENT_ID ] ) ? (int) $cart_item['booking'][ self::BK_EVENT_ID ] : 0;
+		}
+
+		// If we have an event, wrap thumbnail with link
+		if ( $event_id > 0 ) {
+			$event_url = get_permalink( $event_id );
+			if ( $event_url ) {
+				// Check if thumbnail is already wrapped in a link (avoid double-wrapping)
+				if ( strpos( $thumbnail, '<a ' ) === false ) {
+					$thumbnail = '<a href="' . esc_url( $event_url ) . '">' . $thumbnail . '</a>';
+				}
+			}
+		}
+
+		return $thumbnail;
 	}
 
 	/**
