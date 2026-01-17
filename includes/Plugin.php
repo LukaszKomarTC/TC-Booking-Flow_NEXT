@@ -67,6 +67,10 @@ final class Plugin {
 	// Values like: ROAD / MTB / eMTB / GRAVEL (sometimes prefixed by labels)
 	const GF_FIELD_RENTAL_TYPE   = 106;
 
+	// Optional participant notification checkbox (admin/partner operational field)
+	// Checkbox: "Send email confirmation to participant"
+	const GF_FIELD_NOTIFY_PARTICIPANT = 118;
+
 	// Per-event config meta
 	const META_EB_ENABLED                = 'tc_ebd_enabled';
 	const META_EB_RULES_JSON             = 'tc_ebd_rules_json';
@@ -432,6 +436,29 @@ final class Plugin {
 		return false;
 	}
 
+	/**
+	 * Check if current user can see participant notification badge.
+	 *
+	 * Only admin and partners should see this operational indicator.
+	 * Regular customers should not see it.
+	 *
+	 * @return bool
+	 */
+	private function can_see_notification_badge() : bool {
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+
+		// Admin (using manage_options as it's standard WP admin capability)
+		if ( current_user_can('manage_options') ) {
+			return true;
+		}
+
+		// Partner role (matches Partner_Portal pattern)
+		$user = wp_get_current_user();
+		return in_array('hotel', (array) $user->roles, true);
+	}
+
 	public function gf_after_submission_add_to_cart( $entry, $form ) {
 
 		// Only run for the configured GF form
@@ -585,6 +612,10 @@ final class Plugin {
 		$cart_item_meta_part['_tcbf_gf_entry_id']      = $entry_id;
 		$cart_item_meta_part['_tcbf_participant_name'] = $participant_name;
 		$cart_item_meta_part['_tcbf_scope']            = 'participation';
+
+		// Snapshot participant notification checkbox (admin/partner operational field)
+		$notify_checked = ! empty( rgar($entry, (string) self::GF_FIELD_NOTIFY_PARTICIPANT) );
+		$cart_item_meta_part['_tcbf_notify_participant'] = $notify_checked ? '1' : '0';
 
 		// EB snapshot fields for participation
 		$eligible_part = ! empty($cfg['enabled']) && ! empty($cfg['participation_enabled']);
@@ -1142,6 +1173,44 @@ final class Plugin {
 			echo "  line-height: 1.2;\n";
 			echo "}\n";
 
+			echo "\n/* Notification badge (admin/partner only - operational indicator) */\n";
+			echo ".tcbf-notify-badge {\n";
+			echo "  display: inline-flex;\n";
+			echo "  align-items: center;\n";
+			echo "  justify-content: center;\n";
+			echo "  margin-top: 6px;\n";
+			echo "  margin-left: 8px;\n";
+			echo "  width: 22px;\n";
+			echo "  height: 22px;\n";
+			echo "  border-radius: 999px;\n";
+			echo "  font-size: 13px;\n";
+			echo "  line-height: 1;\n";
+			echo "  font-weight: 700;\n";
+			echo "  border: 1px solid rgba(0, 0, 0, 0.15);\n";
+			echo "  opacity: 0.9;\n";
+			echo "  background: #f3f4f6;\n";
+			echo "}\n";
+			echo "\n";
+			echo ".tcbf-notify-badge.is-yes {\n";
+			echo "  background: #d1fae5;\n";
+			echo "  color: #065f46;\n";
+			echo "  border-color: #34d399;\n";
+			echo "}\n";
+			echo "\n";
+			echo ".tcbf-notify-badge.is-yes::before {\n";
+			echo "  content: \"✓\";\n";
+			echo "}\n";
+			echo "\n";
+			echo ".tcbf-notify-badge.is-no {\n";
+			echo "  background: #fee2e2;\n";
+			echo "  color: #991b1b;\n";
+			echo "  border-color: #fca5a5;\n";
+			echo "}\n";
+			echo "\n";
+			echo ".tcbf-notify-badge.is-no::before {\n";
+			echo "  content: \"✕\";\n";
+			echo "}\n";
+
 			echo "\n/* Child 'Included in pack' badge: remove left margin, add top */\n";
 			echo ".tcbf-pack-role-child .tcbf-pack-badge-inline {\n";
 			echo "  margin-left: 0 !important;\n";
@@ -1449,6 +1518,23 @@ final class Plugin {
 				echo '<span class="tcbf-pack-participant-badge__icon">👤</span>';
 				echo '<span class="tcbf-pack-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
 				echo '</div>';
+			}
+
+			// ==================================================================
+			// NOTIFICATION BADGE (Admin/Partner only)
+			// ==================================================================
+			if ( $this->can_see_notification_badge() ) {
+				$notify_flag = isset( $cart_item['_tcbf_notify_participant'] ) ? $cart_item['_tcbf_notify_participant'] : null;
+
+				if ( $notify_flag !== null ) {
+					$enabled = ($notify_flag === '1');
+					$class = $enabled ? 'tcbf-notify-badge is-yes' : 'tcbf-notify-badge is-no';
+					$title = $enabled
+						? Integrations\WooCommerce\Woo::translate('[:es]Notificación al participante: habilitada[:en]Participant notification: enabled[:]')
+						: Integrations\WooCommerce\Woo::translate('[:es]Notificación al participante: deshabilitada[:en]Participant notification: disabled[:]');
+
+					echo '<span class="' . esc_attr($class) . '" title="' . esc_attr($title) . '" aria-label="' . esc_attr($title) . '"></span>';
+				}
 			}
 		}
 
