@@ -1180,6 +1180,7 @@ final class Plugin {
 			echo "  justify-content: center;\n";
 			echo "  margin-top: 6px;\n";
 			echo "  margin-left: 8px;\n";
+			echo "  padding: 4px;\n";
 			echo "  width: 22px;\n";
 			echo "  height: 22px;\n";
 			echo "  border-radius: 999px;\n";
