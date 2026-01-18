@@ -1323,13 +1323,13 @@ final class Plugin {
 			echo "  font-weight: 600;\n";
 			echo "}\n";
 
-			echo "\n/* Desktop: remove pseudo-label that shifts child rows */\n";
+			echo "\n/* Desktop: remove pseudo-element that shifts child rows */\n";
 			echo "@media (min-width: 769px) {\n";
-			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name::before {\n";
-			echo "    display: none !important;\n";
+			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child::before,\n";
+			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child:before {\n";
 			echo "    content: none !important;\n";
+			echo "    display: none !important;\n";
 			echo "  }\n";
-			echo "  /* Indent child row slightly after removing ::before */\n";
 			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name {\n";
 			echo "    padding-left: 28px !important;\n";
 			echo "  }\n";
