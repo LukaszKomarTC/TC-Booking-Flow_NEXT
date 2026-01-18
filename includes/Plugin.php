@@ -1289,6 +1289,40 @@ final class Plugin {
 			echo "  color: #16a34a !important;\n";
 			echo "}\n";
 
+			echo "\n/* ===== Checkout Order Review Table Alignment (TCBF Pack Rows) ===== */\n";
+			echo "/* Normalize left padding for all rows - prevents text touching violet border */\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table td.product-name,\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table th.product-name {\n";
+			echo "  padding-left: 14px !important;\n";
+			echo "  padding-right: 12px !important;\n";
+			echo "}\n";
+
+			echo "/* Keep price column stable and inside the table */\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table td.product-total,\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table th.product-total {\n";
+			echo "  white-space: nowrap;\n";
+			echo "  text-align: right;\n";
+			echo "  padding-right: 14px !important;\n";
+			echo "}\n";
+
+			echo "/* Remove any layout-shifting indentation on child rows */\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name {\n";
+			echo "  text-indent: 0 !important;\n";
+			echo "  margin-left: 0 !important;\n";
+			echo "}\n";
+
+			echo "/* Apply indentation ONLY to child row variation/meta details */\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name dl.variation {\n";
+			echo "  margin-top: 6px;\n";
+			echo "  padding-left: 14px;\n";
+			echo "  border-left: 2px solid rgba(0,0,0,.10);\n";
+			echo "}\n";
+
+			echo "/* Visually emphasize parent product name */\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-parent td.product-name > a {\n";
+			echo "  font-weight: 600;\n";
+			echo "}\n";
+
 			echo "\n/* Mobile responsive */\n";
 			echo "@media (max-width: 768px) {\n";
 			echo "  .tcbf-cart-eb-badge {\n";
