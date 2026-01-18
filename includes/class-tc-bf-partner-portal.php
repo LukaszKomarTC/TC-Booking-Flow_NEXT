@@ -39,6 +39,47 @@ final class Partner_Portal {
     const BASE_PAYABLE_STATUSES = [ 'processing', 'completed' ];
 
     /**
+     * Check if current user is in admin mode (can see all partners)
+     */
+    private static function is_admin_mode() : bool {
+        return function_exists( 'current_user_can' ) && current_user_can( 'manage_woocommerce' );
+    }
+
+    /**
+     * Get requested partner filter from URL (admin mode only)
+     * @return int Partner user ID, or 0 for "all partners"
+     */
+    private static function get_requested_partner_filter() : int {
+        $raw = isset( $_GET['partner_filter'] ) ? (string) $_GET['partner_filter'] : '';
+        $pid = (int) $raw;
+        return $pid > 0 ? $pid : 0;
+    }
+
+    /**
+     * Get list of partners for admin filter dropdown
+     * @return array [ user_id => "Display Name (code)" ]
+     */
+    private static function get_partner_options() : array {
+        $users = get_users( [
+            'meta_key'     => 'discount__code',
+            'meta_compare' => 'EXISTS',
+            'orderby'      => 'display_name',
+            'order'        => 'ASC',
+        ] );
+
+        $opts = [ 0 => __( 'All partners', TC_BF_TEXTDOMAIN ) ];
+        foreach ( $users as $u ) {
+            $code = (string) get_user_meta( $u->ID, 'discount__code', true );
+            $label = $u->display_name;
+            if ( $code !== '' ) {
+                $label .= ' (' . $code . ')';
+            }
+            $opts[ (int) $u->ID ] = $label;
+        }
+        return $opts;
+    }
+
+    /**
      * Check if the custom 'invoiced' status is registered on this site
      */
     private static function has_invoiced_status() : bool {
@@ -94,18 +135,22 @@ final class Partner_Portal {
 
     /**
      * Who can see the partner portal.
-     * - administrator
-     * - hotel role
+     * - administrator (manage_options)
+     * - shop manager (manage_woocommerce)
+     * - hotel role (partners)
      */
     private static function current_user_can_view() : bool {
         if ( ! is_user_logged_in() ) return false;
 
-        if ( current_user_can('manage_options') ) return true;
+        // Admins and shop managers
+        if ( current_user_can( 'manage_options' ) ) return true;
+        if ( current_user_can( 'manage_woocommerce' ) ) return true;
 
+        // Partners (hotel role)
         $u = wp_get_current_user();
-        if ( ! $u || empty($u->roles) ) return false;
+        if ( ! $u || empty( $u->roles ) ) return false;
 
-        return in_array('hotel', (array) $u->roles, true );
+        return in_array( 'hotel', (array) $u->roles, true );
     }
 
     public static function add_menu_item( array $items ) : array {
@@ -137,32 +182,61 @@ final class Partner_Portal {
     /**
      * Build query arguments for wc_get_orders
      *
-     * @param array $filters Associative array with: date_from, date_to, status
-     * @param int   $user_id Partner user ID
-     * @param int   $limit   Results per page (0 = unlimited)
-     * @param int   $page    Page number (1-indexed)
+     * Supports two modes:
+     * - Partner mode: query by partner_id = current_user_id
+     * - Admin mode: query all partners (partner_filter=0) or specific partner (partner_filter>0)
+     *
+     * @param array $filters          Associative array with: date_from, date_to, status
+     * @param int   $partner_filter   Partner to filter by (0 = all partners in admin mode)
+     * @param bool  $is_admin         Whether in admin mode
+     * @param int   $limit            Results per page (0 = unlimited)
+     * @param int   $page             Page number (1-indexed)
      * @return array Query args for wc_get_orders
      */
-    private static function build_query_args( array $filters, int $user_id, int $limit = 30, int $page = 1 ) : array {
+    private static function build_query_args( array $filters, int $partner_filter, bool $is_admin, int $limit = 30, int $page = 1 ) : array {
         $args = [
             'limit'      => $limit > 0 ? $limit : -1,
             'paged'      => $page,
             'orderby'    => 'ID',
             'order'      => 'DESC',
-            'meta_query' => [
-                'relation' => 'AND',
-                [
-                    'key'     => 'partner_id',
-                    'value'   => (string) $user_id,
-                    'compare' => '=',
-                ],
-                [
-                    'key'     => 'tc_ledger_version',
-                    'value'   => '2',
-                    'compare' => '=',
-                ],
+        ];
+
+        // Build meta query - always require tc_ledger_version = 2
+        $meta_query = [
+            'relation' => 'AND',
+            [
+                'key'     => 'tc_ledger_version',
+                'value'   => '2',
+                'compare' => '=',
             ],
         ];
+
+        // Partner ID filter
+        if ( $is_admin ) {
+            // Admin mode: filter by specific partner if selected, otherwise show all
+            if ( $partner_filter > 0 ) {
+                $meta_query[] = [
+                    'key'     => 'partner_id',
+                    'value'   => (string) $partner_filter,
+                    'compare' => '=',
+                ];
+            } else {
+                // All partners: just require partner_id EXISTS (any partner-attributed order)
+                $meta_query[] = [
+                    'key'     => 'partner_id',
+                    'compare' => 'EXISTS',
+                ];
+            }
+        } else {
+            // Partner mode: always filter by their own partner_id
+            $meta_query[] = [
+                'key'     => 'partner_id',
+                'value'   => (string) $partner_filter,
+                'compare' => '=',
+            ];
+        }
+
+        $args['meta_query'] = $meta_query;
 
         // Date range filter
         $date_from = $filters['date_from'] ?? '';
@@ -195,20 +269,21 @@ final class Partner_Portal {
     }
 
     /**
-     * Get orders for partner using meta-based query
+     * Get orders using meta-based query
      *
-     * @param array $filters Filters array
-     * @param int   $user_id Partner user ID
-     * @param int   $limit   Results per page
-     * @param int   $page    Page number
+     * @param array $filters        Filters array
+     * @param int   $partner_filter Partner to filter by (0 = all in admin mode)
+     * @param bool  $is_admin       Whether in admin mode
+     * @param int   $limit          Results per page
+     * @param int   $page           Page number
      * @return array [ 'orders' => WC_Order[], 'total' => int ]
      */
-    private static function get_orders( array $filters, int $user_id, int $limit = 30, int $page = 1 ) : array {
+    private static function get_orders( array $filters, int $partner_filter, bool $is_admin, int $limit = 30, int $page = 1 ) : array {
         if ( ! function_exists( 'wc_get_orders' ) ) {
             return [ 'orders' => [], 'total' => 0 ];
         }
 
-        $args = self::build_query_args( $filters, $user_id, $limit, $page );
+        $args = self::build_query_args( $filters, $partner_filter, $is_admin, $limit, $page );
 
         // Get paginated results
         $args['paginate'] = true;
@@ -223,7 +298,7 @@ final class Partner_Portal {
         } elseif ( is_array( $results ) ) {
             $orders = $results;
             // For non-paginated, get total count separately
-            $count_args = self::build_query_args( $filters, $user_id, -1, 1 );
+            $count_args = self::build_query_args( $filters, $partner_filter, $is_admin, -1, 1 );
             $count_args['return'] = 'ids';
             $all_ids = wc_get_orders( $count_args );
             $total = is_array( $all_ids ) ? count( $all_ids ) : 0;
@@ -377,6 +452,10 @@ final class Partner_Portal {
 
     /**
      * Render the partner portal endpoint
+     *
+     * Supports two modes:
+     * - Partner mode: shows only their attributed orders
+     * - Admin mode (manage_woocommerce): shows all partners or filtered by partner
      */
     public static function render_endpoint() : void {
         if ( ! self::current_user_can_view() ) {
@@ -385,15 +464,36 @@ final class Partner_Portal {
         }
 
         $uid = get_current_user_id();
-        $partner_code = trim( (string) get_user_meta( $uid, 'discount__code', true ) );
-        $partner_pct  = (float) get_user_meta( $uid, 'usrdiscount', true );
-        $partner_code_norm = function_exists( 'wc_format_coupon_code' )
-            ? wc_format_coupon_code( $partner_code )
-            : strtolower( $partner_code );
+        $is_admin = self::is_admin_mode();
 
-        if ( $partner_code_norm === '' ) {
-            echo '<p>' . esc_html__( 'No partner code linked to your user.', TC_BF_TEXTDOMAIN ) . '</p>';
-            return;
+        // Determine partner filter
+        // Admin: use requested filter (0 = all partners)
+        // Partner: force to their own user ID (ignore URL tampering)
+        if ( $is_admin ) {
+            $partner_filter = self::get_requested_partner_filter();
+        } else {
+            // Partner mode: must have a partner code
+            $partner_code = trim( (string) get_user_meta( $uid, 'discount__code', true ) );
+            if ( $partner_code === '' ) {
+                echo '<p>' . esc_html__( 'No partner code linked to your user.', TC_BF_TEXTDOMAIN ) . '</p>';
+                return;
+            }
+            $partner_filter = $uid; // Force to own user ID
+        }
+
+        // Get partner info for display (for selected partner or own partner)
+        $display_partner_id = $partner_filter > 0 ? $partner_filter : 0;
+        $partner_code_display = '';
+        $partner_pct = 0.0;
+
+        if ( $display_partner_id > 0 ) {
+            $partner_code_display = trim( (string) get_user_meta( $display_partner_id, 'discount__code', true ) );
+            $partner_pct = (float) get_user_meta( $display_partner_id, 'usrdiscount', true );
+            if ( function_exists( 'wc_format_coupon_code' ) ) {
+                $partner_code_display = wc_format_coupon_code( $partner_code_display );
+            } else {
+                $partner_code_display = strtolower( $partner_code_display );
+            }
         }
 
         // Filters
@@ -417,13 +517,32 @@ final class Partner_Portal {
 
         // Header
         echo '<h3>' . esc_html__( 'Partner report', TC_BF_TEXTDOMAIN ) . '</h3>';
-        echo '<p style="margin:0 0 12px;">';
-        echo '<strong>' . esc_html__( 'Partner code:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( $partner_code_norm );
-        echo ' &nbsp; <strong>' . esc_html__( 'Commission:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( number_format_i18n( $partner_pct, 2 ) ) . '%';
-        echo '</p>';
 
-        // Filter form
-        self::render_filter_form( $date_from, $date_to, $status );
+        if ( $is_admin ) {
+            // Admin header
+            if ( $partner_filter > 0 ) {
+                $partner_user = get_userdata( $partner_filter );
+                $partner_name = $partner_user ? $partner_user->display_name : "ID #{$partner_filter}";
+                echo '<p style="margin:0 0 12px;">';
+                echo '<strong>' . esc_html__( 'Viewing partner:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( $partner_name );
+                if ( $partner_code_display !== '' ) {
+                    echo ' &nbsp; <strong>' . esc_html__( 'Code:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( $partner_code_display );
+                    echo ' &nbsp; <strong>' . esc_html__( 'Commission:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( number_format_i18n( $partner_pct, 2 ) ) . '%';
+                }
+                echo '</p>';
+            } else {
+                echo '<p style="margin:0 0 12px;"><em>' . esc_html__( 'Admin view: showing all partner-attributed orders.', TC_BF_TEXTDOMAIN ) . '</em></p>';
+            }
+        } else {
+            // Partner header
+            echo '<p style="margin:0 0 12px;">';
+            echo '<strong>' . esc_html__( 'Partner code:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( $partner_code_display );
+            echo ' &nbsp; <strong>' . esc_html__( 'Commission:', TC_BF_TEXTDOMAIN ) . '</strong> ' . esc_html( number_format_i18n( $partner_pct, 2 ) ) . '%';
+            echo '</p>';
+        }
+
+        // Filter form (with partner selector for admins)
+        self::render_filter_form( $date_from, $date_to, $status, $partner_filter );
 
         // v2-only note
         echo '<p style="font-size:0.85em;color:#666;margin:0 0 12px;">';
@@ -431,13 +550,16 @@ final class Partner_Portal {
         echo '</p>';
 
         // Get orders via meta query
-        $result = self::get_orders( $filters, $uid, $per_page, $paged );
+        $result = self::get_orders( $filters, $partner_filter, $is_admin, $per_page, $paged );
         $orders = $result['orders'];
         $total  = $result['total'];
         $max_num_pages = max( 1, (int) ceil( $total / $per_page ) );
 
         if ( empty( $orders ) ) {
-            echo '<p>' . esc_html__( 'No orders found for this partner.', TC_BF_TEXTDOMAIN ) . '</p>';
+            $no_orders_msg = $is_admin && $partner_filter === 0
+                ? __( 'No partner-attributed orders found.', TC_BF_TEXTDOMAIN )
+                : __( 'No orders found for this partner.', TC_BF_TEXTDOMAIN );
+            echo '<p>' . esc_html( $no_orders_msg ) . '</p>';
             return;
         }
 
@@ -446,20 +568,18 @@ final class Partner_Portal {
         $rows = [];
         foreach ( $orders as $order ) {
             if ( ! $order instanceof \WC_Order ) continue;
-            $rows[] = self::format_row( $order, $uid, $partner_pct, $prices_inc_tax );
+            // For row formatting, use the partner_filter (or 0 for admin all-view)
+            $row_partner_id = $display_partner_id > 0 ? $display_partner_id : 0;
+            $rows[] = self::format_row( $order, $row_partner_id, $partner_pct, $prices_inc_tax );
         }
 
-        // Compute stats (for this page)
-        // Note: for accurate totals across all pages, we'd need to query all orders
-        // For now, show page stats + indicate if there are more pages
-        $page_stats = self::compute_stats( $rows );
-
         // For accurate total stats, get all orders (without pagination)
-        $all_result = self::get_orders( $filters, $uid, 0, 1 );
+        $all_result = self::get_orders( $filters, $partner_filter, $is_admin, 0, 1 );
         $all_rows = [];
         foreach ( $all_result['orders'] as $order ) {
             if ( ! $order instanceof \WC_Order ) continue;
-            $all_rows[] = self::format_row( $order, $uid, $partner_pct, $prices_inc_tax );
+            $row_partner_id = $display_partner_id > 0 ? $display_partner_id : 0;
+            $all_rows[] = self::format_row( $order, $row_partner_id, $partner_pct, $prices_inc_tax );
         }
         $total_stats = self::compute_stats( $all_rows );
 
@@ -467,20 +587,25 @@ final class Partner_Portal {
         self::render_table( $rows, $total_stats, $prices_inc_tax );
 
         // CSV export button
-        self::render_csv_button( $filters );
+        self::render_csv_button( $filters, $partner_filter );
 
         // Pagination
         if ( $max_num_pages > 1 ) {
-            self::render_pagination( $paged, $max_num_pages, $filters );
+            self::render_pagination( $paged, $max_num_pages, $filters, $partner_filter );
         }
     }
 
     /**
      * Render filter form
+     *
+     * @param string $date_from      Selected date from
+     * @param string $date_to        Selected date to
+     * @param string $status         Selected status filter
+     * @param int    $partner_filter Selected partner (0 = all, for admin mode)
      */
-    private static function render_filter_form( string $date_from, string $date_to, string $status ) : void {
+    private static function render_filter_form( string $date_from, string $date_to, string $status, int $partner_filter = 0 ) : void {
         // Build status options dynamically (only include 'invoiced' if registered)
-        $opts = [
+        $status_opts = [
             ''              => __( 'Any', TC_BF_TEXTDOMAIN ),
             'wc-pending'    => 'Pending',
             'wc-processing' => 'Processing',
@@ -489,18 +614,29 @@ final class Partner_Portal {
         ];
 
         if ( self::has_invoiced_status() ) {
-            $opts['wc-invoiced'] = 'Invoiced';
+            $status_opts['wc-invoiced'] = 'Invoiced';
         }
 
-        $opts['wc-cancelled'] = 'Cancelled';
-        $opts['wc-refunded']  = 'Refunded';
-        $opts['wc-failed']    = 'Failed';
+        $status_opts['wc-cancelled'] = 'Cancelled';
+        $status_opts['wc-refunded']  = 'Refunded';
+        $status_opts['wc-failed']    = 'Failed';
 
         echo '<form method="get" action="' . esc_url( wc_get_account_endpoint_url( self::ENDPOINT ) ) . '" style="margin: 0 0 16px;">';
+
+        // Partner selector (admin mode only)
+        if ( self::is_admin_mode() ) {
+            $partner_opts = self::get_partner_options();
+            echo '<label style="margin-right:12px;">' . esc_html__( 'Partner', TC_BF_TEXTDOMAIN ) . ' <select name="partner_filter">';
+            foreach ( $partner_opts as $pid => $plabel ) {
+                echo '<option value="' . esc_attr( (string) $pid ) . '"' . selected( $partner_filter, $pid, false ) . '>' . esc_html( $plabel ) . '</option>';
+            }
+            echo '</select></label>';
+        }
+
         echo '<label style="margin-right:12px;">' . esc_html__( 'From', TC_BF_TEXTDOMAIN ) . ' <input type="date" name="tc_from" value="' . esc_attr( $date_from ) . '" /></label>';
         echo '<label style="margin-right:12px;">' . esc_html__( 'To', TC_BF_TEXTDOMAIN ) . ' <input type="date" name="tc_to" value="' . esc_attr( $date_to ) . '" /></label>';
         echo '<label style="margin-right:12px;">' . esc_html__( 'Status', TC_BF_TEXTDOMAIN ) . ' <select name="tc_status">';
-        foreach ( $opts as $k => $lbl ) {
+        foreach ( $status_opts as $k => $lbl ) {
             echo '<option value="' . esc_attr( $k ) . '"' . selected( $status, $k, false ) . '>' . esc_html( $lbl ) . '</option>';
         }
         echo '</select></label>';
@@ -575,17 +711,27 @@ final class Partner_Portal {
 
     /**
      * Render CSV export button
+     *
+     * @param array $filters        Current filters
+     * @param int   $partner_filter Partner filter (0 = all, for admin mode)
      */
-    private static function render_csv_button( array $filters ) : void {
+    private static function render_csv_button( array $filters, int $partner_filter = 0 ) : void {
         $nonce = wp_create_nonce( self::CSV_NONCE );
 
-        $export_url = add_query_arg( [
+        $args = [
             'action'    => self::CSV_ACTION,
             '_wpnonce'  => $nonce,
             'tc_from'   => $filters['date_from'],
             'tc_to'     => $filters['date_to'],
             'tc_status' => $filters['status'],
-        ], admin_url( 'admin-post.php' ) );
+        ];
+
+        // Include partner_filter for admin mode
+        if ( self::is_admin_mode() ) {
+            $args['partner_filter'] = $partner_filter;
+        }
+
+        $export_url = add_query_arg( $args, admin_url( 'admin-post.php' ) );
 
         echo '<p style="margin-top:16px;">';
         echo '<a href="' . esc_url( $export_url ) . '" class="button">';
@@ -596,17 +742,29 @@ final class Partner_Portal {
 
     /**
      * Render pagination
+     *
+     * @param int   $paged          Current page
+     * @param int   $max_num_pages  Total pages
+     * @param array $filters        Current filters
+     * @param int   $partner_filter Partner filter (0 = all, for admin mode)
      */
-    private static function render_pagination( int $paged, int $max_num_pages, array $filters ) : void {
+    private static function render_pagination( int $paged, int $max_num_pages, array $filters, int $partner_filter = 0 ) : void {
         echo '<nav class="woocommerce-pagination" style="margin-top:16px;">';
 
         for ( $p = 1; $p <= $max_num_pages; $p++ ) {
-            $url = add_query_arg( [
+            $args = [
                 'tc_paged'  => $p,
                 'tc_from'   => $filters['date_from'],
                 'tc_to'     => $filters['date_to'],
                 'tc_status' => $filters['status'],
-            ], wc_get_account_endpoint_url( self::ENDPOINT ) );
+            ];
+
+            // Include partner_filter for admin mode
+            if ( self::is_admin_mode() && $partner_filter > 0 ) {
+                $args['partner_filter'] = $partner_filter;
+            }
+
+            $url = add_query_arg( $args, wc_get_account_endpoint_url( self::ENDPOINT ) );
 
             $class = $p === $paged ? ' class="page-numbers current"' : ' class="page-numbers"';
             echo '<a' . $class . ' href="' . esc_url( $url ) . '">' . esc_html( (string) $p ) . '</a> ';
@@ -617,6 +775,10 @@ final class Partner_Portal {
 
     /**
      * Handle CSV export request
+     *
+     * Supports two modes:
+     * - Partner mode: export only their attributed orders
+     * - Admin mode: export all partners or filtered by partner
      */
     public static function handle_csv_export() : void {
         // Security checks
@@ -633,11 +795,25 @@ final class Partner_Portal {
         }
 
         $uid = get_current_user_id();
-        $partner_code = trim( (string) get_user_meta( $uid, 'discount__code', true ) );
-        $partner_pct  = (float) get_user_meta( $uid, 'usrdiscount', true );
+        $is_admin = self::is_admin_mode();
 
-        if ( $partner_code === '' ) {
-            wp_die( 'No partner code', 'Error', [ 'response' => 400 ] );
+        // Determine partner filter (same logic as render_endpoint)
+        if ( $is_admin ) {
+            $partner_filter = self::get_requested_partner_filter();
+        } else {
+            // Partner mode: must have a partner code
+            $partner_code = trim( (string) get_user_meta( $uid, 'discount__code', true ) );
+            if ( $partner_code === '' ) {
+                wp_die( 'No partner code', 'Error', [ 'response' => 400 ] );
+            }
+            $partner_filter = $uid; // Force to own user ID
+        }
+
+        // Get partner info for display
+        $display_partner_id = $partner_filter > 0 ? $partner_filter : 0;
+        $partner_pct = 0.0;
+        if ( $display_partner_id > 0 ) {
+            $partner_pct = (float) get_user_meta( $display_partner_id, 'usrdiscount', true );
         }
 
         // Filters
@@ -655,7 +831,7 @@ final class Partner_Portal {
         ];
 
         // Get all orders (no pagination for export)
-        $result = self::get_orders( $filters, $uid, 0, 1 );
+        $result = self::get_orders( $filters, $partner_filter, $is_admin, 0, 1 );
         $orders = $result['orders'];
 
         $prices_inc_tax = function_exists( 'wc_prices_include_tax' ) ? (bool) wc_prices_include_tax() : true;
@@ -664,13 +840,23 @@ final class Partner_Portal {
         $rows = [];
         foreach ( $orders as $order ) {
             if ( ! $order instanceof \WC_Order ) continue;
-            $rows[] = self::format_row( $order, $uid, $partner_pct, $prices_inc_tax );
+            $row_partner_id = $display_partner_id > 0 ? $display_partner_id : 0;
+            $rows[] = self::format_row( $order, $row_partner_id, $partner_pct, $prices_inc_tax );
         }
 
         $stats = self::compute_stats( $rows );
 
-        // Output CSV
-        $filename = 'partner-orders-' . date( 'Ymd' ) . '.csv';
+        // Build filename based on context
+        $date_str = date( 'Ymd' );
+        if ( $is_admin ) {
+            if ( $partner_filter > 0 ) {
+                $filename = "partner-orders-{$partner_filter}-{$date_str}.csv";
+            } else {
+                $filename = "partner-orders-all-{$date_str}.csv";
+            }
+        } else {
+            $filename = "partner-orders-{$uid}-{$date_str}.csv";
+        }
 
         header( 'Content-Type: text/csv; charset=utf-8' );
         header( 'Content-Disposition: attachment; filename=' . $filename );
