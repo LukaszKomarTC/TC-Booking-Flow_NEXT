@@ -279,9 +279,9 @@ final class GF_Participants_List {
 		$html .= '<th class="tcbf-col-date">' . esc_html__('Signed up on', 'tc-booking-flow-next') . '</th>';
 		$html .= '<th class="tcbf-col-status">' . esc_html__('Status', 'tc-booking-flow-next') . '</th>';
 
-		// Info status column (admin + partner only)
+		// Notification status column (admin + partner only)
 		if ( $show_info_column ) {
-			$html .= '<th class="tcbf-col-info">' . esc_html__('Info', 'tc-booking-flow-next') . '</th>';
+			$html .= '<th class="tcbf-col-info">' . esc_html__('Notification', 'tc-booking-flow-next') . '</th>';
 		}
 
 		$html .= '</tr></thead>';
@@ -374,17 +374,17 @@ final class GF_Participants_List {
 		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr__('Signed up on', 'tc-booking-flow-next') . '">' . esc_html( $display_date ) . '</td>';
 		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr__('Status', 'tc-booking-flow-next') . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
 
-		// Info status column (admin + partner only)
+		// Notification status column (admin + partner only)
 		if ( $show_info_column ) {
 			// Admin sees all info; partner only sees info for their owned rows
 			$show_info_badge = $is_admin || $row_can_view_full;
 
 			if ( $show_info_badge ) {
 				$info_status = self::get_notification_status( $entry_id );
-				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Info', 'tc-booking-flow-next') . '"><span class="tcbf-info-status tcbf-info-status--' . esc_attr( sanitize_html_class( $info_status['class'] ) ) . '">' . esc_html( $info_status['label'] ) . '</span></td>';
+				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Notification', 'tc-booking-flow-next') . '"><span class="tcbf-info-status tcbf-info-status--' . esc_attr( sanitize_html_class( $info_status['class'] ) ) . '">' . esc_html( $info_status['label'] ) . '</span></td>';
 			} else {
 				// Partner viewing non-owned row - show "—" to avoid leaking operational timing
-				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Info', 'tc-booking-flow-next') . '">—</td>';
+				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Notification', 'tc-booking-flow-next') . '">—</td>';
 			}
 		}
 
@@ -822,12 +822,13 @@ final class GF_Participants_List {
 		$has_failed = ! empty( $ledger['failed'] ) && is_array( $ledger['failed'] );
 
 		if ( $has_sent ) {
-			// Show "Sent" with optional date
+			// Show "Sent" with exact date and time
 			$label = __('Sent', 'tc-booking-flow-next');
 			if ( isset( $ledger['last_at'] ) && $ledger['last_at'] !== '' ) {
 				$timestamp = strtotime( $ledger['last_at'] );
 				if ( $timestamp !== false ) {
-					$label .= ' ' . date_i18n( 'M j', $timestamp );
+					// Format: "Sent Jan 18, 14:33"
+					$label .= ' ' . date_i18n( 'M j, H:i', $timestamp );
 				}
 			}
 			return [ 'label' => $label, 'class' => 'sent' ];
