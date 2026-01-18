@@ -620,7 +620,7 @@ final class Partner_Portal {
         echo '<tr style="font-size:0.9em;opacity:0.8;">';
         echo '<td colspan="7" style="text-align:right;">';
         echo esc_html__( 'Payable statuses:', TC_BF_TEXTDOMAIN ) . ' ';
-        echo esc_html( implode( ', ', array_map( 'wc_get_order_status_name', self::PAYABLE_STATUSES ) ) );
+        echo esc_html( implode( ', ', array_map( 'wc_get_order_status_name', self::get_payable_statuses() ) ) );
         echo '</td>';
         echo '<td></td>';
         echo '</tr>';
