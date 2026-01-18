@@ -117,9 +117,15 @@ final class Partner_Portal {
             'orderby'    => 'ID',
             'order'      => 'DESC',
             'meta_query' => [
+                'relation' => 'AND',
                 [
                     'key'     => 'partner_id',
                     'value'   => (string) $user_id,
+                    'compare' => '=',
+                ],
+                [
+                    'key'     => 'tc_ledger_version',
+                    'value'   => '2',
                     'compare' => '=',
                 ],
             ],
@@ -148,8 +154,8 @@ final class Partner_Portal {
         if ( $status !== '' ) {
             $args['status'] = str_replace( 'wc-', '', $status );
         } else {
-            // All visible statuses
-            $args['status'] = [ 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ];
+            // All visible statuses (includes custom 'invoiced' status)
+            $args['status'] = [ 'pending', 'processing', 'on-hold', 'completed', 'invoiced', 'cancelled', 'refunded', 'failed' ];
         }
 
         return $args;
@@ -496,6 +502,7 @@ final class Partner_Portal {
             'wc-processing' => 'Processing',
             'wc-on-hold'    => 'On hold',
             'wc-completed'  => 'Completed',
+            'wc-invoiced'   => 'Invoiced',
             'wc-cancelled'  => 'Cancelled',
             'wc-refunded'   => 'Refunded',
             'wc-failed'     => 'Failed',
