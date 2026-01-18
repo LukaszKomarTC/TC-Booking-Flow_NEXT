@@ -1,0 +1,284 @@
+/**
+ * TCBF Native Participants List Styles
+ *
+ * Responsive table with CSS-only mobile stacked card layout.
+ * No JavaScript required.
+ *
+ * @since 0.6.0
+ */
+
+/* ==========================================================================
+   Container
+   ========================================================================== */
+
+.tcbf-participants-list {
+	margin: 1.5em 0;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+/* ==========================================================================
+   Desktop Table Styles
+   ========================================================================== */
+
+.tcbf-participants-table {
+	width: 100%;
+	border-collapse: collapse;
+	background: #fff;
+	border: 1px solid #e5e5e5;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.tcbf-participants-table thead {
+	background: #f7f7f7;
+}
+
+.tcbf-participants-table th {
+	text-align: left;
+	font-weight: 600;
+	padding: 12px 10px;
+	border-bottom: 2px solid #ddd;
+	color: #333;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.tcbf-participants-table td {
+	padding: 10px;
+	border-bottom: 1px solid #eee;
+	color: #555;
+	vertical-align: middle;
+}
+
+.tcbf-participants-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.tcbf-participants-table tbody tr:hover {
+	background: #fafafa;
+}
+
+/* Column widths */
+.tcbf-col-number {
+	width: 40px;
+	text-align: center;
+	color: #999;
+	font-weight: 500;
+}
+
+.tcbf-col-participant {
+	min-width: 120px;
+	font-weight: 500;
+	color: #333;
+}
+
+.tcbf-col-email {
+	min-width: 140px;
+	word-break: break-all;
+}
+
+.tcbf-col-bicycle {
+	min-width: 100px;
+}
+
+.tcbf-col-pedals,
+.tcbf-col-helmet {
+	min-width: 80px;
+}
+
+.tcbf-col-date {
+	min-width: 90px;
+	white-space: nowrap;
+}
+
+.tcbf-col-status {
+	min-width: 90px;
+}
+
+/* ==========================================================================
+   Status Badges
+   ========================================================================== */
+
+.tcbf-status {
+	display: inline-block;
+	padding: 3px 8px;
+	border-radius: 3px;
+	font-size: 12px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.tcbf-status--confirmed {
+	background: #d4edda;
+	color: #155724;
+}
+
+.tcbf-status--in-cart {
+	background: #fff3cd;
+	color: #856404;
+}
+
+.tcbf-status--cancelled {
+	background: #f8d7da;
+	color: #721c24;
+}
+
+.tcbf-status--unknown {
+	background: #e2e3e5;
+	color: #6c757d;
+}
+
+/* ==========================================================================
+   Empty State
+   ========================================================================== */
+
+.tcbf-participants-empty {
+	padding: 2em;
+	background: #f9f9f9;
+	border: 1px solid #e5e5e5;
+	border-radius: 4px;
+	text-align: center;
+	color: #666;
+}
+
+.tcbf-participants-empty p {
+	margin: 0;
+}
+
+/* ==========================================================================
+   Mobile Responsive (Stacked Card Layout)
+
+   CSS-only approach using data-label attributes on each <td>.
+   No JavaScript or DataTables required.
+   ========================================================================== */
+
+@media screen and (max-width: 768px) {
+	/* Hide table header on mobile */
+	.tcbf-participants-table thead {
+		display: none;
+	}
+
+	.tcbf-participants-table,
+	.tcbf-participants-table tbody,
+	.tcbf-participants-table tr,
+	.tcbf-participants-table td {
+		display: block;
+		width: 100%;
+	}
+
+	/* Each row becomes a card */
+	.tcbf-participants-table tbody tr {
+		margin-bottom: 1em;
+		border: 1px solid #ddd;
+		border-radius: 6px;
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+		overflow: hidden;
+	}
+
+	.tcbf-participants-table tbody tr:last-child {
+		margin-bottom: 0;
+	}
+
+	.tcbf-participants-table tbody tr:hover {
+		background: #fff;
+	}
+
+	/* Each cell becomes a row with label */
+	.tcbf-participants-table td {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 10px 14px;
+		border-bottom: 1px solid #f0f0f0;
+		text-align: right;
+	}
+
+	.tcbf-participants-table td:last-child {
+		border-bottom: none;
+	}
+
+	/* Show label from data-label attribute */
+	.tcbf-participants-table td::before {
+		content: attr(data-label);
+		font-weight: 600;
+		color: #333;
+		text-align: left;
+		flex-shrink: 0;
+		margin-right: 1em;
+	}
+
+	/* Special styling for row number */
+	.tcbf-participants-table td.tcbf-col-number {
+		background: #f7f7f7;
+		font-weight: 600;
+		color: #333;
+		justify-content: center;
+	}
+
+	.tcbf-participants-table td.tcbf-col-number::before {
+		display: none;
+	}
+
+	/* Participant name styling */
+	.tcbf-participants-table td.tcbf-col-participant {
+		background: #fafafa;
+	}
+
+	/* Status cell */
+	.tcbf-participants-table td.tcbf-col-status {
+		background: #fafafa;
+	}
+
+	/* Reset column widths */
+	.tcbf-col-number,
+	.tcbf-col-participant,
+	.tcbf-col-email,
+	.tcbf-col-bicycle,
+	.tcbf-col-pedals,
+	.tcbf-col-helmet,
+	.tcbf-col-date,
+	.tcbf-col-status {
+		width: 100%;
+		min-width: 0;
+	}
+
+	/* Ensure long content wraps properly */
+	.tcbf-col-email,
+	.tcbf-col-bicycle {
+		word-break: break-word;
+	}
+}
+
+/* ==========================================================================
+   Print Styles
+   ========================================================================== */
+
+@media print {
+	.tcbf-participants-list {
+		font-size: 11px;
+	}
+
+	.tcbf-participants-table {
+		border: 1px solid #000;
+	}
+
+	.tcbf-participants-table th,
+	.tcbf-participants-table td {
+		border: 1px solid #000;
+		padding: 6px 8px;
+	}
+
+	.tcbf-participants-table tbody tr:hover {
+		background: none;
+	}
+
+	.tcbf-status {
+		border: 1px solid #000;
+		background: none !important;
+		color: #000 !important;
+	}
+}

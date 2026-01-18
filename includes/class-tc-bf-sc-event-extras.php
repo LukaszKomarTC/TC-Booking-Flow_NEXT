@@ -1617,14 +1617,14 @@ JS;
             }
         }
 
-        // Participants section (GravityView)
+        // Participants section (TCBF Native — replaces GravityView)
         if ( get_post_meta($post_id, 'participants', true) === 'Yes' ) {
             $participants_content = do_shortcode( "
                 [vc_row]
                 [vc_column]
                 [vc_separator css='.vc_custom_1607950580058{margin-top: 30px !important;margin-bottom: 30px !important;}']
                 [vc_column_text]<h3 id='participantes'>" . self::tr("[:en]List of participants[:es]Listado de participantes[:]") . "</h3>[/vc_column_text]
-                [gravityview id='37950' search_field='145' search_value='" . $post_id . "_" . get_post_meta( $post_id, 'sc_event_date_time', true ) . "']
+                [tcbf_participants event_id='" . (int) $post_id . "']
                 [/vc_column]
                 [/vc_row]
             " );
