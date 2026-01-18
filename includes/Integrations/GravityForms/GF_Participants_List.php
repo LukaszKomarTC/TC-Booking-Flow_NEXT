@@ -70,6 +70,21 @@ final class GF_Participants_List {
 	const MAX_ROWS = 40;
 
 	/**
+	 * Translate string using qTranslate XT if available
+	 *
+	 * Accepts multilingual strings in format: [:en]English[:pl]Polish[:]
+	 *
+	 * @param string $text Multilingual string
+	 * @return string Translated string for current language
+	 */
+	private static function tr( string $text ) : string {
+		if ( function_exists( 'qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage' ) ) {
+			return (string) qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $text );
+		}
+		return $text;
+	}
+
+	/**
 	 * Register the shortcode
 	 */
 	public static function register() : void {
@@ -268,20 +283,20 @@ final class GF_Participants_List {
 		$html = '<div class="tcbf-participants-list">';
 		$html .= '<table class="tcbf-participants-table">';
 
-		// Table header
+		// Table header (qTranslate XT multilingual)
 		$html .= '<thead><tr>';
 		$html .= '<th class="tcbf-col-number">#</th>';
-		$html .= '<th class="tcbf-col-participant">' . esc_html__('Participant', 'tc-booking-flow-next') . '</th>';
-		$html .= '<th class="tcbf-col-email">' . esc_html__('Email', 'tc-booking-flow-next') . '</th>';
-		$html .= '<th class="tcbf-col-bicycle">' . esc_html__('Bicycle + size', 'tc-booking-flow-next') . '</th>';
-		$html .= '<th class="tcbf-col-pedals">' . esc_html__('Pedals', 'tc-booking-flow-next') . '</th>';
-		$html .= '<th class="tcbf-col-helmet">' . esc_html__('Helmet', 'tc-booking-flow-next') . '</th>';
-		$html .= '<th class="tcbf-col-date">' . esc_html__('Signed up on', 'tc-booking-flow-next') . '</th>';
-		$html .= '<th class="tcbf-col-status">' . esc_html__('Status', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-participant">' . esc_html( self::tr( '[:en]Participant[:pl]Uczestnik[:]' ) ) . '</th>';
+		$html .= '<th class="tcbf-col-email">' . esc_html( self::tr( '[:en]Email[:pl]Email[:]' ) ) . '</th>';
+		$html .= '<th class="tcbf-col-bicycle">' . esc_html( self::tr( '[:en]Bicycle + size[:pl]Rower + rozmiar[:]' ) ) . '</th>';
+		$html .= '<th class="tcbf-col-pedals">' . esc_html( self::tr( '[:en]Pedals[:pl]Pedały[:]' ) ) . '</th>';
+		$html .= '<th class="tcbf-col-helmet">' . esc_html( self::tr( '[:en]Helmet[:pl]Kask[:]' ) ) . '</th>';
+		$html .= '<th class="tcbf-col-date">' . esc_html( self::tr( '[:en]Signed up on[:pl]Data zapisu[:]' ) ) . '</th>';
+		$html .= '<th class="tcbf-col-status">' . esc_html( self::tr( '[:en]Status[:pl]Status[:]' ) ) . '</th>';
 
 		// Notification status column (admin + partner only)
 		if ( $show_info_column ) {
-			$html .= '<th class="tcbf-col-info">' . esc_html__('Notification', 'tc-booking-flow-next') . '</th>';
+			$html .= '<th class="tcbf-col-info">' . esc_html( self::tr( '[:en]Notification[:pl]Powiadomienie[:]' ) ) . '</th>';
 		}
 
 		$html .= '</tr></thead>';
@@ -363,16 +378,16 @@ final class GF_Participants_List {
 		// Get status from tcbf_state meta (hardened access)
 		$status = self::get_entry_status( $entry_id );
 
-		// Build row with data-label attributes for mobile
+		// Build row with data-label attributes for mobile (qTranslate XT multilingual)
 		$html = '<tr>';
 		$html .= '<td class="tcbf-col-number" data-label="#">' . esc_html( $row_num ) . '</td>';
-		$html .= '<td class="tcbf-col-participant" data-label="' . esc_attr__('Participant', 'tc-booking-flow-next') . '">' . esc_html( $participant_name ) . '</td>';
-		$html .= '<td class="tcbf-col-email" data-label="' . esc_attr__('Email', 'tc-booking-flow-next') . '">' . esc_html( $display_email ) . '</td>';
-		$html .= '<td class="tcbf-col-bicycle" data-label="' . esc_attr__('Bicycle + size', 'tc-booking-flow-next') . '">' . esc_html( $display_bike ) . '</td>';
-		$html .= '<td class="tcbf-col-pedals" data-label="' . esc_attr__('Pedals', 'tc-booking-flow-next') . '">' . esc_html( $display_pedals ) . '</td>';
-		$html .= '<td class="tcbf-col-helmet" data-label="' . esc_attr__('Helmet', 'tc-booking-flow-next') . '">' . esc_html( $display_helmet ) . '</td>';
-		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr__('Signed up on', 'tc-booking-flow-next') . '">' . esc_html( $display_date ) . '</td>';
-		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr__('Status', 'tc-booking-flow-next') . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
+		$html .= '<td class="tcbf-col-participant" data-label="' . esc_attr( self::tr( '[:en]Participant[:pl]Uczestnik[:]' ) ) . '">' . esc_html( $participant_name ) . '</td>';
+		$html .= '<td class="tcbf-col-email" data-label="' . esc_attr( self::tr( '[:en]Email[:pl]Email[:]' ) ) . '">' . esc_html( $display_email ) . '</td>';
+		$html .= '<td class="tcbf-col-bicycle" data-label="' . esc_attr( self::tr( '[:en]Bicycle + size[:pl]Rower + rozmiar[:]' ) ) . '">' . esc_html( $display_bike ) . '</td>';
+		$html .= '<td class="tcbf-col-pedals" data-label="' . esc_attr( self::tr( '[:en]Pedals[:pl]Pedały[:]' ) ) . '">' . esc_html( $display_pedals ) . '</td>';
+		$html .= '<td class="tcbf-col-helmet" data-label="' . esc_attr( self::tr( '[:en]Helmet[:pl]Kask[:]' ) ) . '">' . esc_html( $display_helmet ) . '</td>';
+		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr( self::tr( '[:en]Signed up on[:pl]Data zapisu[:]' ) ) . '">' . esc_html( $display_date ) . '</td>';
+		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr( self::tr( '[:en]Status[:pl]Status[:]' ) ) . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
 
 		// Notification status column (admin + partner only)
 		if ( $show_info_column ) {
@@ -381,10 +396,10 @@ final class GF_Participants_List {
 
 			if ( $show_info_badge ) {
 				$info_status = self::get_notification_status( $entry_id );
-				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Notification', 'tc-booking-flow-next') . '"><span class="tcbf-info-status tcbf-info-status--' . esc_attr( sanitize_html_class( $info_status['class'] ) ) . '">' . esc_html( $info_status['label'] ) . '</span></td>';
+				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr( self::tr( '[:en]Notification[:pl]Powiadomienie[:]' ) ) . '"><span class="tcbf-info-status tcbf-info-status--' . esc_attr( sanitize_html_class( $info_status['class'] ) ) . '">' . esc_html( $info_status['label'] ) . '</span></td>';
 			} else {
 				// Partner viewing non-owned row - show "—" to avoid leaking operational timing
-				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Notification', 'tc-booking-flow-next') . '">—</td>';
+				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr( self::tr( '[:en]Notification[:pl]Powiadomienie[:]' ) ) . '">—</td>';
 			}
 		}
 
@@ -634,34 +649,34 @@ final class GF_Participants_List {
 			$state = (string) gform_get_meta( $entry_id, \TC_BF\Domain\Entry_State::META_STATE );
 		}
 
-		// Map state to display label and CSS class
+		// Map state to display label and CSS class (qTranslate XT multilingual)
 		switch ( $state ) {
 			case \TC_BF\Domain\Entry_State::STATE_PAID:
-				return [ 'label' => __('Confirmed', 'tc-booking-flow-next'), 'class' => 'confirmed' ];
+				return [ 'label' => self::tr( '[:en]Confirmed[:pl]Potwierdzone[:]' ), 'class' => 'confirmed' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_IN_CART:
-				return [ 'label' => __('In cart', 'tc-booking-flow-next'), 'class' => 'in-cart' ];
+				return [ 'label' => self::tr( '[:en]In cart[:pl]W koszyku[:]' ), 'class' => 'in-cart' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_CREATED:
-				return [ 'label' => __('Created', 'tc-booking-flow-next'), 'class' => 'created' ];
+				return [ 'label' => self::tr( '[:en]Created[:pl]Utworzone[:]' ), 'class' => 'created' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_REMOVED:
-				return [ 'label' => __('Removed', 'tc-booking-flow-next'), 'class' => 'removed' ];
+				return [ 'label' => self::tr( '[:en]Removed[:pl]Usunięte[:]' ), 'class' => 'removed' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_EXPIRED:
-				return [ 'label' => __('Expired', 'tc-booking-flow-next'), 'class' => 'expired' ];
+				return [ 'label' => self::tr( '[:en]Expired[:pl]Wygasłe[:]' ), 'class' => 'expired' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_PAYMENT_FAILED:
-				return [ 'label' => __('Payment failed', 'tc-booking-flow-next'), 'class' => 'payment-failed' ];
+				return [ 'label' => self::tr( '[:en]Payment failed[:pl]Płatność nieudana[:]' ), 'class' => 'payment-failed' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_CANCELLED:
-				return [ 'label' => __('Cancelled', 'tc-booking-flow-next'), 'class' => 'cancelled' ];
+				return [ 'label' => self::tr( '[:en]Cancelled[:pl]Anulowane[:]' ), 'class' => 'cancelled' ];
 
 			case \TC_BF\Domain\Entry_State::STATE_REFUNDED:
-				return [ 'label' => __('Refunded', 'tc-booking-flow-next'), 'class' => 'refunded' ];
+				return [ 'label' => self::tr( '[:en]Refunded[:pl]Zwrócone[:]' ), 'class' => 'refunded' ];
 
 			default:
-				return [ 'label' => __('Unknown', 'tc-booking-flow-next'), 'class' => 'unknown' ];
+				return [ 'label' => self::tr( '[:en]Unknown[:pl]Nieznany[:]' ), 'class' => 'unknown' ];
 		}
 	}
 
@@ -672,7 +687,7 @@ final class GF_Participants_List {
 	 */
 	private static function render_empty_state() : string {
 		return '<div class="tcbf-participants-list tcbf-participants-empty">'
-			. '<p>' . esc_html__('No participants yet.', 'tc-booking-flow-next') . '</p>'
+			. '<p>' . esc_html( self::tr( '[:en]No participants yet.[:pl]Brak uczestników.[:]' ) ) . '</p>'
 			. '</div>';
 	}
 
@@ -805,14 +820,14 @@ final class GF_Participants_List {
 	 */
 	private static function get_notification_status( int $entry_id ) : array {
 		if ( $entry_id <= 0 || ! function_exists( 'gform_get_meta' ) ) {
-			return [ 'label' => __('Not sent', 'tc-booking-flow-next'), 'class' => 'not-sent' ];
+			return [ 'label' => self::tr( '[:en]Not sent[:pl]Nie wysłano[:]' ), 'class' => 'not-sent' ];
 		}
 
 		$ledger = gform_get_meta( $entry_id, self::META_NOTIF_LEDGER );
 
 		// No ledger or empty ledger
 		if ( empty( $ledger ) || ! is_array( $ledger ) ) {
-			return [ 'label' => __('Not sent', 'tc-booking-flow-next'), 'class' => 'not-sent' ];
+			return [ 'label' => self::tr( '[:en]Not sent[:pl]Nie wysłano[:]' ), 'class' => 'not-sent' ];
 		}
 
 		// Check if any notifications sent
@@ -822,12 +837,12 @@ final class GF_Participants_List {
 		$has_failed = ! empty( $ledger['failed'] ) && is_array( $ledger['failed'] );
 
 		if ( $has_sent ) {
-			// Show "Sent" with exact date and time
-			$label = __('Sent', 'tc-booking-flow-next');
+			// Show "Sent" with exact date and time (qTranslate XT multilingual)
+			$label = self::tr( '[:en]Sent[:pl]Wysłano[:]' );
 			if ( isset( $ledger['last_at'] ) && $ledger['last_at'] !== '' ) {
 				$timestamp = strtotime( $ledger['last_at'] );
 				if ( $timestamp !== false ) {
-					// Format: "Sent Jan 18, 14:33"
+					// Format: "Sent Jan 18, 14:33" / "Wysłano 18 sty, 14:33"
 					$label .= ' ' . date_i18n( 'M j, H:i', $timestamp );
 				}
 			}
@@ -835,11 +850,11 @@ final class GF_Participants_List {
 		}
 
 		if ( $has_failed ) {
-			// Show "Failed" with optional date
-			$label = __('Failed', 'tc-booking-flow-next');
+			// Show "Failed" (qTranslate XT multilingual)
+			$label = self::tr( '[:en]Failed[:pl]Nieudane[:]' );
 			return [ 'label' => $label, 'class' => 'failed' ];
 		}
 
-		return [ 'label' => __('Not sent', 'tc-booking-flow-next'), 'class' => 'not-sent' ];
+		return [ 'label' => self::tr( '[:en]Not sent[:pl]Nie wysłano[:]' ), 'class' => 'not-sent' ];
 	}
 }
