@@ -323,7 +323,7 @@ class Woo_OrderMeta {
 		}
 
 		// Also check WC session for frontend flows with explicit partner context
-		if ( $intent_partner_id <= 0 && function_exists( 'WC' ) && WC()->session ) {
+		if ( $intent_partner_id <= 0 && function_exists( 'WC' ) && WC() && WC()->session ) {
 			$session_intent = WC()->session->get( 'tcbf_partner_intent_id' );
 			if ( $session_intent !== null && (int) $session_intent > 0 ) {
 				$intent_partner_id = (int) $session_intent;
