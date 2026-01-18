@@ -238,10 +238,14 @@ final class Partner_Portal {
     /**
      * Format a single order row for display/export
      *
+     * IMPORTANT: Client-facing money (total, discount) comes from WooCommerce authoritative
+     * getters, NOT from meta math. This ensures exact parity with cart/order confirmation.
+     * Commission comes from ledger snapshot meta (for accounting).
+     *
      * @param \WC_Order $order         Order object
      * @param int       $partner_uid   Partner user ID (for "own order" detection)
      * @param float     $partner_pct   Partner commission % (fallback)
-     * @param bool      $prices_inc_tax Whether prices include tax
+     * @param bool      $prices_inc_tax Whether prices include tax (unused, kept for signature compat)
      * @return array Formatted row data
      */
     private static function format_row( \WC_Order $order, int $partner_uid, float $partner_pct, bool $prices_inc_tax ) : array {
@@ -249,93 +253,33 @@ final class Partner_Portal {
         $order_user_id = (int) $order->get_user_id();
         $is_own_order = $order_user_id > 0 && $order_user_id === $partner_uid;
 
-        $order_total = (float) $order->get_total();
-        $total_discount = (float) $order->get_total_discount();
+        // ============================================================
+        // CLIENT-FACING MONEY: Use Woo authoritative getters (already rounded)
+        // ============================================================
 
-        // Effective tax ratio
-        $eff_rate = 0.0;
-        $order_tax = (float) $order->get_total_tax();
-        $order_net = max( 0.0, $order_total - $order_tax );
-        if ( $order_net > 0.0 && $order_tax > 0.0 ) {
-            $eff_rate = $order_tax / $order_net;
-        }
+        // Client total = what customer paid (Woo's authoritative value)
+        $client_total_disp = (float) $order->get_total();
 
-        // Read ledger meta
-        $client_total            = (float) $order->get_meta( 'client_total', true );
+        // Discount = coupon discount including tax (Woo's authoritative value)
+        $discount_disp = (float) $order->get_discount_total() + (float) $order->get_discount_tax();
+
+        // ============================================================
+        // COMMISSION: From ledger snapshot meta (for accounting)
+        // ============================================================
+
         $partner_commission_meta = (float) $order->get_meta( 'partner_commission', true );
-        $client_discount_meta    = (float) $order->get_meta( 'client_discount', true );
-        $partner_base_total_meta = (float) $order->get_meta( 'partner_base_total', true );
         $ledger_v                = (string) $order->get_meta( 'tc_ledger_version', true );
         $partner_code_meta       = (string) $order->get_meta( 'partner_code', true );
 
-        if ( $client_total <= 0 ) {
-            $client_total = $order_total;
-        }
-
-        // Calculate display amounts
-        $commission_display = 0.0;
-        $discount_display   = 0.0;
-
-        if ( $ledger_v === '2' || $client_discount_meta > 0 || $partner_base_total_meta > 0 ) {
-            // v2 ledger path
-            $commission_display = $partner_commission_meta > 0
-                ? $partner_commission_meta
-                : ( $order_total * ( $partner_pct / 100.0 ) );
-
-            if ( $client_discount_meta > 0 ) {
-                $discount_display = $client_discount_meta;
-            } elseif ( $partner_base_total_meta > 0 && $client_total > 0 ) {
-                $discount_display = max( 0.0, $partner_base_total_meta - $client_total );
-            } else {
-                $discount_display = $total_discount;
-            }
+        // Commission from snapshot, with fallback to calculation if missing
+        if ( $partner_commission_meta > 0 ) {
+            $commission_disp = $partner_commission_meta;
         } else {
-            // Legacy inference (older orders without v2 ledger)
-            if ( $partner_commission_meta > 0 ) {
-                $commission_display = $partner_commission_meta;
-                $commission_net = $partner_commission_meta / 1.21;
-                $discount_net = max( 0.0, $total_discount - $commission_net );
-                $discount_display = $discount_net * 1.21;
-            } else {
-                $commission_net = $order_total * ( $partner_pct / 100.0 );
-                $commission_display = $commission_net * 1.21;
-                $discount_display = $total_discount * 1.21;
-            }
+            // Fallback: calculate from order total (should rarely happen for v2 orders)
+            $commission_disp = $client_total_disp * ( $partner_pct / 100.0 );
         }
 
         $status_slug = $order->get_status();
-
-        // Apply tax display conversion
-        $client_total_disp = $client_total;
-        $discount_disp     = $discount_display;
-        $commission_disp   = $commission_display;
-
-        if ( $ledger_v === '2' || $client_discount_meta > 0 || $partner_base_total_meta > 0 ) {
-            $is_gross_ledger = ( abs( $client_total - $order_total ) < 0.02 );
-
-            if ( $prices_inc_tax ) {
-                if ( ! $is_gross_ledger ) {
-                    // Convert net to gross
-                    $client_total_disp = self::apply_tax_rate( $client_total, $eff_rate );
-                    $discount_disp     = self::apply_tax_rate( $discount_display, $eff_rate );
-                    $commission_disp   = self::apply_tax_rate( $commission_display, $eff_rate );
-                }
-            } else {
-                if ( $is_gross_ledger && $eff_rate > 0.0 ) {
-                    // Convert gross to net
-                    $client_total_disp = $client_total / ( 1.0 + $eff_rate );
-                    $discount_disp     = $discount_display / ( 1.0 + $eff_rate );
-                    $commission_disp   = $commission_display / ( 1.0 + $eff_rate );
-                }
-            }
-        } else {
-            // Legacy: VAT-included amounts
-            if ( ! $prices_inc_tax && $eff_rate > 0.0 ) {
-                $client_total_disp = $client_total / ( 1.0 + $eff_rate );
-                $discount_disp     = $discount_display / ( 1.0 + $eff_rate );
-                $commission_disp   = $commission_display / ( 1.0 + $eff_rate );
-            }
-        }
 
         // Products/services description
         $products_desc = self::format_products( $order );
@@ -361,6 +305,7 @@ final class Partner_Portal {
 
     /**
      * Apply tax rate to amount
+     * @deprecated No longer used - kept for backward compatibility
      */
     private static function apply_tax_rate( float $amount, float $rate ) : float {
         if ( $rate <= 0.0 ) return $amount;
