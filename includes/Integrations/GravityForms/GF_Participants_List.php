@@ -28,7 +28,6 @@ final class GF_Participants_List {
 		'first_name'  => '2.3',
 		'last_name'   => '2.6',
 		'email'       => '21',
-		'event_uid'   => '145',  // Default, can be overridden via settings
 		'bike_model'  => '146',  // Combined bike model and size
 		'pedals'      => '60',
 		'helmet'      => '61',
@@ -154,20 +153,13 @@ final class GF_Participants_List {
 			$uid_field_id = 145;
 		}
 
-		// Build search criteria
+		// Build search criteria (filter by event UID only; status shown per row)
 		$search_criteria = [
 			'field_filters' => [
-				'mode' => 'all',
-				// Filter by event UID
 				[
 					'key'      => (string) $uid_field_id,
 					'value'    => $event_uid,
 					'operator' => '=',
-				],
-				// Filter by paid state only
-				[
-					'key'   => \TC_BF\Domain\Entry_State::META_STATE,
-					'value' => \TC_BF\Domain\Entry_State::STATE_PAID,
 				],
 			],
 		];
@@ -240,13 +232,13 @@ final class GF_Participants_List {
 		// Table header
 		$html .= '<thead><tr>';
 		$html .= '<th class="tcbf-col-number">#</th>';
-		$html .= '<th class="tcbf-col-participant">' . esc_html__('Participant', 'tc-booking-flow') . '</th>';
-		$html .= '<th class="tcbf-col-email">' . esc_html__('Email', 'tc-booking-flow') . '</th>';
-		$html .= '<th class="tcbf-col-bicycle">' . esc_html__('Bicycle + size', 'tc-booking-flow') . '</th>';
-		$html .= '<th class="tcbf-col-pedals">' . esc_html__('Pedals', 'tc-booking-flow') . '</th>';
-		$html .= '<th class="tcbf-col-helmet">' . esc_html__('Helmet', 'tc-booking-flow') . '</th>';
-		$html .= '<th class="tcbf-col-date">' . esc_html__('Signed up on', 'tc-booking-flow') . '</th>';
-		$html .= '<th class="tcbf-col-status">' . esc_html__('Status', 'tc-booking-flow') . '</th>';
+		$html .= '<th class="tcbf-col-participant">' . esc_html__('Participant', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-email">' . esc_html__('Email', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-bicycle">' . esc_html__('Bicycle + size', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-pedals">' . esc_html__('Pedals', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-helmet">' . esc_html__('Helmet', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-date">' . esc_html__('Signed up on', 'tc-booking-flow-next') . '</th>';
+		$html .= '<th class="tcbf-col-status">' . esc_html__('Status', 'tc-booking-flow-next') . '</th>';
 		$html .= '</tr></thead>';
 
 		// Table body
@@ -311,13 +303,13 @@ final class GF_Participants_List {
 		// Build row with data-label attributes for mobile
 		$html = '<tr>';
 		$html .= '<td class="tcbf-col-number" data-label="#">' . esc_html( $row_num ) . '</td>';
-		$html .= '<td class="tcbf-col-participant" data-label="' . esc_attr__('Participant', 'tc-booking-flow') . '">' . esc_html( $participant_name ) . '</td>';
-		$html .= '<td class="tcbf-col-email" data-label="' . esc_attr__('Email', 'tc-booking-flow') . '">' . esc_html( $display_email ) . '</td>';
-		$html .= '<td class="tcbf-col-bicycle" data-label="' . esc_attr__('Bicycle + size', 'tc-booking-flow') . '">' . esc_html( $display_bike ) . '</td>';
-		$html .= '<td class="tcbf-col-pedals" data-label="' . esc_attr__('Pedals', 'tc-booking-flow') . '">' . esc_html( $display_pedals ) . '</td>';
-		$html .= '<td class="tcbf-col-helmet" data-label="' . esc_attr__('Helmet', 'tc-booking-flow') . '">' . esc_html( $display_helmet ) . '</td>';
-		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr__('Signed up on', 'tc-booking-flow') . '">' . esc_html( $display_date ) . '</td>';
-		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr__('Status', 'tc-booking-flow') . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
+		$html .= '<td class="tcbf-col-participant" data-label="' . esc_attr__('Participant', 'tc-booking-flow-next') . '">' . esc_html( $participant_name ) . '</td>';
+		$html .= '<td class="tcbf-col-email" data-label="' . esc_attr__('Email', 'tc-booking-flow-next') . '">' . esc_html( $display_email ) . '</td>';
+		$html .= '<td class="tcbf-col-bicycle" data-label="' . esc_attr__('Bicycle + size', 'tc-booking-flow-next') . '">' . esc_html( $display_bike ) . '</td>';
+		$html .= '<td class="tcbf-col-pedals" data-label="' . esc_attr__('Pedals', 'tc-booking-flow-next') . '">' . esc_html( $display_pedals ) . '</td>';
+		$html .= '<td class="tcbf-col-helmet" data-label="' . esc_attr__('Helmet', 'tc-booking-flow-next') . '">' . esc_html( $display_helmet ) . '</td>';
+		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr__('Signed up on', 'tc-booking-flow-next') . '">' . esc_html( $display_date ) . '</td>';
+		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr__('Status', 'tc-booking-flow-next') . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
 		$html .= '</tr>';
 
 		return $html;
@@ -342,6 +334,21 @@ final class GF_Participants_List {
 	}
 
 	/**
+	 * Safe substr with mbstring fallback
+	 *
+	 * @param string $string Input string
+	 * @param int    $start  Start position
+	 * @param int    $length Length to extract
+	 * @return string Substring
+	 */
+	private static function safe_substr( string $string, int $start, int $length ) : string {
+		if ( function_exists('mb_substr') ) {
+			return mb_substr( $string, $start, $length, 'UTF-8' );
+		}
+		return substr( $string, $start, $length );
+	}
+
+	/**
 	 * Format participant name with optional masking
 	 *
 	 * Masking format: FirstName L.
@@ -363,8 +370,7 @@ final class GF_Participants_List {
 			// Masking: FirstName + first letter of last name + period
 			$last_initial = '';
 			if ( ! empty( $last_name ) ) {
-				// Get first character (UTF-8 safe)
-				$last_initial = mb_substr( $last_name, 0, 1, 'UTF-8' ) . '.';
+				$last_initial = self::safe_substr( $last_name, 0, 1 ) . '.';
 			}
 			return $first_name . ( $last_initial ? ' ' . $last_initial : '' );
 		}
@@ -392,16 +398,16 @@ final class GF_Participants_List {
 		$domain = $parts[1];
 
 		// Mask local part: show first 2 chars + ***
-		$local_masked = mb_substr( $local, 0, 2, 'UTF-8' ) . '***';
+		$local_masked = self::safe_substr( $local, 0, 2 ) . '***';
 
 		// Mask domain: show first 2 chars of domain name + *** + TLD
 		$domain_parts = explode( '.', $domain );
 		if ( count( $domain_parts ) >= 2 ) {
 			$domain_name = $domain_parts[0];
 			$tld = end( $domain_parts );
-			$domain_masked = mb_substr( $domain_name, 0, 2, 'UTF-8' ) . '***.' . $tld;
+			$domain_masked = self::safe_substr( $domain_name, 0, 2 ) . '***.' . $tld;
 		} else {
-			$domain_masked = mb_substr( $domain, 0, 2, 'UTF-8' ) . '***';
+			$domain_masked = self::safe_substr( $domain, 0, 2 ) . '***';
 		}
 
 		return $local_masked . '@' . $domain_masked;
@@ -445,13 +451,13 @@ final class GF_Participants_List {
 		// Map state to display label and CSS class
 		switch ( $state ) {
 			case \TC_BF\Domain\Entry_State::STATE_PAID:
-				return [ 'label' => __('Confirmed', 'tc-booking-flow'), 'class' => 'confirmed' ];
+				return [ 'label' => __('Confirmed', 'tc-booking-flow-next'), 'class' => 'confirmed' ];
 			case \TC_BF\Domain\Entry_State::STATE_IN_CART:
-				return [ 'label' => __('In cart', 'tc-booking-flow'), 'class' => 'in-cart' ];
+				return [ 'label' => __('In cart', 'tc-booking-flow-next'), 'class' => 'in-cart' ];
 			case \TC_BF\Domain\Entry_State::STATE_CANCELLED:
-				return [ 'label' => __('Cancelled', 'tc-booking-flow'), 'class' => 'cancelled' ];
+				return [ 'label' => __('Cancelled', 'tc-booking-flow-next'), 'class' => 'cancelled' ];
 			default:
-				return [ 'label' => __('Unknown', 'tc-booking-flow'), 'class' => 'unknown' ];
+				return [ 'label' => __('Unknown', 'tc-booking-flow-next'), 'class' => 'unknown' ];
 		}
 	}
 
@@ -462,7 +468,7 @@ final class GF_Participants_List {
 	 */
 	private static function render_empty_state() : string {
 		return '<div class="tcbf-participants-list tcbf-participants-empty">'
-			. '<p>' . esc_html__('No confirmed participants yet.', 'tc-booking-flow') . '</p>'
+			. '<p>' . esc_html__('No participants yet.', 'tc-booking-flow-next') . '</p>'
 			. '</div>';
 	}
 
