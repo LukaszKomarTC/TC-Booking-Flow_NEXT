@@ -147,6 +147,9 @@ final class GF_Participants_List {
 		// Check if current user is a partner user
 		$is_partner_user = $partners_enabled && self::is_partner_user();
 
+		// Determine if this is a public view (not admin AND not authorized partner)
+		$is_public_view = ! $is_admin && ! $is_partner_user;
+
 		// Query entries via GFAPI
 		$entries = self::query_participants( $event_uid );
 
@@ -170,12 +173,32 @@ final class GF_Participants_List {
 			}
 		}
 
+		// Public view: filter entries to show only paid and in_cart states
+		if ( $is_public_view ) {
+			$allowed_states = [
+				\TC_BF\Domain\Entry_State::STATE_PAID,
+				\TC_BF\Domain\Entry_State::STATE_IN_CART,
+			];
+
+			$entries = array_values( array_filter( $entries, function( $entry ) use ( $allowed_states ) {
+				$entry_id = isset( $entry['id'] ) ? (int) $entry['id'] : 0;
+				if ( $entry_id <= 0 ) {
+					return false; // Exclude entries without valid ID
+				}
+				$state = self::get_entry_state( $entry_id );
+				return in_array( $state, $allowed_states, true );
+			} ) );
+		}
+
 		if ( empty( $entries ) ) {
 			return self::render_empty_state();
 		}
 
+		// Determine if Status column should be shown (admin/partner only, not public)
+		$show_status_column = ! $is_public_view;
+
 		// Render the table with per-row masking
-		return self::render_table( $entries, $privacy_mode, $is_admin, $is_partner_user, $partners_enabled );
+		return self::render_table( $entries, $privacy_mode, $is_admin, $is_partner_user, $partners_enabled, $show_status_column );
 	}
 
 	/**
@@ -269,14 +292,15 @@ final class GF_Participants_List {
 	/**
 	 * Render the participants table
 	 *
-	 * @param array  $entries          GF entries
-	 * @param string $privacy_mode     Privacy mode setting
-	 * @param bool   $is_admin         Whether user is admin
-	 * @param bool   $is_partner_user  Whether user is a partner
-	 * @param bool   $partners_enabled Whether partners are enabled for this event
+	 * @param array  $entries            GF entries
+	 * @param string $privacy_mode       Privacy mode setting
+	 * @param bool   $is_admin           Whether user is admin
+	 * @param bool   $is_partner_user    Whether user is a partner
+	 * @param bool   $partners_enabled   Whether partners are enabled for this event
+	 * @param bool   $show_status_column Whether to show the Status column
 	 * @return string HTML table
 	 */
-	private static function render_table( array $entries, string $privacy_mode, bool $is_admin, bool $is_partner_user, bool $partners_enabled ) : string {
+	private static function render_table( array $entries, string $privacy_mode, bool $is_admin, bool $is_partner_user, bool $partners_enabled, bool $show_status_column ) : string {
 		// Determine if Info column should be shown (admin or partner user)
 		$show_info_column = $is_admin || $is_partner_user;
 
@@ -292,7 +316,11 @@ final class GF_Participants_List {
 		$html .= '<th class="tcbf-col-pedals">' . esc_html( self::tr( '[:en]Pedals[:es]Pedales[:]' ) ) . '</th>';
 		$html .= '<th class="tcbf-col-helmet">' . esc_html( self::tr( '[:en]Helmet[:es]Casco[:]' ) ) . '</th>';
 		$html .= '<th class="tcbf-col-date">' . esc_html( self::tr( '[:en]Signed up on[:es]Fecha de registro[:]' ) ) . '</th>';
-		$html .= '<th class="tcbf-col-status">' . esc_html( self::tr( '[:en]Status[:es]Estado[:]' ) ) . '</th>';
+
+		// Status column (admin + partner only, hidden for public)
+		if ( $show_status_column ) {
+			$html .= '<th class="tcbf-col-status">' . esc_html( self::tr( '[:en]Status[:es]Estado[:]' ) ) . '</th>';
+		}
 
 		// Notification status column (admin + partner only)
 		if ( $show_info_column ) {
@@ -307,7 +335,7 @@ final class GF_Participants_List {
 
 		foreach ( $entries as $entry ) {
 			$row_num++;
-			$html .= self::render_row( $entry, $row_num, $privacy_mode, $is_admin, $is_partner_user, $partners_enabled, $show_info_column );
+			$html .= self::render_row( $entry, $row_num, $privacy_mode, $is_admin, $is_partner_user, $partners_enabled, $show_info_column, $show_status_column );
 		}
 
 		$html .= '</tbody>';
@@ -320,16 +348,17 @@ final class GF_Participants_List {
 	/**
 	 * Render a single table row with per-row masking
 	 *
-	 * @param array  $entry            GF entry
-	 * @param int    $row_num          Row number (1-indexed)
-	 * @param string $privacy_mode     Privacy mode setting
-	 * @param bool   $is_admin         Whether user is admin
-	 * @param bool   $is_partner_user  Whether user is a partner
-	 * @param bool   $partners_enabled Whether partners are enabled for this event
-	 * @param bool   $show_info_column Whether Info column is shown
+	 * @param array  $entry              GF entry
+	 * @param int    $row_num            Row number (1-indexed)
+	 * @param string $privacy_mode       Privacy mode setting
+	 * @param bool   $is_admin           Whether user is admin
+	 * @param bool   $is_partner_user    Whether user is a partner
+	 * @param bool   $partners_enabled   Whether partners are enabled for this event
+	 * @param bool   $show_info_column   Whether Info column is shown
+	 * @param bool   $show_status_column Whether Status column is shown
 	 * @return string HTML row
 	 */
-	private static function render_row( array $entry, int $row_num, string $privacy_mode, bool $is_admin, bool $is_partner_user, bool $partners_enabled, bool $show_info_column ) : string {
+	private static function render_row( array $entry, int $row_num, string $privacy_mode, bool $is_admin, bool $is_partner_user, bool $partners_enabled, bool $show_info_column, bool $show_status_column ) : string {
 		// Extract field values safely
 		$first_name = self::get_field_value( $entry, 'first_name' );
 		$last_name  = self::get_field_value( $entry, 'last_name' );
@@ -375,9 +404,6 @@ final class GF_Participants_List {
 		$date_created = isset( $entry['date_created'] ) ? $entry['date_created'] : '';
 		$display_date = self::format_date( $date_created );
 
-		// Get status from tcbf_state meta (hardened access)
-		$status = self::get_entry_status( $entry_id );
-
 		// Build row with data-label attributes for mobile (qTranslate XT multilingual)
 		$html = '<tr>';
 		$html .= '<td class="tcbf-col-number" data-label="#">' . esc_html( $row_num ) . '</td>';
@@ -387,7 +413,12 @@ final class GF_Participants_List {
 		$html .= '<td class="tcbf-col-pedals" data-label="' . esc_attr( self::tr( '[:en]Pedals[:es]Pedales[:]' ) ) . '">' . esc_html( $display_pedals ) . '</td>';
 		$html .= '<td class="tcbf-col-helmet" data-label="' . esc_attr( self::tr( '[:en]Helmet[:es]Casco[:]' ) ) . '">' . esc_html( $display_helmet ) . '</td>';
 		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr( self::tr( '[:en]Signed up on[:es]Fecha de registro[:]' ) ) . '">' . esc_html( $display_date ) . '</td>';
-		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr( self::tr( '[:en]Status[:es]Estado[:]' ) ) . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
+
+		// Status column (admin + partner only, hidden for public)
+		if ( $show_status_column ) {
+			$status = self::get_entry_status( $entry_id );
+			$html .= '<td class="tcbf-col-status" data-label="' . esc_attr( self::tr( '[:en]Status[:es]Estado[:]' ) ) . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
+		}
 
 		// Notification status column (admin + partner only)
 		if ( $show_info_column ) {
@@ -678,6 +709,22 @@ final class GF_Participants_List {
 			default:
 				return [ 'label' => self::tr( '[:en]Unknown[:es]Desconocido[:]' ), 'class' => 'unknown' ];
 		}
+	}
+
+	/**
+	 * Get entry state string (hardened access)
+	 *
+	 * Returns the raw state string from entry meta for filtering purposes.
+	 *
+	 * @param int $entry_id GF entry ID
+	 * @return string State string or empty string if not found
+	 */
+	private static function get_entry_state( int $entry_id ) : string {
+		if ( $entry_id <= 0 || ! function_exists( 'gform_get_meta' ) ) {
+			return '';
+		}
+
+		return (string) gform_get_meta( $entry_id, \TC_BF\Domain\Entry_State::META_STATE );
 	}
 
 	/**
