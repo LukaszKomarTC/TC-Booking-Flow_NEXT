@@ -1619,15 +1619,13 @@ JS;
 
         // Participants section (TCBF-native GFAPI renderer, replaces GravityView)
         if ( get_post_meta($post_id, 'participants', true) === 'Yes' ) {
-            // Construct event UID (same format as GF field 145: event_id_timestamp)
-            $event_uid = $post_id . "_" . get_post_meta( $post_id, 'sc_event_date_time', true );
-
+            // Pass event_id only - class computes UID internally (TCBF owns business logic)
             $participants_content = do_shortcode( "
                 [vc_row]
                 [vc_column]
                 [vc_separator css='.vc_custom_1607950580058{margin-top: 30px !important;margin-bottom: 30px !important;}']
                 [vc_column_text]<h3 id='participantes'>" . self::tr("[:en]List of participants[:es]Listado de participantes[:]") . "</h3>[/vc_column_text]
-                [tcbf_participants event_uid='" . esc_attr($event_uid) . "']
+                [tcbf_participants event_id='" . (int) $post_id . "']
                 [/vc_column]
                 [/vc_row]
             " );

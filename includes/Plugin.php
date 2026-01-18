@@ -168,7 +168,7 @@ final class Plugin {
 
 		// ---- Participants List: TCBF-native GFAPI renderer (replaces GravityView)
 		add_action('init', [ $this, 'register_participants_shortcode' ]);
-		add_action('wp_head', [ $this, 'output_participants_list_css' ], 10);
+		add_action('wp_enqueue_scripts', [ $this, 'enqueue_participants_list_assets' ]);
 
 	}
 
@@ -183,128 +183,21 @@ final class Plugin {
 	}
 
 	/**
-	 * Output CSS for participants list table (inline, scoped)
+	 * Enqueue participants list assets (proper WP asset management)
 	 */
-	public function output_participants_list_css() : void {
-		// Only output on singular sc_event pages where participants are enabled
-		if ( ! is_singular( 'sc_event' ) ) return;
-
-		$post_id = get_the_ID();
-		if ( ! $post_id ) return;
-
-		// Check if participants list is enabled for this event
-		if ( get_post_meta( $post_id, 'participants', true ) !== 'Yes' ) return;
-
-		?>
-		<style id="tcbf-participants-css">
-		/* TCBF Participants List Table */
-		.tcbf-participants-wrapper {
-			width: 100%;
-			overflow-x: auto;
-			margin: 20px 0;
+	public function enqueue_participants_list_assets() : void {
+		// Only enqueue on singular sc_event pages
+		if ( ! is_singular( 'sc_event' ) ) {
+			return;
 		}
 
-		.tcbf-participants-table {
-			width: 100%;
-			border-collapse: collapse;
-			background: #fff;
-			box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-		}
-
-		.tcbf-participants-table thead {
-			background: #f8f9fa;
-		}
-
-		.tcbf-participants-table th {
-			padding: 12px 16px;
-			text-align: left;
-			font-weight: 600;
-			color: #333;
-			border-bottom: 2px solid #dee2e6;
-		}
-
-		.tcbf-participants-table td {
-			padding: 12px 16px;
-			border-bottom: 1px solid #dee2e6;
-			color: #555;
-		}
-
-		.tcbf-participants-table tbody tr:hover {
-			background: #f8f9fa;
-		}
-
-		.tcbf-participants-table tbody tr:last-child td {
-			border-bottom: none;
-		}
-
-		.tcbf-participants-table a {
-			color: #007bff;
-			text-decoration: none;
-		}
-
-		.tcbf-participants-table a:hover {
-			text-decoration: underline;
-		}
-
-		.tcbf-participants-empty,
-		.tcbf-participants-error {
-			padding: 16px 20px;
-			background: #f8f9fa;
-			border: 1px solid #dee2e6;
-			border-radius: 4px;
-			margin: 20px 0;
-		}
-
-		.tcbf-participants-error {
-			background: #fff3cd;
-			border-color: #ffc107;
-			color: #856404;
-		}
-
-		/* Responsive: mobile/tablet */
-		@media (max-width: 768px) {
-			.tcbf-participants-table thead {
-				display: none;
-			}
-
-			.tcbf-participants-table,
-			.tcbf-participants-table tbody,
-			.tcbf-participants-table tr,
-			.tcbf-participants-table td {
-				display: block;
-				width: 100%;
-			}
-
-			.tcbf-participants-table tr {
-				margin-bottom: 16px;
-				border: 1px solid #dee2e6;
-				border-radius: 4px;
-				background: #fff;
-				box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-			}
-
-			.tcbf-participants-table td {
-				position: relative;
-				padding-left: 50%;
-				text-align: right;
-				border-bottom: 1px solid #f0f0f0;
-			}
-
-			.tcbf-participants-table td:last-child {
-				border-bottom: none;
-			}
-
-			.tcbf-participants-table td::before {
-				content: attr(data-label);
-				position: absolute;
-				left: 16px;
-				top: 12px;
-				font-weight: 600;
-				color: #333;
-			}
-		}
-		</style>
-		<?php
+		// Enqueue CSS file
+		wp_enqueue_style(
+			'tcbf-participants',
+			TC_BF_URL . 'assets/css/tcbf-participants.css',
+			[],
+			TC_BF_VERSION
+		);
 	}
 
 	/* =========================================================

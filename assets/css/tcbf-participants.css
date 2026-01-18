@@ -1,0 +1,150 @@
+/**
+ * TCBF Participants List Table Styles
+ *
+ * Clean, responsive table design for event participants.
+ * Desktop: traditional table layout
+ * Mobile: stacked card layout with data-label attributes
+ *
+ * @package TC_BF
+ * @since 1.0.0
+ */
+
+/* ===== Wrapper ===== */
+.tcbf-participants-wrapper {
+	width: 100%;
+	overflow-x: auto;
+	margin: 20px 0;
+}
+
+/* ===== Table Base ===== */
+.tcbf-participants-table {
+	width: 100%;
+	border-collapse: collapse;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tcbf-participants-table thead {
+	background: #f8f9fa;
+}
+
+.tcbf-participants-table th {
+	padding: 12px 16px;
+	text-align: left;
+	font-weight: 600;
+	color: #333;
+	border-bottom: 2px solid #dee2e6;
+}
+
+.tcbf-participants-table td {
+	padding: 12px 16px;
+	border-bottom: 1px solid #dee2e6;
+	color: #555;
+}
+
+.tcbf-participants-table tbody tr:hover {
+	background: #f8f9fa;
+}
+
+.tcbf-participants-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* ===== Links ===== */
+.tcbf-participants-table a {
+	color: #007bff;
+	text-decoration: none;
+}
+
+.tcbf-participants-table a:hover {
+	text-decoration: underline;
+}
+
+/* ===== Status badge ===== */
+.tcbf-participant-status {
+	display: inline-block;
+	padding: 3px 8px;
+	border-radius: 3px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.tcbf-participant-status.status-paid {
+	background: #d1fae5;
+	color: #065f46;
+}
+
+.tcbf-participant-status.status-in-cart {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.tcbf-participant-status.status-cancelled {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.tcbf-participant-status.status-unknown {
+	background: #e5e7eb;
+	color: #374151;
+}
+
+/* ===== Messages ===== */
+.tcbf-participants-empty,
+.tcbf-participants-error {
+	padding: 16px 20px;
+	background: #f8f9fa;
+	border: 1px solid #dee2e6;
+	border-radius: 4px;
+	margin: 20px 0;
+}
+
+.tcbf-participants-error {
+	background: #fff3cd;
+	border-color: #ffc107;
+	color: #856404;
+}
+
+/* ===== Responsive: Mobile/Tablet ===== */
+@media (max-width: 768px) {
+	.tcbf-participants-table thead {
+		display: none;
+	}
+
+	.tcbf-participants-table,
+	.tcbf-participants-table tbody,
+	.tcbf-participants-table tr,
+	.tcbf-participants-table td {
+		display: block;
+		width: 100%;
+	}
+
+	.tcbf-participants-table tr {
+		margin-bottom: 16px;
+		border: 1px solid #dee2e6;
+		border-radius: 4px;
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+
+	.tcbf-participants-table td {
+		position: relative;
+		padding-left: 50%;
+		text-align: right;
+		border-bottom: 1px solid #f0f0f0;
+	}
+
+	.tcbf-participants-table td:last-child {
+		border-bottom: none;
+	}
+
+	.tcbf-participants-table td::before {
+		content: attr(data-label);
+		position: absolute;
+		left: 16px;
+		top: 12px;
+		font-weight: 600;
+		color: #333;
+	}
+}
