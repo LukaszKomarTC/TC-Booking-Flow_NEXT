@@ -28,10 +28,17 @@ final class GF_Participants_List {
 		'first_name'  => '2.3',
 		'last_name'   => '2.6',
 		'email'       => '21',
-		'bike_model'  => '146',  // Combined bike model and size
 		'pedals'      => '60',
 		'helmet'      => '61',
 	];
+
+	/**
+	 * Bicycle field IDs to try in order (fallback chain)
+	 *
+	 * Field 146 = derived summary text
+	 * Fields 130/142/143/169 = actual radio selections per bike type
+	 */
+	private static array $bike_fields = [ '146', '130', '142', '143', '169' ];
 
 	/**
 	 * Option keys for plugin settings
@@ -270,7 +277,7 @@ final class GF_Participants_List {
 		$first_name = self::get_field_value( $entry, 'first_name' );
 		$last_name  = self::get_field_value( $entry, 'last_name' );
 		$email      = self::get_field_value( $entry, 'email' );
-		$bike       = self::get_field_value( $entry, 'bike_model' );
+		$bike       = self::get_bicycle_value( $entry );
 		$pedals     = self::get_field_value( $entry, 'pedals' );
 		$helmet     = self::get_field_value( $entry, 'helmet' );
 
@@ -331,6 +338,27 @@ final class GF_Participants_List {
 
 		// Handle nested field IDs (e.g., "2.3" for name subfield)
 		return isset( $entry[ $field_id ] ) ? trim( (string) $entry[ $field_id ] ) : '';
+	}
+
+	/**
+	 * Get bicycle value with fallback chain
+	 *
+	 * Tries multiple fields in order because bike selection
+	 * may be stored in different fields depending on the rental flow:
+	 * - Field 146: derived summary text (preferred)
+	 * - Fields 130/142/143/169: actual radio selections per bike type
+	 *
+	 * @param array $entry GF entry
+	 * @return string Bicycle model + size, or empty string
+	 */
+	private static function get_bicycle_value( array $entry ) : string {
+		foreach ( self::$bike_fields as $field_id ) {
+			$value = isset( $entry[ $field_id ] ) ? trim( (string) $entry[ $field_id ] ) : '';
+			if ( $value !== '' ) {
+				return $value;
+			}
+		}
+		return '';
 	}
 
 	/**
