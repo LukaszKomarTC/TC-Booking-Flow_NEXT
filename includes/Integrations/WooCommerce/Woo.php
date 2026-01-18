@@ -355,6 +355,55 @@ final class Woo {
 	}
 
 	/* =========================================================
+	 * Cart count (pack-aware)
+	 * ========================================================= */
+
+	/**
+	 * Calculate pack-aware cart count for header badge display.
+	 *
+	 * Groups participation + rental items into packs (1 pack = 1 count)
+	 * so the cart badge shows the number of participants, not line items.
+	 *
+	 * @param int $count Original cart item count from WooCommerce.
+	 * @return int Pack-aware count.
+	 */
+	public static function get_pack_aware_cart_count( int $count ) : int {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return $count;
+		}
+
+		$cart_items = WC()->cart->get_cart();
+		if ( empty( $cart_items ) ) {
+			return 0;
+		}
+
+		$seen_groups = [];
+		$pack_count  = 0;
+
+		foreach ( $cart_items as $cart_item ) {
+			$group_id = 0;
+
+			// Get group ID from cart item meta
+			if ( isset( $cart_item[ Pack_Grouping::META_GROUP_ID ] ) ) {
+				$group_id = (int) $cart_item[ Pack_Grouping::META_GROUP_ID ];
+			}
+
+			if ( $group_id > 0 ) {
+				// Pack item: only count once per group
+				if ( ! isset( $seen_groups[ $group_id ] ) ) {
+					$seen_groups[ $group_id ] = true;
+					$pack_count++;
+				}
+			} else {
+				// Non-pack item: count normally
+				$pack_count++;
+			}
+		}
+
+		return $pack_count;
+	}
+
+	/* =========================================================
 	 * Product resolution
 	 * ========================================================= */
 

@@ -179,6 +179,9 @@ final class Plugin {
 		// ---- Cart display: add pack grouping classes to cart items (CSS-based grouping)
 		add_filter('woocommerce_cart_item_class', [ $this, 'woo_add_pack_classes_to_cart_item' ], 10, 3);
 
+		// ---- Cart display: pack-aware cart count (header badge shows packs, not line items)
+		add_filter('woocommerce_cart_contents_count', [ $this, 'woo_filter_cart_contents_count_as_packs' ], 20, 1);
+
 		// ---- Pack Grouping: atomic cart behavior for participation + rental
 		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
 			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
@@ -1728,6 +1731,22 @@ final class Plugin {
 		}
 
 		return $class;
+	}
+
+	/**
+	 * Filter cart contents count for pack-aware display.
+	 *
+	 * Shows number of packs (1 pack = 1) instead of line items so header
+	 * cart badge reflects participant count, not participation + rental lines.
+	 *
+	 * @param int $count Original cart item count.
+	 * @return int Pack-aware count.
+	 */
+	public function woo_filter_cart_contents_count_as_packs( $count ) {
+		if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo' ) ) {
+			return \TC_BF\Integrations\WooCommerce\Woo::get_pack_aware_cart_count( (int) $count );
+		}
+		return $count;
 	}
 
 	/**
