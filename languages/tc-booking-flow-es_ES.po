@@ -25,3 +25,94 @@ msgstr "Alquiler"
 
 msgid "Participation"
 msgstr "Participación"
+
+# Partner Portal translations
+msgid "Partner report"
+msgstr "Partner report"
+
+msgid "All partners"
+msgstr "Todos los socios"
+
+msgid "You do not have access to this page."
+msgstr "No tienes acceso a esta página."
+
+msgid "No partner code linked to your user."
+msgstr "No hay código de socio vinculado a tu usuario."
+
+msgid "Viewing partner:"
+msgstr "Viendo socio:"
+
+msgid "Code:"
+msgstr "Código:"
+
+msgid "Commission:"
+msgstr "Comisión:"
+
+msgid "Admin view: showing all partner-attributed orders."
+msgstr "Vista de administrador: mostrando todos los pedidos atribuidos a socios."
+
+msgid "Partner code:"
+msgstr "Código de socio:"
+
+msgid "This report shows orders attributed at checkout (ledger v2). Orders without partner attribution or older bookings may not appear."
+msgstr "Este informe muestra los pedidos atribuidos en el momento del pago (ledger v2). Los pedidos sin atribución de socio o reservas antiguas pueden no aparecer."
+
+msgid "No partner-attributed orders found."
+msgstr "No se encontraron pedidos atribuidos a socios."
+
+msgid "No orders found for this partner."
+msgstr "No se encontraron pedidos para este socio."
+
+msgid "Partner"
+msgstr "Socio"
+
+msgid "From"
+msgstr "Desde"
+
+msgid "To"
+msgstr "Hasta"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Filter"
+msgstr "Filtrar"
+
+msgid "Any"
+msgstr "Cualquiera"
+
+msgid "Order"
+msgstr "Pedido"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Products / Services"
+msgstr "Productos / Servicios"
+
+msgid "Client total"
+msgstr "Total cliente"
+
+msgid "Discount"
+msgstr "Descuento"
+
+msgid "Commission"
+msgstr "Comisión"
+
+msgid "(incl. tax)"
+msgstr "(IVA incl.)"
+
+msgid "(excl. tax)"
+msgstr "(IVA excl.)"
+
+msgid "Total payable commission"
+msgstr "Comisión total a pagar"
+
+msgid "%d of %d orders"
+msgstr "%d de %d pedidos"
+
+msgid "Payable statuses:"
+msgstr "Estados pagables:"
+
+msgid "Download CSV"
+msgstr "Descargar CSV"
