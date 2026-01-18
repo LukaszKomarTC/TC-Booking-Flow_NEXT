@@ -95,6 +95,10 @@ class Woo_OrderMeta {
 		}
 
 		$coupon_codes = $order->get_coupon_codes();
+
+		// Partner gate warning: check if logged-in user is a partner but their coupon is missing
+		self::maybe_add_partner_gate_note( $order, $coupon_codes );
+
 		if ( empty($coupon_codes) ) return;
 
 		$partner_user_id = 0;
@@ -290,5 +294,53 @@ class Woo_OrderMeta {
 	private static function money_round( float $v ) : float {
 		// tiny epsilon mitigates binary float artifacts like 19.999999 -> 20.00
 		return round($v + 1e-9, 2);
+	}
+
+	/**
+	 * Add order note if a logged-in partner user's coupon was not present at checkout.
+	 * This helps admins understand why partner attribution was skipped.
+	 *
+	 * @param \WC_Order $order        The order being processed
+	 * @param array     $coupon_codes Coupon codes applied to the order
+	 */
+	private static function maybe_add_partner_gate_note( \WC_Order $order, array $coupon_codes ) : void {
+
+		// Only check for logged-in users
+		$order_user_id = (int) $order->get_user_id();
+		if ( $order_user_id <= 0 ) return;
+
+		// Check if the order user has a partner code
+		$user_partner_code = (string) get_user_meta( $order_user_id, 'discount__code', true );
+		if ( $user_partner_code === '' ) return;
+
+		// Normalize the partner code for comparison
+		$user_partner_code_norm = function_exists( 'wc_format_coupon_code' )
+			? wc_format_coupon_code( $user_partner_code )
+			: strtolower( trim( $user_partner_code ) );
+
+		if ( $user_partner_code_norm === '' ) return;
+
+		// Normalize applied coupon codes
+		$applied_codes_norm = array_map( function( $code ) {
+			return function_exists( 'wc_format_coupon_code' )
+				? wc_format_coupon_code( (string) $code )
+				: strtolower( trim( (string) $code ) );
+		}, $coupon_codes );
+
+		// Check if partner's own coupon is among the applied coupons
+		if ( in_array( $user_partner_code_norm, $applied_codes_norm, true ) ) {
+			return; // Coupon is present, gate will pass normally
+		}
+
+		// Partner coupon not present — add admin note
+		$order->add_order_note(
+			sprintf(
+				/* translators: %s: partner coupon code */
+				__( 'Partner gate: coupon "%s" was not present at checkout; partner attribution skipped.', 'tc-booking-flow' ),
+				$user_partner_code_norm
+			),
+			0, // Not customer note
+			true // Added by system
+		);
 	}
 }
