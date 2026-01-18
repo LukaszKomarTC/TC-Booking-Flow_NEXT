@@ -205,6 +205,7 @@ final class Plugin {
 		add_action('woocommerce_payment_complete', [ $this, 'entry_state_mark_paid' ], 25, 1);
 		add_action('woocommerce_order_status_processing', [ $this, 'entry_state_mark_paid' ], 25, 2);
 		add_action('woocommerce_order_status_completed', [ $this, 'entry_state_mark_paid' ], 25, 2);
+		add_action('woocommerce_order_status_invoiced', [ $this, 'entry_state_mark_paid' ], 25, 2);
 
 		// ---- Entry State: handle failed/cancelled/refunded orders
 		add_action('woocommerce_order_status_failed', [ $this, 'entry_state_mark_payment_failed' ], 10, 2);
@@ -1876,8 +1877,8 @@ final class Plugin {
 			return;
 		}
 
-		// Only mark as paid if order is actually paid
-		if ( ! $order->is_paid() && ! in_array( $order->get_status(), [ 'processing', 'completed' ], true ) ) {
+		// Only mark as paid if order is actually paid (includes custom 'invoiced' status)
+		if ( ! $order->is_paid() && ! in_array( $order->get_status(), [ 'processing', 'completed', 'invoiced' ], true ) ) {
 			return;
 		}
 
