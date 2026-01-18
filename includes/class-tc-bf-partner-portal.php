@@ -34,10 +34,43 @@ final class Partner_Portal {
     const CSV_NONCE      = 'tcbf_partner_csv_nonce';
 
     /**
-     * Payable statuses for commission totals
-     * Only these statuses count toward partner payout
+     * Base payable statuses for commission totals (always available)
      */
-    const PAYABLE_STATUSES = [ 'processing', 'completed', 'invoiced' ];
+    const BASE_PAYABLE_STATUSES = [ 'processing', 'completed' ];
+
+    /**
+     * Check if the custom 'invoiced' status is registered on this site
+     */
+    private static function has_invoiced_status() : bool {
+        if ( ! function_exists( 'wc_get_order_statuses' ) ) {
+            return false;
+        }
+        return array_key_exists( 'wc-invoiced', wc_get_order_statuses() );
+    }
+
+    /**
+     * Get payable statuses (includes 'invoiced' only if it exists)
+     */
+    private static function get_payable_statuses() : array {
+        $statuses = self::BASE_PAYABLE_STATUSES;
+        if ( self::has_invoiced_status() ) {
+            $statuses[] = 'invoiced';
+        }
+        return $statuses;
+    }
+
+    /**
+     * Get all visible statuses for portal query
+     */
+    private static function get_visible_statuses() : array {
+        $statuses = [ 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ];
+        if ( self::has_invoiced_status() ) {
+            // Insert after 'completed'
+            $pos = array_search( 'completed', $statuses, true );
+            array_splice( $statuses, $pos + 1, 0, 'invoiced' );
+        }
+        return $statuses;
+    }
 
     public static function init() : void {
         // Register endpoint
@@ -98,7 +131,7 @@ final class Partner_Portal {
      */
     private static function is_payable_status( string $status ) : bool {
         $status = str_replace( 'wc-', '', $status );
-        return in_array( $status, self::PAYABLE_STATUSES, true );
+        return in_array( $status, self::get_payable_statuses(), true );
     }
 
     /**
@@ -154,8 +187,8 @@ final class Partner_Portal {
         if ( $status !== '' ) {
             $args['status'] = str_replace( 'wc-', '', $status );
         } else {
-            // All visible statuses (includes custom 'invoiced' status)
-            $args['status'] = [ 'pending', 'processing', 'on-hold', 'completed', 'invoiced', 'cancelled', 'refunded', 'failed' ];
+            // All visible statuses (includes 'invoiced' only if registered)
+            $args['status'] = self::get_visible_statuses();
         }
 
         return $args;
@@ -447,6 +480,11 @@ final class Partner_Portal {
         // Filter form
         self::render_filter_form( $date_from, $date_to, $status );
 
+        // v2-only note
+        echo '<p style="font-size:0.85em;color:#666;margin:0 0 12px;">';
+        echo esc_html__( 'This report shows orders attributed at checkout (ledger v2). Orders without partner attribution or older bookings may not appear.', TC_BF_TEXTDOMAIN );
+        echo '</p>';
+
         // Get orders via meta query
         $result = self::get_orders( $filters, $uid, $per_page, $paged );
         $orders = $result['orders'];
@@ -496,17 +534,22 @@ final class Partner_Portal {
      * Render filter form
      */
     private static function render_filter_form( string $date_from, string $date_to, string $status ) : void {
+        // Build status options dynamically (only include 'invoiced' if registered)
         $opts = [
             ''              => __( 'Any', TC_BF_TEXTDOMAIN ),
             'wc-pending'    => 'Pending',
             'wc-processing' => 'Processing',
             'wc-on-hold'    => 'On hold',
             'wc-completed'  => 'Completed',
-            'wc-invoiced'   => 'Invoiced',
-            'wc-cancelled'  => 'Cancelled',
-            'wc-refunded'   => 'Refunded',
-            'wc-failed'     => 'Failed',
         ];
+
+        if ( self::has_invoiced_status() ) {
+            $opts['wc-invoiced'] = 'Invoiced';
+        }
+
+        $opts['wc-cancelled'] = 'Cancelled';
+        $opts['wc-refunded']  = 'Refunded';
+        $opts['wc-failed']    = 'Failed';
 
         echo '<form method="get" action="' . esc_url( wc_get_account_endpoint_url( self::ENDPOINT ) ) . '" style="margin: 0 0 16px;">';
         echo '<label style="margin-right:12px;">' . esc_html__( 'From', TC_BF_TEXTDOMAIN ) . ' <input type="date" name="tc_from" value="' . esc_attr( $date_from ) . '" /></label>';
