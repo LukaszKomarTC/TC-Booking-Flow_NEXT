@@ -95,6 +95,10 @@ class Woo_OrderMeta {
 		}
 
 		$coupon_codes = $order->get_coupon_codes();
+
+		// Partner gate warning: check if logged-in user is a partner but their coupon is missing
+		self::maybe_add_partner_gate_note( $order, $coupon_codes );
+
 		if ( empty($coupon_codes) ) return;
 
 		$partner_user_id = 0;
@@ -290,5 +294,87 @@ class Woo_OrderMeta {
 	private static function money_round( float $v ) : float {
 		// tiny epsilon mitigates binary float artifacts like 19.999999 -> 20.00
 		return round($v + 1e-9, 2);
+	}
+
+	/**
+	 * Add order note ONLY when there's explicit partner intent but coupon is missing.
+	 *
+	 * Intent-based: only fires when admin explicitly selected a partner in the booking flow
+	 * (via _tcbf_partner_intent_id meta or session), NOT for every partner user placing orders.
+	 *
+	 * This prevents noise from:
+	 * - Partner users intentionally removing their coupon (opt-out by policy)
+	 * - Partner users placing unrelated orders
+	 * - Test checkouts without coupon
+	 *
+	 * @param \WC_Order $order        The order being processed
+	 * @param array     $coupon_codes Coupon codes applied to the order
+	 */
+	private static function maybe_add_partner_gate_note( \WC_Order $order, array $coupon_codes ) : void {
+
+		// Check for explicit partner intent marker
+		// This is set by admin booking flow when partner is explicitly selected
+		$intent_partner_id = 0;
+
+		// Check order meta for intent (set during admin order creation)
+		$meta_intent = $order->get_meta( '_tcbf_partner_intent_id', true );
+		if ( $meta_intent !== '' && (int) $meta_intent > 0 ) {
+			$intent_partner_id = (int) $meta_intent;
+		}
+
+		// Also check WC session for frontend flows with explicit partner context
+		if ( $intent_partner_id <= 0 && function_exists( 'WC' ) && WC() && WC()->session ) {
+			$session_intent = WC()->session->get( 'tcbf_partner_intent_id' );
+			if ( $session_intent !== null && (int) $session_intent > 0 ) {
+				$intent_partner_id = (int) $session_intent;
+				// Clear session after use
+				WC()->session->set( 'tcbf_partner_intent_id', null );
+			}
+		}
+
+		// No explicit intent — do not add note (this is normal behavior)
+		if ( $intent_partner_id <= 0 ) {
+			return;
+		}
+
+		// Intent exists — check if the intended partner's coupon is present
+		$intent_partner_code = (string) get_user_meta( $intent_partner_id, 'discount__code', true );
+		if ( $intent_partner_code === '' ) {
+			return; // Partner has no code configured, nothing to warn about
+		}
+
+		// Normalize the partner code for comparison
+		$intent_code_norm = function_exists( 'wc_format_coupon_code' )
+			? wc_format_coupon_code( $intent_partner_code )
+			: strtolower( trim( $intent_partner_code ) );
+
+		if ( $intent_code_norm === '' ) return;
+
+		// Normalize applied coupon codes
+		$applied_codes_norm = array_map( function( $code ) {
+			return function_exists( 'wc_format_coupon_code' )
+				? wc_format_coupon_code( (string) $code )
+				: strtolower( trim( (string) $code ) );
+		}, $coupon_codes );
+
+		// Check if intended partner's coupon is among the applied coupons
+		if ( in_array( $intent_code_norm, $applied_codes_norm, true ) ) {
+			return; // Coupon is present, gate will pass normally
+		}
+
+		// Intent existed but coupon missing — add admin warning note
+		$partner_user = get_userdata( $intent_partner_id );
+		$partner_name = $partner_user ? $partner_user->display_name : "ID #{$intent_partner_id}";
+
+		$order->add_order_note(
+			sprintf(
+				/* translators: 1: partner name, 2: partner coupon code */
+				__( 'Partner gate: partner "%1$s" was selected but coupon "%2$s" was not present at checkout; partner attribution skipped.', 'tc-booking-flow' ),
+				$partner_name,
+				$intent_code_norm
+			),
+			0, // Not customer note
+			true // Added by system
+		);
 	}
 }

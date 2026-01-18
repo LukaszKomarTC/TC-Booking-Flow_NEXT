@@ -390,9 +390,9 @@ final class Sc_Event_Extras {
                         }
 
                         // 3) If still potentially available, subtract booked qty (INCLUDING in-cart holds)
-                        if ( $available_qty > 0 && class_exists( 'WC_Bookings_Controller' ) ) {
+                        if ( $available_qty > 0 ) {
 
-                            $booking_ids = \WC_Bookings_Controller::get_bookings_in_date_range(
+                            $booking_ids = self::get_booking_ids_in_range_cached(
                                 $start_ts,
                                 $end_ts,
                                 (int) $resource->ID,
@@ -1707,5 +1707,62 @@ JS;
         );
 
         return $content;
+    }
+
+    /**
+     * Get booking IDs in date range with per-request cache
+     *
+     * Replaces deprecated WC_Bookings_Controller::get_bookings_in_date_range()
+     * with WC_Data_Store::load('booking')->get_bookings_in_date_range().
+     *
+     * Uses static cache to avoid repeated identical queries within same request
+     * (important for availability loops across products/resources).
+     *
+     * @param int  $start_ts        Start timestamp
+     * @param int  $end_ts          End timestamp
+     * @param int  $resource_id     Resource ID (0 for all)
+     * @param bool $include_in_cart Whether to include in-cart bookings
+     * @return array Booking IDs array
+     */
+    private static function get_booking_ids_in_range_cached( int $start_ts, int $end_ts, int $resource_id, bool $include_in_cart = true ) : array {
+        static $cache = [];
+
+        // Build cache key
+        $cache_key = "{$start_ts}|{$end_ts}|{$resource_id}|" . ( $include_in_cart ? '1' : '0' );
+
+        if ( isset( $cache[ $cache_key ] ) ) {
+            return $cache[ $cache_key ];
+        }
+
+        // Guard: WC_Data_Store must exist
+        if ( ! class_exists( 'WC_Data_Store' ) ) {
+            $cache[ $cache_key ] = [];
+            return [];
+        }
+
+        try {
+            $data_store = \WC_Data_Store::load( 'booking' );
+
+            // Guard: method must exist on datastore
+            if ( ! method_exists( $data_store, 'get_bookings_in_date_range' ) ) {
+                $cache[ $cache_key ] = [];
+                return [];
+            }
+
+            $booking_ids = $data_store->get_bookings_in_date_range( $start_ts, $end_ts, $resource_id, $include_in_cart );
+
+            // Ensure array return
+            if ( ! is_array( $booking_ids ) ) {
+                $booking_ids = [];
+            }
+
+            $cache[ $cache_key ] = $booking_ids;
+            return $booking_ids;
+
+        } catch ( \Exception $e ) {
+            // Datastore load failed (Bookings not active, etc.)
+            $cache[ $cache_key ] = [];
+            return [];
+        }
     }
 }
