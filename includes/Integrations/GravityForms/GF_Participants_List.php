@@ -17,6 +17,7 @@ use TC_BF\Domain\EventMeta;
  * - Settings are the authority (not shortcode attributes)
  * - CSS is properly enqueued (no inline wp_head output)
  * - Partner authorization uses canonical TCBF resolvers (PartnerResolver, EventMeta)
+ * - Partner "full view" is per-row, based on user ID ownership (not coupon code)
  *
  * @since 0.6.0
  */
@@ -47,8 +48,9 @@ final class GF_Participants_List {
 	/**
 	 * Option keys for plugin settings
 	 */
-	const OPT_PRIVACY_MODE   = 'tcbf_participants_privacy_mode';
-	const OPT_EVENT_UID_FIELD = 'tcbf_participants_event_uid_field_id';
+	const OPT_PRIVACY_MODE      = 'tcbf_participants_privacy_mode';
+	const OPT_EVENT_UID_FIELD   = 'tcbf_participants_event_uid_field_id';
+	const OPT_USER_ID_FIELD     = 'tcbf_participants_user_id_field_id';
 
 	/**
 	 * Privacy mode constants
@@ -97,9 +99,6 @@ final class GF_Participants_List {
 	 *
 	 * Usage: [tcbf_participants event_id="123"]
 	 *
-	 * Event UID is computed internally:
-	 * $event_uid = $event_id . '_' . get_post_meta($event_id, 'sc_event_date_time', true);
-	 *
 	 * @param array $atts Shortcode attributes
 	 * @return string HTML output
 	 */
@@ -127,35 +126,41 @@ final class GF_Participants_List {
 		$privacy_mode = self::get_privacy_mode();
 		$is_admin = self::is_admin_user();
 
-		// Get current user's partner context (canonical TCBF resolver)
-		$partner_context = self::get_current_partner_context();
+		// Check if partners are enabled for this event (canonical EventMeta)
+		$partners_enabled = self::partners_enabled_for_event( $event_id );
 
-		// Check if partner is authorized for this event (event-level check)
-		$is_partner_allowed = self::is_partner_allowed_for_event( $event_id, $partner_context );
-
-		// Single boolean: can view full data (unmasked + info status column)
-		$can_view_full = $is_admin || $is_partner_allowed;
-
-		// admin_only mode: hide list from public completely (but show to admin + authorized partner)
-		if ( $privacy_mode === self::PRIVACY_ADMIN_ONLY && ! $can_view_full ) {
-			return '';
-		}
+		// Check if current user is a partner user
+		$is_partner_user = $partners_enabled && self::is_partner_user();
 
 		// Query entries via GFAPI
 		$entries = self::query_participants( $event_uid );
+
+		// admin_only mode handling
+		if ( $privacy_mode === self::PRIVACY_ADMIN_ONLY && ! $is_admin ) {
+			// Partners can see the list if enabled + is partner user
+			if ( ! ( $partners_enabled && $is_partner_user ) ) {
+				return '';
+			}
+			// Partner viewing admin_only: check if they have any owned rows
+			// If no owned rows, hide the list entirely
+			$has_owned_rows = false;
+			foreach ( $entries as $entry ) {
+				if ( self::entry_owned_by_current_user( $entry ) ) {
+					$has_owned_rows = true;
+					break;
+				}
+			}
+			if ( ! $has_owned_rows ) {
+				return '';
+			}
+		}
 
 		if ( empty( $entries ) ) {
 			return self::render_empty_state();
 		}
 
-		// Determine if we should mask data
-		// - public_masked: mask unless can_view_full
-		// - full: never mask
-		// - admin_only: already blocked above if !can_view_full, so no masking here
-		$should_mask = ( $privacy_mode === self::PRIVACY_PUBLIC_MASKED && ! $can_view_full );
-
-		// Render the table (pass can_view_full to control Info status column)
-		return self::render_table( $entries, $should_mask, $can_view_full, $is_admin, $partner_context );
+		// Render the table with per-row masking
+		return self::render_table( $entries, $privacy_mode, $is_admin, $is_partner_user, $partners_enabled );
 	}
 
 	/**
@@ -249,14 +254,17 @@ final class GF_Participants_List {
 	/**
 	 * Render the participants table
 	 *
-	 * @param array $entries         GF entries
-	 * @param bool  $mask_data       Whether to mask sensitive data
-	 * @param bool  $can_view_full   Whether user can view full data (admin or authorized partner)
-	 * @param bool  $is_admin        Whether user is admin
-	 * @param array $partner_context Current user's partner context from PartnerResolver
+	 * @param array  $entries          GF entries
+	 * @param string $privacy_mode     Privacy mode setting
+	 * @param bool   $is_admin         Whether user is admin
+	 * @param bool   $is_partner_user  Whether user is a partner
+	 * @param bool   $partners_enabled Whether partners are enabled for this event
 	 * @return string HTML table
 	 */
-	private static function render_table( array $entries, bool $mask_data, bool $can_view_full = false, bool $is_admin = false, array $partner_context = [] ) : string {
+	private static function render_table( array $entries, string $privacy_mode, bool $is_admin, bool $is_partner_user, bool $partners_enabled ) : string {
+		// Determine if Info column should be shown (admin or partner user)
+		$show_info_column = $is_admin || $is_partner_user;
+
 		$html = '<div class="tcbf-participants-list">';
 		$html .= '<table class="tcbf-participants-table">';
 
@@ -272,7 +280,7 @@ final class GF_Participants_List {
 		$html .= '<th class="tcbf-col-status">' . esc_html__('Status', 'tc-booking-flow-next') . '</th>';
 
 		// Info status column (admin + partner only)
-		if ( $can_view_full ) {
+		if ( $show_info_column ) {
 			$html .= '<th class="tcbf-col-info">' . esc_html__('Info', 'tc-booking-flow-next') . '</th>';
 		}
 
@@ -284,7 +292,7 @@ final class GF_Participants_List {
 
 		foreach ( $entries as $entry ) {
 			$row_num++;
-			$html .= self::render_row( $entry, $row_num, $mask_data, $can_view_full, $is_admin, $partner_context );
+			$html .= self::render_row( $entry, $row_num, $privacy_mode, $is_admin, $is_partner_user, $partners_enabled, $show_info_column );
 		}
 
 		$html .= '</tbody>';
@@ -295,17 +303,18 @@ final class GF_Participants_List {
 	}
 
 	/**
-	 * Render a single table row
+	 * Render a single table row with per-row masking
 	 *
-	 * @param array $entry           GF entry
-	 * @param int   $row_num         Row number (1-indexed)
-	 * @param bool  $mask_data       Whether to mask sensitive data
-	 * @param bool  $can_view_full   Whether user can view full data (admin or authorized partner)
-	 * @param bool  $is_admin        Whether user is admin
-	 * @param array $partner_context Current user's partner context from PartnerResolver
+	 * @param array  $entry            GF entry
+	 * @param int    $row_num          Row number (1-indexed)
+	 * @param string $privacy_mode     Privacy mode setting
+	 * @param bool   $is_admin         Whether user is admin
+	 * @param bool   $is_partner_user  Whether user is a partner
+	 * @param bool   $partners_enabled Whether partners are enabled for this event
+	 * @param bool   $show_info_column Whether Info column is shown
 	 * @return string HTML row
 	 */
-	private static function render_row( array $entry, int $row_num, bool $mask_data, bool $can_view_full = false, bool $is_admin = false, array $partner_context = [] ) : string {
+	private static function render_row( array $entry, int $row_num, string $privacy_mode, bool $is_admin, bool $is_partner_user, bool $partners_enabled, bool $show_info_column ) : string {
 		// Extract field values safely
 		$first_name = self::get_field_value( $entry, 'first_name' );
 		$last_name  = self::get_field_value( $entry, 'last_name' );
@@ -315,25 +324,25 @@ final class GF_Participants_List {
 		$helmet     = self::get_field_value( $entry, 'helmet' );
 		$entry_id   = isset( $entry['id'] ) ? (int) $entry['id'] : 0;
 
-		// Determine row-level masking
-		// Admin sees all unmasked; partner sees only their entries unmasked
-		$row_mask_data = $mask_data;
-		if ( ! $is_admin && $can_view_full && ! empty( $partner_context['active'] ) ) {
-			// Partner viewing: check if this entry belongs to them
-			$entry_partner_code = self::get_entry_partner_code( $entry );
-			$current_partner_code = isset( $partner_context['code'] ) ? $partner_context['code'] : '';
+		// Determine ownership by user ID (not coupon code)
+		$is_owned = self::entry_owned_by_current_user( $entry );
 
-			if ( $entry_partner_code !== $current_partner_code ) {
-				// Not this partner's entry - apply masking
-				$row_mask_data = true;
-			}
+		// Per-row masking decision
+		// $row_can_view_full = admin OR (partners_enabled AND is_partner_user AND is_owned)
+		$row_can_view_full = $is_admin || ( $partners_enabled && $is_partner_user && $is_owned );
+
+		// privacy_mode=full always unmasked for everyone (existing behavior)
+		if ( $privacy_mode === self::PRIVACY_FULL ) {
+			$row_can_view_full = true;
 		}
 
+		$mask_data = ! $row_can_view_full;
+
 		// Format participant name (apply masking if needed)
-		$participant_name = self::format_participant_name( $first_name, $last_name, $row_mask_data );
+		$participant_name = self::format_participant_name( $first_name, $last_name, $mask_data );
 
 		// Format email (apply masking if needed)
-		$display_email = $row_mask_data ? self::mask_email( $email ) : $email;
+		$display_email = $mask_data ? self::mask_email( $email ) : $email;
 		if ( empty( $display_email ) ) {
 			$display_email = '—';
 		}
@@ -366,17 +375,15 @@ final class GF_Participants_List {
 		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr__('Status', 'tc-booking-flow-next') . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
 
 		// Info status column (admin + partner only)
-		if ( $can_view_full ) {
-			// Admin sees all info; partner only sees info for their own entries
-			$entry_partner_code = self::get_entry_partner_code( $entry );
-			$current_partner_code = isset( $partner_context['code'] ) ? $partner_context['code'] : '';
-			$show_info = $is_admin || ( ! empty( $partner_context['active'] ) && $entry_partner_code === $current_partner_code );
+		if ( $show_info_column ) {
+			// Admin sees all info; partner only sees info for their owned rows
+			$show_info_badge = $is_admin || $row_can_view_full;
 
-			if ( $show_info ) {
+			if ( $show_info_badge ) {
 				$info_status = self::get_notification_status( $entry_id );
 				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Info', 'tc-booking-flow-next') . '"><span class="tcbf-info-status tcbf-info-status--' . esc_attr( sanitize_html_class( $info_status['class'] ) ) . '">' . esc_html( $info_status['label'] ) . '</span></td>';
 			} else {
-				// Partner viewing another partner's entry - show "—"
+				// Partner viewing non-owned row - show "—" to avoid leaking operational timing
 				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Info', 'tc-booking-flow-next') . '">—</td>';
 			}
 		}
@@ -684,58 +691,18 @@ final class GF_Participants_List {
 	}
 
 	/* =========================================================
-	 * Partner Authorization (Canonical TCBF Resolvers)
+	 * Partner Authorization (User ID Ownership)
 	 * ========================================================= */
 
 	/**
-	 * Get current logged-in user's partner context via canonical PartnerResolver
+	 * Check if partners are enabled for this event
 	 *
-	 * Uses PartnerResolver::build_partner_context_from_code() which is the
-	 * canonical way to resolve partner identity in TCBF.
+	 * Wraps canonical EventMeta::event_partners_enabled().
 	 *
-	 * @return array Partner context array with 'active', 'code', etc. or ['active' => false]
+	 * @param int $event_id Event post ID
+	 * @return bool True if partners are enabled
 	 */
-	private static function get_current_partner_context() : array {
-		if ( ! is_user_logged_in() ) {
-			return [ 'active' => false ];
-		}
-
-		if ( ! class_exists( '\\TC_BF\\Domain\\PartnerResolver' ) ) {
-			return [ 'active' => false ];
-		}
-
-		$user_id = get_current_user_id();
-
-		// PartnerResolver uses 'discount__code' user meta as the canonical partner identifier
-		// We use the same approach here to maintain consistency
-		$code_raw = (string) get_user_meta( $user_id, 'discount__code', true );
-
-		if ( $code_raw === '' ) {
-			return [ 'active' => false ];
-		}
-
-		// Build context using canonical resolver
-		return PartnerResolver::build_partner_context_from_code( $code_raw, $user_id );
-	}
-
-	/**
-	 * Check if partner is authorized for this event (event-level check)
-	 *
-	 * Uses canonical TCBF resolvers:
-	 * - Partner must have active partner context (from PartnerResolver)
-	 * - Partners must be enabled for this event (from EventMeta)
-	 *
-	 * @param int   $event_id        Event post ID
-	 * @param array $partner_context Partner context from get_current_partner_context()
-	 * @return bool True if partner is authorized for this event
-	 */
-	private static function is_partner_allowed_for_event( int $event_id, array $partner_context ) : bool {
-		// Must have active partner context
-		if ( empty( $partner_context['active'] ) ) {
-			return false;
-		}
-
-		// Partners must be enabled for this event (canonical EventMeta check)
+	private static function partners_enabled_for_event( int $event_id ) : bool {
 		if ( ! class_exists( '\\TC_BF\\Domain\\EventMeta' ) ) {
 			return false;
 		}
@@ -744,38 +711,84 @@ final class GF_Participants_List {
 	}
 
 	/**
-	 * Get partner code from GF entry
+	 * Check if current user is a partner user
 	 *
-	 * Uses PartnerResolver::GF_FIELD_COUPON_CODE as the canonical field ID
-	 * (field 154 = manual/hidden coupon code input field).
+	 * Uses canonical partner detection via PartnerResolver.
+	 * A user is a partner if they have a valid discount__code that
+	 * resolves to an active partner context.
 	 *
-	 * @param array $entry GF entry
-	 * @return string Normalized partner code or empty
+	 * @return bool True if current user is a partner
 	 */
-	private static function get_entry_partner_code( array $entry ) : string {
-		// Use canonical field ID from PartnerResolver
-		$field_id = '154'; // PartnerResolver::GF_FIELD_COUPON_CODE
-		if ( class_exists( '\\TC_BF\\Domain\\PartnerResolver' ) && defined( '\\TC_BF\\Domain\\PartnerResolver::GF_FIELD_COUPON_CODE' ) ) {
-			$field_id = (string) PartnerResolver::GF_FIELD_COUPON_CODE;
+	private static function is_partner_user() : bool {
+		if ( ! is_user_logged_in() ) {
+			return false;
 		}
 
-		$code_raw = isset( $entry[ $field_id ] ) ? trim( (string) $entry[ $field_id ] ) : '';
+		if ( ! class_exists( '\\TC_BF\\Domain\\PartnerResolver' ) ) {
+			return false;
+		}
+
+		$user_id = get_current_user_id();
+
+		// Check if user has discount__code meta (canonical partner identifier)
+		$code_raw = (string) get_user_meta( $user_id, 'discount__code', true );
 
 		if ( $code_raw === '' ) {
-			return '';
+			return false;
 		}
 
-		// Normalize using canonical PartnerResolver method
-		if ( class_exists( '\\TC_BF\\Domain\\PartnerResolver' ) ) {
-			return PartnerResolver::normalize_partner_code( $code_raw );
+		// Build context to verify it's a valid/active partner
+		$context = PartnerResolver::build_partner_context_from_code( $code_raw, $user_id );
+
+		return ! empty( $context['active'] );
+	}
+
+	/**
+	 * Check if entry is owned by current user (by user ID)
+	 *
+	 * Ownership is determined strictly by WP user ID, not coupon code.
+	 *
+	 * Primary: GF native created_by field
+	 * Fallback: Hidden user ID field (if configured)
+	 *
+	 * @param array $entry GF entry
+	 * @return bool True if entry is owned by current user
+	 */
+	private static function entry_owned_by_current_user( array $entry ) : bool {
+		if ( ! is_user_logged_in() ) {
+			return false;
 		}
 
-		// Fallback: use WC coupon formatter if available
-		if ( function_exists( 'wc_format_coupon_code' ) ) {
-			return wc_format_coupon_code( $code_raw );
+		$current_uid = get_current_user_id();
+
+		// Primary: GF native created_by field
+		$created_by = isset( $entry['created_by'] ) ? (int) $entry['created_by'] : 0;
+		if ( $created_by > 0 ) {
+			return $created_by === $current_uid;
 		}
 
-		return strtolower( trim( $code_raw ) );
+		// Fallback: Hidden user ID field (if configured in settings)
+		$user_id_field = self::get_user_id_field_id();
+		if ( $user_id_field > 0 ) {
+			$field_value = isset( $entry[ (string) $user_id_field ] ) ? (int) $entry[ (string) $user_id_field ] : 0;
+			if ( $field_value > 0 ) {
+				return $field_value === $current_uid;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get the user ID field ID from settings
+	 *
+	 * Optional setting for fallback ownership detection when
+	 * GF created_by is empty (e.g., guest submissions with user ID stored in hidden field).
+	 *
+	 * @return int Field ID or 0 if not configured
+	 */
+	private static function get_user_id_field_id() : int {
+		return (int) get_option( self::OPT_USER_ID_FIELD, 0 );
 	}
 
 	/* =========================================================
