@@ -44,13 +44,17 @@ class GF_Participants_List {
 	 * @var array
 	 */
 	private static $field_map = [
-		'event_uid'  => 145,           // Event unique ID
-		'name'       => [
-			'first'  => '2.3',         // Participant first name
-			'last'   => '2.6',         // Participant family name
+		'event_uid'     => 145,        // Event unique ID
+		'name'          => [
+			'first'     => '2.3',      // Participant first name
+			'last'      => '2.6',      // Participant family name
 		],
-		'email'      => 21,            // Email
-		'phone'      => 123,           // Phone number
+		'email'         => 21,         // Email
+		'phone'         => 123,        // Phone number
+		'bike_road'     => 130,        // Road bike rental choice
+		'bike_mtb'      => 142,        // MTB rental choice
+		'bike_emtb'     => 143,        // E-MTB rental choice
+		'bike_gravel'   => 169,        // Gravel bike rental choice
 	];
 
 	/**
@@ -80,7 +84,6 @@ class GF_Participants_List {
 		$atts = shortcode_atts(
 			[
 				'event_id' => 0,
-				'privacy'  => '', // Optional override (usually empty)
 			],
 			$atts,
 			'tcbf_participants'
@@ -105,7 +108,7 @@ class GF_Participants_List {
 		}
 
 		// Get privacy mode (plugin settings are authority)
-		$privacy_mode = $this->get_privacy_mode( $atts['privacy'] );
+		$privacy_mode = $this->get_privacy_mode();
 
 		// Admin-only mode: hide list completely from non-admins
 		if ( $privacy_mode === self::PRIVACY_ADMIN_ONLY && ! $this->is_admin_user() ) {
@@ -153,27 +156,23 @@ class GF_Participants_List {
 	 * Get privacy mode (plugin settings are authority)
 	 *
 	 * Priority order:
-	 * 1. Shortcode override (if explicitly allowed)
-	 * 2. Plugin setting
-	 * 3. Fallback to public
+	 * 1. Plugin setting (tcbf_participants_privacy_mode)
+	 * 2. Filter override (for testing/staging)
+	 * 3. Fallback to public_masked
 	 *
-	 * @param string $override Optional shortcode override
 	 * @return string Privacy mode constant
 	 */
-	private function get_privacy_mode( $override = '' ) {
-		// Read from plugin settings (when Settings class exists)
-		$setting = self::PRIVACY_PUBLIC; // Default fallback
+	private function get_privacy_mode() {
+		// Read from plugin settings (default: public_masked per playbook)
+		$setting = get_option( 'tcbf_participants_privacy_mode', self::PRIVACY_PUBLIC_MASKED );
 
-		if ( class_exists( '\\TC_BF\\Admin\\Settings' ) ) {
-			$setting = get_option( 'tcbf_participants_privacy_mode', self::PRIVACY_PUBLIC );
-		}
-
-		// Allow filter override (for testing/staging)
+		// Allow filter override (for testing/staging environments)
 		$setting = apply_filters( 'tcbf_participants_privacy_mode', $setting );
 
-		// Shortcode override only if valid
-		if ( $override && in_array( $override, [ self::PRIVACY_PUBLIC, self::PRIVACY_PUBLIC_MASKED, self::PRIVACY_ADMIN_ONLY ], true ) ) {
-			$setting = $override;
+		// Validate setting value
+		$valid_modes = [ self::PRIVACY_PUBLIC, self::PRIVACY_PUBLIC_MASKED, self::PRIVACY_ADMIN_ONLY ];
+		if ( ! in_array( $setting, $valid_modes, true ) ) {
+			$setting = self::PRIVACY_PUBLIC_MASKED;
 		}
 
 		return $setting;

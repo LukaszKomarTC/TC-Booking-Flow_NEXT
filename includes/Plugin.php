@@ -31,6 +31,13 @@ final class Plugin {
 
 	private static $instance = null;
 
+	/**
+	 * Participants list integration (instantiated once)
+	 *
+	 * @var \TC_BF\Integrations\GravityForms\GF_Participants_List|null
+	 */
+	private $participants_list = null;
+
 	const GF_FORM_ID = 44;
 
 	// GF field IDs used in your form 44 export
@@ -174,12 +181,20 @@ final class Plugin {
 
 	/**
 	 * Register participants list shortcode [tcbf_participants]
+	 *
+	 * Instantiates GF_Participants_List once and stores as property.
 	 */
 	public function register_participants_shortcode() : void {
-		if ( ! class_exists( '\\TC_BF\\Integrations\\GravityForms\\GF_Participants_List' ) ) return;
+		if ( ! class_exists( '\\TC_BF\\Integrations\\GravityForms\\GF_Participants_List' ) ) {
+			return;
+		}
 
-		$instance = new \TC_BF\Integrations\GravityForms\GF_Participants_List();
-		add_shortcode( 'tcbf_participants', [ $instance, 'render_shortcode' ] );
+		// Instantiate once and store as property (per playbook requirement)
+		if ( null === $this->participants_list ) {
+			$this->participants_list = new \TC_BF\Integrations\GravityForms\GF_Participants_List();
+		}
+
+		add_shortcode( 'tcbf_participants', [ $this->participants_list, 'render_shortcode' ] );
 	}
 
 	/**
