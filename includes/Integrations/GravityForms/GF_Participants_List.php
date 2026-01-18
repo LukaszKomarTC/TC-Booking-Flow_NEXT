@@ -54,6 +54,16 @@ final class GF_Participants_List {
 	const PRIVACY_FULL          = 'full';
 
 	/**
+	 * GF field ID for partner coupon code (stored on entry)
+	 */
+	const GF_PARTNER_CODE_FIELD = 154;
+
+	/**
+	 * Entry meta key for notification ledger
+	 */
+	const META_NOTIF_LEDGER = 'tcbf_notif_ledger';
+
+	/**
 	 * Maximum rows to display (safety cap)
 	 */
 	const MAX_ROWS = 40;
@@ -114,27 +124,39 @@ final class GF_Participants_List {
 
 		$event_uid = $event_id . '_' . $date_time;
 
-		// Check privacy mode
+		// Check privacy mode and access levels
 		$privacy_mode = self::get_privacy_mode();
 		$is_admin = self::is_admin_user();
 
-		// admin_only mode: hide list from public completely
-		if ( $privacy_mode === self::PRIVACY_ADMIN_ONLY && ! $is_admin ) {
+		// Get current user's partner code (if logged in and is a partner)
+		$current_partner_code = self::get_current_user_partner_code();
+
+		// Query entries via GFAPI (needed to check partner ownership)
+		$entries = self::query_participants( $event_uid );
+
+		// Check if partner is authorized for ANY entry in this event
+		$is_partner_allowed = self::is_partner_allowed_for_entries( $entries, $current_partner_code );
+
+		// Single boolean: can view full data (unmasked + info status column)
+		$can_view_full = $is_admin || $is_partner_allowed;
+
+		// admin_only mode: hide list from public completely (but show to admin + authorized partner)
+		if ( $privacy_mode === self::PRIVACY_ADMIN_ONLY && ! $can_view_full ) {
 			return '';
 		}
-
-		// Query entries via GFAPI
-		$entries = self::query_participants( $event_uid );
 
 		if ( empty( $entries ) ) {
 			return self::render_empty_state();
 		}
 
 		// Determine if we should mask data
-		$should_mask = ( $privacy_mode === self::PRIVACY_PUBLIC_MASKED && ! $is_admin );
+		// - public_masked: mask unless can_view_full
+		// - full: never mask
+		// - admin_only: already blocked above if !can_view_full, so no masking here
+		$should_mask = ( $privacy_mode === self::PRIVACY_PUBLIC_MASKED && ! $can_view_full );
 
-		// Render the table
-		return self::render_table( $entries, $should_mask );
+		// Render the table (pass can_view_full to control Info status column)
+		return self::render_table( $entries, $should_mask, $can_view_full, $current_partner_code );
 	}
 
 	/**
@@ -228,11 +250,14 @@ final class GF_Participants_List {
 	/**
 	 * Render the participants table
 	 *
-	 * @param array $entries   GF entries
-	 * @param bool  $mask_data Whether to mask sensitive data
+	 * @param array  $entries              GF entries
+	 * @param bool   $mask_data            Whether to mask sensitive data
+	 * @param bool   $can_view_full        Whether user can view full data (admin or authorized partner)
+	 * @param string $current_partner_code Current user's partner code (for row-level partner access)
 	 * @return string HTML table
 	 */
-	private static function render_table( array $entries, bool $mask_data ) : string {
+	private static function render_table( array $entries, bool $mask_data, bool $can_view_full = false, string $current_partner_code = '' ) : string {
+		$is_admin = self::is_admin_user();
 		$html = '<div class="tcbf-participants-list">';
 		$html .= '<table class="tcbf-participants-table">';
 
@@ -246,6 +271,12 @@ final class GF_Participants_List {
 		$html .= '<th class="tcbf-col-helmet">' . esc_html__('Helmet', 'tc-booking-flow-next') . '</th>';
 		$html .= '<th class="tcbf-col-date">' . esc_html__('Signed up on', 'tc-booking-flow-next') . '</th>';
 		$html .= '<th class="tcbf-col-status">' . esc_html__('Status', 'tc-booking-flow-next') . '</th>';
+
+		// Info status column (admin + partner only)
+		if ( $can_view_full ) {
+			$html .= '<th class="tcbf-col-info">' . esc_html__('Info', 'tc-booking-flow-next') . '</th>';
+		}
+
 		$html .= '</tr></thead>';
 
 		// Table body
@@ -254,7 +285,7 @@ final class GF_Participants_List {
 
 		foreach ( $entries as $entry ) {
 			$row_num++;
-			$html .= self::render_row( $entry, $row_num, $mask_data );
+			$html .= self::render_row( $entry, $row_num, $mask_data, $can_view_full, $is_admin, $current_partner_code );
 		}
 
 		$html .= '</tbody>';
@@ -267,12 +298,15 @@ final class GF_Participants_List {
 	/**
 	 * Render a single table row
 	 *
-	 * @param array $entry     GF entry
-	 * @param int   $row_num   Row number (1-indexed)
-	 * @param bool  $mask_data Whether to mask sensitive data
+	 * @param array  $entry                GF entry
+	 * @param int    $row_num              Row number (1-indexed)
+	 * @param bool   $mask_data            Whether to mask sensitive data
+	 * @param bool   $can_view_full        Whether user can view full data (admin or authorized partner)
+	 * @param bool   $is_admin             Whether user is admin
+	 * @param string $current_partner_code Current user's partner code
 	 * @return string HTML row
 	 */
-	private static function render_row( array $entry, int $row_num, bool $mask_data ) : string {
+	private static function render_row( array $entry, int $row_num, bool $mask_data, bool $can_view_full = false, bool $is_admin = false, string $current_partner_code = '' ) : string {
 		// Extract field values safely
 		$first_name = self::get_field_value( $entry, 'first_name' );
 		$last_name  = self::get_field_value( $entry, 'last_name' );
@@ -280,12 +314,25 @@ final class GF_Participants_List {
 		$bike       = self::get_bicycle_value( $entry );
 		$pedals     = self::get_field_value( $entry, 'pedals' );
 		$helmet     = self::get_field_value( $entry, 'helmet' );
+		$entry_id   = isset( $entry['id'] ) ? (int) $entry['id'] : 0;
+
+		// For partners (non-admin), determine row-level visibility
+		// Partner can only see full data for entries with matching partner code
+		$row_mask_data = $mask_data;
+		if ( ! $is_admin && $can_view_full && $current_partner_code !== '' ) {
+			// Check if this entry's partner code matches
+			$entry_partner_code = self::get_entry_partner_code( $entry );
+			if ( $entry_partner_code !== $current_partner_code ) {
+				// Not this partner's entry - apply masking
+				$row_mask_data = true;
+			}
+		}
 
 		// Format participant name (apply masking if needed)
-		$participant_name = self::format_participant_name( $first_name, $last_name, $mask_data );
+		$participant_name = self::format_participant_name( $first_name, $last_name, $row_mask_data );
 
 		// Format email (apply masking if needed)
-		$display_email = $mask_data ? self::mask_email( $email ) : $email;
+		$display_email = $row_mask_data ? self::mask_email( $email ) : $email;
 		if ( empty( $display_email ) ) {
 			$display_email = '—';
 		}
@@ -304,7 +351,6 @@ final class GF_Participants_List {
 		$display_date = self::format_date( $date_created );
 
 		// Get status from tcbf_state meta (hardened access)
-		$entry_id = isset( $entry['id'] ) ? (int) $entry['id'] : 0;
 		$status = self::get_entry_status( $entry_id );
 
 		// Build row with data-label attributes for mobile
@@ -317,6 +363,20 @@ final class GF_Participants_List {
 		$html .= '<td class="tcbf-col-helmet" data-label="' . esc_attr__('Helmet', 'tc-booking-flow-next') . '">' . esc_html( $display_helmet ) . '</td>';
 		$html .= '<td class="tcbf-col-date" data-label="' . esc_attr__('Signed up on', 'tc-booking-flow-next') . '">' . esc_html( $display_date ) . '</td>';
 		$html .= '<td class="tcbf-col-status" data-label="' . esc_attr__('Status', 'tc-booking-flow-next') . '"><span class="tcbf-status tcbf-status--' . esc_attr( sanitize_html_class( $status['class'] ) ) . '">' . esc_html( $status['label'] ) . '</span></td>';
+
+		// Info status column (admin + partner only)
+		if ( $can_view_full ) {
+			// Admin sees all, partner only sees their own entries' info
+			$show_info = $is_admin || ( $current_partner_code !== '' && self::get_entry_partner_code( $entry ) === $current_partner_code );
+			if ( $show_info ) {
+				$info_status = self::get_notification_status( $entry_id );
+				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Info', 'tc-booking-flow-next') . '"><span class="tcbf-info-status tcbf-info-status--' . esc_attr( sanitize_html_class( $info_status['class'] ) ) . '">' . esc_html( $info_status['label'] ) . '</span></td>';
+			} else {
+				// Partner viewing another partner's entry - show "—"
+				$html .= '<td class="tcbf-col-info" data-label="' . esc_attr__('Info', 'tc-booking-flow-next') . '">—</td>';
+			}
+		}
+
 		$html .= '</tr>';
 
 		return $html;
@@ -617,5 +677,143 @@ final class GF_Participants_List {
 		}
 
 		return '<!-- TCBF Participants Debug: ' . esc_html( $message ) . ' -->';
+	}
+
+	/* =========================================================
+	 * Partner Authorization Helpers
+	 * ========================================================= */
+
+	/**
+	 * Get current logged-in user's partner code
+	 *
+	 * Returns empty string if not logged in or not a partner.
+	 *
+	 * @return string Normalized partner code or empty
+	 */
+	private static function get_current_user_partner_code() : string {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+
+		$user_id  = get_current_user_id();
+		$code_raw = (string) get_user_meta( $user_id, 'discount__code', true );
+
+		if ( $code_raw === '' ) {
+			return '';
+		}
+
+		// Normalize using PartnerResolver method if available
+		if ( class_exists( '\\TC_BF\\Domain\\PartnerResolver' ) ) {
+			return \TC_BF\Domain\PartnerResolver::normalize_partner_code( $code_raw );
+		}
+
+		// Fallback: use WC coupon formatter if available
+		if ( function_exists( 'wc_format_coupon_code' ) ) {
+			return wc_format_coupon_code( $code_raw );
+		}
+
+		return strtolower( trim( $code_raw ) );
+	}
+
+	/**
+	 * Check if partner is authorized for any entry in the list
+	 *
+	 * Partner is authorized if at least one entry has a matching partner code.
+	 *
+	 * @param array  $entries              GF entries
+	 * @param string $current_partner_code Current user's partner code
+	 * @return bool True if partner is authorized for at least one entry
+	 */
+	private static function is_partner_allowed_for_entries( array $entries, string $current_partner_code ) : bool {
+		if ( $current_partner_code === '' ) {
+			return false;
+		}
+
+		foreach ( $entries as $entry ) {
+			$entry_partner_code = self::get_entry_partner_code( $entry );
+			if ( $entry_partner_code === $current_partner_code ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get partner code from GF entry (field 154)
+	 *
+	 * @param array $entry GF entry
+	 * @return string Normalized partner code or empty
+	 */
+	private static function get_entry_partner_code( array $entry ) : string {
+		$field_id = (string) self::GF_PARTNER_CODE_FIELD;
+		$code_raw = isset( $entry[ $field_id ] ) ? trim( (string) $entry[ $field_id ] ) : '';
+
+		if ( $code_raw === '' ) {
+			return '';
+		}
+
+		// Normalize using PartnerResolver method if available
+		if ( class_exists( '\\TC_BF\\Domain\\PartnerResolver' ) ) {
+			return \TC_BF\Domain\PartnerResolver::normalize_partner_code( $code_raw );
+		}
+
+		// Fallback: use WC coupon formatter if available
+		if ( function_exists( 'wc_format_coupon_code' ) ) {
+			return wc_format_coupon_code( $code_raw );
+		}
+
+		return strtolower( trim( $code_raw ) );
+	}
+
+	/* =========================================================
+	 * Notification Status Helpers
+	 * ========================================================= */
+
+	/**
+	 * Get notification status from entry meta ledger
+	 *
+	 * Reads tcbf_notif_ledger meta and determines badge status.
+	 *
+	 * @param int $entry_id GF entry ID
+	 * @return array ['label' => string, 'class' => string]
+	 */
+	private static function get_notification_status( int $entry_id ) : array {
+		if ( $entry_id <= 0 || ! function_exists( 'gform_get_meta' ) ) {
+			return [ 'label' => __('Not sent', 'tc-booking-flow-next'), 'class' => 'not-sent' ];
+		}
+
+		$ledger = gform_get_meta( $entry_id, self::META_NOTIF_LEDGER );
+
+		// No ledger or empty ledger
+		if ( empty( $ledger ) || ! is_array( $ledger ) ) {
+			return [ 'label' => __('Not sent', 'tc-booking-flow-next'), 'class' => 'not-sent' ];
+		}
+
+		// Check if any notifications sent
+		$has_sent = ! empty( $ledger['sent'] ) && is_array( $ledger['sent'] );
+
+		// Check if any notifications failed
+		$has_failed = ! empty( $ledger['failed'] ) && is_array( $ledger['failed'] );
+
+		if ( $has_sent ) {
+			// Show "Sent" with optional date
+			$label = __('Sent', 'tc-booking-flow-next');
+			if ( isset( $ledger['last_at'] ) && $ledger['last_at'] !== '' ) {
+				$timestamp = strtotime( $ledger['last_at'] );
+				if ( $timestamp !== false ) {
+					$label .= ' ' . date_i18n( 'M j', $timestamp );
+				}
+			}
+			return [ 'label' => $label, 'class' => 'sent' ];
+		}
+
+		if ( $has_failed ) {
+			// Show "Failed" with optional date
+			$label = __('Failed', 'tc-booking-flow-next');
+			return [ 'label' => $label, 'class' => 'failed' ];
+		}
+
+		return [ 'label' => __('Not sent', 'tc-booking-flow-next'), 'class' => 'not-sent' ];
 	}
 }

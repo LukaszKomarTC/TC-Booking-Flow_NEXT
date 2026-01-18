@@ -17,6 +17,7 @@ require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Discount_Roundi
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_JS.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_View_Filters.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Participants_List.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Notifications_Ledger.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
@@ -139,6 +140,11 @@ final class Plugin {
 		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_Participants_List') ) {
 			\TC_BF\Integrations\GravityForms\GF_Participants_List::register();
 			add_action( 'wp_enqueue_scripts', [ \TC_BF\Integrations\GravityForms\GF_Participants_List::class, 'enqueue_assets' ], 20 );
+		}
+
+		// GF Notifications Ledger: track notification send/fail for participant info status
+		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_Notifications_Ledger') ) {
+			\TC_BF\Integrations\GravityForms\GF_Notifications_Ledger::init();
 		}
 
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);

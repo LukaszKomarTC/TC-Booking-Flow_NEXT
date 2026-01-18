@@ -157,6 +157,39 @@
 }
 
 /* ==========================================================================
+   Info Status Badges (Notification Status)
+   ========================================================================== */
+
+.tcbf-col-info {
+	min-width: 80px;
+}
+
+.tcbf-info-status {
+	display: inline-block;
+	padding: 3px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.tcbf-info-status--sent {
+	background: #d4edda;
+	color: #155724;
+}
+
+.tcbf-info-status--failed {
+	background: #f8d7da;
+	color: #721c24;
+}
+
+.tcbf-info-status--not-sent {
+	background: #fff3cd;
+	color: #856404;
+}
+
+/* ==========================================================================
    Empty State
    ========================================================================== */
 
@@ -258,6 +291,11 @@
 		background: #fafafa;
 	}
 
+	/* Info cell (admin/partner only) */
+	.tcbf-participants-table td.tcbf-col-info {
+		background: #fafafa;
+	}
+
 	/* Reset column widths */
 	.tcbf-col-number,
 	.tcbf-col-participant,
@@ -266,7 +304,8 @@
 	.tcbf-col-pedals,
 	.tcbf-col-helmet,
 	.tcbf-col-date,
-	.tcbf-col-status {
+	.tcbf-col-status,
+	.tcbf-col-info {
 		width: 100%;
 		min-width: 0;
 	}
@@ -301,7 +340,8 @@
 		background: none;
 	}
 
-	.tcbf-status {
+	.tcbf-status,
+	.tcbf-info-status {
 		border: 1px solid #000;
 		background: none !important;
 		color: #000 !important;
