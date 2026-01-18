@@ -355,9 +355,94 @@ final class GF_Participants_List {
 		foreach ( self::$bike_fields as $field_id ) {
 			$value = isset( $entry[ $field_id ] ) ? trim( (string) $entry[ $field_id ] ) : '';
 			if ( $value !== '' ) {
-				return $value;
+				return self::format_bicycle_value( $value );
 			}
 		}
+		return '';
+	}
+
+	/**
+	 * Format bicycle value for display
+	 *
+	 * Converts product_id_resource_id tokens (e.g., "47852_47865") into
+	 * human-readable labels like "Product Name — Resource Name".
+	 *
+	 * @param string $raw Raw bicycle value from GF
+	 * @return string Formatted display value
+	 */
+	private static function format_bicycle_value( string $raw ) : string {
+		$raw = trim( $raw );
+		if ( $raw === '' ) {
+			return '';
+		}
+
+		// Check for product_id_resource_id pattern (e.g., "47852_47865")
+		if ( preg_match( '/^(\d+)_(\d+)$/', $raw, $matches ) ) {
+			$product_id  = (int) $matches[1];
+			$resource_id = (int) $matches[2];
+
+			$product_name  = self::get_product_name( $product_id );
+			$resource_name = self::get_resource_name( $resource_id );
+
+			// Build display string based on what we have
+			if ( $product_name && $resource_name ) {
+				return $product_name . ' — ' . $resource_name;
+			} elseif ( $product_name ) {
+				return $product_name;
+			} elseif ( $resource_name ) {
+				return $resource_name;
+			}
+
+			// Fallback: return raw token if we couldn't resolve either
+			return $raw;
+		}
+
+		// Not a token pattern — return as-is (already human-readable)
+		return $raw;
+	}
+
+	/**
+	 * Get WooCommerce product name by ID
+	 *
+	 * @param int $product_id Product ID
+	 * @return string Product name or empty string
+	 */
+	private static function get_product_name( int $product_id ) : string {
+		if ( $product_id <= 0 || ! function_exists( 'wc_get_product' ) ) {
+			return '';
+		}
+
+		$product = wc_get_product( $product_id );
+		if ( ! $product ) {
+			return '';
+		}
+
+		return $product->get_name();
+	}
+
+	/**
+	 * Get resource name by ID (post title or term name)
+	 *
+	 * @param int $resource_id Resource ID (typically a post or term)
+	 * @return string Resource name or empty string
+	 */
+	private static function get_resource_name( int $resource_id ) : string {
+		if ( $resource_id <= 0 ) {
+			return '';
+		}
+
+		// Try as post first
+		$title = get_the_title( $resource_id );
+		if ( $title && $title !== '' ) {
+			return $title;
+		}
+
+		// Fallback: try as term (some booking systems store resources as terms)
+		$term = get_term( $resource_id );
+		if ( $term && ! is_wp_error( $term ) && isset( $term->name ) ) {
+			return $term->name;
+		}
+
 		return '';
 	}
 
@@ -465,6 +550,8 @@ final class GF_Participants_List {
 	/**
 	 * Get entry status from tcbf_state meta (hardened access)
 	 *
+	 * Maps all known entry states to human-readable labels and CSS classes.
+	 *
 	 * @param int $entry_id GF entry ID
 	 * @return array ['label' => string, 'class' => string]
 	 */
@@ -480,10 +567,28 @@ final class GF_Participants_List {
 		switch ( $state ) {
 			case \TC_BF\Domain\Entry_State::STATE_PAID:
 				return [ 'label' => __('Confirmed', 'tc-booking-flow-next'), 'class' => 'confirmed' ];
+
 			case \TC_BF\Domain\Entry_State::STATE_IN_CART:
 				return [ 'label' => __('In cart', 'tc-booking-flow-next'), 'class' => 'in-cart' ];
+
+			case \TC_BF\Domain\Entry_State::STATE_CREATED:
+				return [ 'label' => __('Created', 'tc-booking-flow-next'), 'class' => 'created' ];
+
+			case \TC_BF\Domain\Entry_State::STATE_REMOVED:
+				return [ 'label' => __('Removed', 'tc-booking-flow-next'), 'class' => 'removed' ];
+
+			case \TC_BF\Domain\Entry_State::STATE_EXPIRED:
+				return [ 'label' => __('Expired', 'tc-booking-flow-next'), 'class' => 'expired' ];
+
+			case \TC_BF\Domain\Entry_State::STATE_PAYMENT_FAILED:
+				return [ 'label' => __('Payment failed', 'tc-booking-flow-next'), 'class' => 'payment-failed' ];
+
 			case \TC_BF\Domain\Entry_State::STATE_CANCELLED:
 				return [ 'label' => __('Cancelled', 'tc-booking-flow-next'), 'class' => 'cancelled' ];
+
+			case \TC_BF\Domain\Entry_State::STATE_REFUNDED:
+				return [ 'label' => __('Refunded', 'tc-booking-flow-next'), 'class' => 'refunded' ];
+
 			default:
 				return [ 'label' => __('Unknown', 'tc-booking-flow-next'), 'class' => 'unknown' ];
 		}

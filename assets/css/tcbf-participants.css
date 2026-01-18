@@ -126,6 +126,31 @@
 	color: #721c24;
 }
 
+.tcbf-status--created {
+	background: #e7f3ff;
+	color: #0056b3;
+}
+
+.tcbf-status--removed {
+	background: #fce4ec;
+	color: #880e4f;
+}
+
+.tcbf-status--expired {
+	background: #fff8e1;
+	color: #ff6f00;
+}
+
+.tcbf-status--payment-failed {
+	background: #ffebee;
+	color: #c62828;
+}
+
+.tcbf-status--refunded {
+	background: #f3e5f5;
+	color: #6a1b9a;
+}
+
 .tcbf-status--unknown {
 	background: #e2e3e5;
 	color: #6c757d;
