@@ -1323,16 +1323,14 @@ final class Plugin {
 			echo "  font-weight: 600;\n";
 			echo "}\n";
 
-			echo "\n/* Desktop: remove pseudo-element that shifts child rows */\n";
-			echo "@media (min-width: 769px) {\n";
-			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child::before,\n";
-			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child:before {\n";
-			echo "    content: none !important;\n";
-			echo "    display: none !important;\n";
-			echo "  }\n";
-			echo "  .woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name {\n";
-			echo "    padding-left: 28px !important;\n";
-			echo "  }\n";
+			echo "\n/* Remove pseudo-element that shifts child rows in checkout (all screen sizes) */\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child::before,\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child:before {\n";
+			echo "  content: none !important;\n";
+			echo "  display: none !important;\n";
+			echo "}\n";
+			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name {\n";
+			echo "  padding-left: 28px !important;\n";
 			echo "}\n";
 
 			echo "\n/* Mobile responsive */\n";
