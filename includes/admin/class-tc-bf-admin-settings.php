@@ -15,6 +15,10 @@ final class Settings {
 	// TCBF-12: Partner program toggle default (enabled by default)
 	const OPT_PARTNERS_ENABLED_DEFAULT = 'tcbf_partners_enabled_default';
 
+	// TCBF Participants List settings
+	const OPT_PARTICIPANTS_PRIVACY_MODE   = 'tcbf_participants_privacy_mode';
+	const OPT_PARTICIPANTS_EVENT_UID_FIELD = 'tcbf_participants_event_uid_field_id';
+
 	public static function init() : void {
 		add_action('admin_menu', [__CLASS__, 'menu']);
 		add_action('admin_init', [__CLASS__, 'register_settings']);
@@ -208,6 +212,42 @@ final class Settings {
 					</tbody>
 				</table>
 
+				<h2 style="margin-top: 2em;"><?php echo esc_html__('Participants List', 'tc-booking-flow-next'); ?></h2>
+				<table class="form-table" role="presentation">
+					<tbody>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_PARTICIPANTS_PRIVACY_MODE); ?>"><?php echo esc_html__('Privacy Mode', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<?php $privacy_mode = get_option(self::OPT_PARTICIPANTS_PRIVACY_MODE, 'public_masked'); ?>
+								<select name="<?php echo esc_attr(self::OPT_PARTICIPANTS_PRIVACY_MODE); ?>" id="<?php echo esc_attr(self::OPT_PARTICIPANTS_PRIVACY_MODE); ?>">
+									<option value="public_masked" <?php selected($privacy_mode, 'public_masked'); ?>><?php echo esc_html__('Public (masked names/emails)', 'tc-booking-flow-next'); ?></option>
+									<option value="admin_only" <?php selected($privacy_mode, 'admin_only'); ?>><?php echo esc_html__('Admin only (hidden from public)', 'tc-booking-flow-next'); ?></option>
+									<option value="full" <?php selected($privacy_mode, 'full'); ?>><?php echo esc_html__('Full (show all data publicly)', 'tc-booking-flow-next'); ?></option>
+								</select>
+								<p class="description">
+									<?php echo esc_html__('Controls visibility of participant data. Admins (manage_options or manage_woocommerce) always see full data.', 'tc-booking-flow-next'); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_PARTICIPANTS_EVENT_UID_FIELD); ?>"><?php echo esc_html__('Event UID Field ID', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<input type="number" class="small-text" name="<?php echo esc_attr(self::OPT_PARTICIPANTS_EVENT_UID_FIELD); ?>" id="<?php echo esc_attr(self::OPT_PARTICIPANTS_EVENT_UID_FIELD); ?>" value="<?php echo esc_attr( (string) get_option(self::OPT_PARTICIPANTS_EVENT_UID_FIELD, 145) ); ?>" min="1" step="1" />
+								<p class="description">
+									<?php echo esc_html__('Gravity Forms field ID that stores the event unique identifier (default: 145).', 'tc-booking-flow-next'); ?>
+								</p>
+							</td>
+						</tr>
+
+					</tbody>
+				</table>
+
 				<?php submit_button(); ?>
 			</form>
 
@@ -285,6 +325,22 @@ final class Settings {
 			'type' => 'boolean',
 			'sanitize_callback' => function($v){ return (int)(!empty($v)); },
 			'default' => 1,
+		]);
+
+		// Participants List settings
+		register_setting('tc_bf_settings', self::OPT_PARTICIPANTS_PRIVACY_MODE, [
+			'type'              => 'string',
+			'sanitize_callback' => function($v){
+				$valid = ['public_masked', 'admin_only', 'full'];
+				return in_array($v, $valid, true) ? $v : 'public_masked';
+			},
+			'default'           => 'public_masked',
+		]);
+
+		register_setting('tc_bf_settings', self::OPT_PARTICIPANTS_EVENT_UID_FIELD, [
+			'type'              => 'integer',
+			'sanitize_callback' => function($v){ return max(1, absint($v)); },
+			'default'           => 145,
 		]);
 	}
 
