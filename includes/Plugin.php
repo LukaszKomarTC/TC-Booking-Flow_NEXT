@@ -1174,6 +1174,7 @@ final class Plugin {
 			echo "}\n";
 
 			echo "\n/* Notification badge (admin/partner only - operational indicator) */\n";
+			echo "/* Perfect circle approach: aspect-ratio + border-radius 50% + box-sizing */\n";
 			echo ".tcbf-notify-badge {\n";
 			echo "  display: inline-flex;\n";
 			echo "  align-items: center;\n";
@@ -1183,15 +1184,15 @@ final class Plugin {
 			echo "  padding: 5px;\n";
 			echo "  min-width: 22px;\n";
 			echo "  min-height: 22px;\n";
-			echo "  aspect-ratio: 1 / 1;\n";
-			echo "  border-radius: 50%;\n";
+			echo "  aspect-ratio: 1 / 1;\n";  /* Forces perfect square regardless of content */
+			echo "  border-radius: 50%;\n";    /* Makes square into perfect circle */
 			echo "  font-size: 13px;\n";
 			echo "  line-height: 1;\n";
 			echo "  font-weight: 700;\n";
 			echo "  border: 1px solid rgba(0, 0, 0, 0.15);\n";
 			echo "  opacity: 0.9;\n";
 			echo "  background: #f3f4f6;\n";
-			echo "  box-sizing: border-box;\n";
+			echo "  box-sizing: border-box;\n"; /* Padding included in dimensions */
 			echo "}\n";
 			echo "\n";
 			echo ".tcbf-notify-badge.is-yes {\n";
