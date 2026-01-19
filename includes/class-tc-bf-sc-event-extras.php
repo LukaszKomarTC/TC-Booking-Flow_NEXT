@@ -393,14 +393,14 @@ final class Sc_Event_Extras {
                         if ( $available_qty > 0 ) {
 
                             // [TCBF INVESTIGATION] STEP 1 - Log availability loop inputs
-                            error_log('[TCBF AV] prod_id=' . $prod_id
+                            self::tcbf_invest_log('AV', 'prod_id=' . $prod_id
                                 . ' post_type=' . get_post_type($prod_id)
                                 . ' wc_type=' . (wc_get_product($prod_id) ? wc_get_product($prod_id)->get_type() : 'n/a')
                             );
-                            error_log('[TCBF AV] resource_id=' . (int) $resource->ID
+                            self::tcbf_invest_log('AV', 'resource_id=' . (int) $resource->ID
                                 . ' post_type=' . get_post_type((int) $resource->ID)
                             );
-                            error_log('[TCBF AV] date_range=' . date('Y-m-d H:i', $start_ts) . ' to ' . date('Y-m-d H:i', $end_ts));
+                            self::tcbf_invest_log('AV', 'date_range=' . date('Y-m-d H:i', $start_ts) . ' to ' . date('Y-m-d H:i', $end_ts));
 
                             $booking_ids = self::get_booking_ids_in_range_cached(
                                 $start_ts,
@@ -1762,12 +1762,12 @@ JS;
             }
 
             // [TCBF INVESTIGATION] STEP 2 - Log wrapper inputs
-            error_log('[TCBF DS] start_ts=' . $start_ts . ' (' . date('Y-m-d H:i', $start_ts) . ')');
-            error_log('[TCBF DS] end_ts=' . $end_ts . ' (' . date('Y-m-d H:i', $end_ts) . ')');
-            error_log('[TCBF DS] product_id=' . $product_id
+            self::tcbf_invest_log('DS', 'start_ts=' . $start_ts . ' (' . date('Y-m-d H:i', $start_ts) . ')');
+            self::tcbf_invest_log('DS', 'end_ts=' . $end_ts . ' (' . date('Y-m-d H:i', $end_ts) . ')');
+            self::tcbf_invest_log('DS', 'product_id=' . $product_id
                 . ' wc_type=' . (wc_get_product($product_id) ? wc_get_product($product_id)->get_type() : 'n/a')
             );
-            error_log('[TCBF DS] resource_id=' . $resource_id
+            self::tcbf_invest_log('DS', 'resource_id=' . $resource_id
                 . ' post_type=' . get_post_type($resource_id)
             );
 
@@ -1784,20 +1784,20 @@ JS;
                     ],
                 ],
             ]);
-            error_log('[TCBF TRUTH] bookings_for_resource=' . count($truth)
+            self::tcbf_invest_log('TRUTH', 'bookings_for_resource=' . count($truth)
                 . ' sample_ids=' . implode(',', array_slice($truth, 0, 5))
             );
 
             // [TCBF INVESTIGATION] STEP 4 - Inspect one booking if exists
             if ( ! empty( $truth ) && class_exists( 'WC_Booking' ) ) {
                 $b = new \WC_Booking( $truth[0] );
-                error_log('[TCBF TRUTH] booking_id=' . $truth[0]);
-                error_log('[TCBF TRUTH] booking_product_id=' . $b->get_product_id() . ' vs passed_product_id=' . $product_id);
-                error_log('[TCBF TRUTH] booking_resource_id=' . $b->get_resource_id() . ' vs passed_resource_id=' . $resource_id);
-                error_log('[TCBF TRUTH] booking_start=' . $b->get_start() . ' (' . date('Y-m-d H:i', $b->get_start()) . ')');
-                error_log('[TCBF TRUTH] booking_end=' . $b->get_end() . ' (' . date('Y-m-d H:i', $b->get_end()) . ')');
-                error_log('[TCBF TRUTH] booking_status=' . $b->get_status());
-                error_log('[TCBF TRUTH] date_overlap? start_ts=' . $start_ts . ' <= booking_end=' . $b->get_end() . ' AND end_ts=' . $end_ts . ' >= booking_start=' . $b->get_start());
+                self::tcbf_invest_log('BOOKING', 'booking_id=' . $truth[0]);
+                self::tcbf_invest_log('BOOKING', 'booking_product_id=' . $b->get_product_id() . ' vs passed_product_id=' . $product_id);
+                self::tcbf_invest_log('BOOKING', 'booking_resource_id=' . $b->get_resource_id() . ' vs passed_resource_id=' . $resource_id);
+                self::tcbf_invest_log('BOOKING', 'booking_start=' . $b->get_start() . ' (' . date('Y-m-d H:i', $b->get_start()) . ')');
+                self::tcbf_invest_log('BOOKING', 'booking_end=' . $b->get_end() . ' (' . date('Y-m-d H:i', $b->get_end()) . ')');
+                self::tcbf_invest_log('BOOKING', 'booking_status=' . $b->get_status());
+                self::tcbf_invest_log('BOOKING', 'date_overlap? start_ts=' . $start_ts . ' <= booking_end=' . $b->get_end() . ' AND end_ts=' . $end_ts . ' >= booking_start=' . $b->get_start());
             }
 
             // New API: product_id as 3rd param, resource_ids array as 5th param
@@ -1805,9 +1805,9 @@ JS;
             $booking_ids  = $data_store->get_bookings_in_date_range( $start_ts, $end_ts, $product_id, $include_in_cart, $resource_ids );
 
             // [TCBF INVESTIGATION] STEP 2 continued - Log DS output
-            error_log('[TCBF DS] booking_ids_count=' . (is_array($booking_ids) ? count($booking_ids) : -1));
+            self::tcbf_invest_log('DS', 'booking_ids_count=' . (is_array($booking_ids) ? count($booking_ids) : -1));
             if ( ! empty( $booking_ids ) && is_array( $booking_ids ) ) {
-                error_log('[TCBF DS] sample_booking_id=' . $booking_ids[0]);
+                self::tcbf_invest_log('DS', 'sample_booking_id=' . $booking_ids[0]);
             }
 
             // Ensure array return
@@ -1822,6 +1822,30 @@ JS;
             // Datastore load failed (Bookings not active, etc.)
             $cache[ $cache_key ] = [];
             return [];
+        }
+    }
+
+    /**
+     * Temporary investigation logger for availability debugging.
+     *
+     * Logs to TCBF admin logging window (Settings → Logging) when:
+     * 1. Debug mode is enabled in plugin settings
+     * 2. Query param ?tcbf_debug_avail=1 is present
+     *
+     * All lines prefixed with [TCBF-AVAIL] for easy filtering.
+     *
+     * @param string $tag     Short tag: AV, DS, TRUTH, BOOKING
+     * @param string $message Log message
+     */
+    private static function tcbf_invest_log( string $tag, string $message ) : void {
+        // Gate: only log when query param is present
+        if ( ! isset( $_GET['tcbf_debug_avail'] ) || $_GET['tcbf_debug_avail'] !== '1' ) {
+            return;
+        }
+
+        // Use TCBF's existing logging system
+        if ( class_exists( '\\TC_BF\\Admin\\Settings' ) && method_exists( '\\TC_BF\\Admin\\Settings', 'append_log' ) ) {
+            \TC_BF\Admin\Settings::append_log( '[TCBF-AVAIL] [' . $tag . '] ' . $message );
         }
     }
 }
