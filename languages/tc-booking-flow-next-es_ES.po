@@ -162,9 +162,6 @@ msgstr "Precio del pack antes de EB"
 msgid "Pack price"
 msgstr "Precio del pack"
 
-msgid "Early booking discount"
-msgstr "Descuento reserva anticipada"
-
 msgid "Pack total"
 msgstr "Total del pack"
 
@@ -173,12 +170,6 @@ msgstr "Alquiler incluido en el pack"
 
 msgid "Booking date"
 msgstr "Fecha de la reserva"
-
-msgid "Event"
-msgstr "Evento"
-
-msgid "Bike"
-msgstr "Bicicleta"
 
 msgid "Own bike"
 msgstr "Propia"
