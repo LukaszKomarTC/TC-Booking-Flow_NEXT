@@ -182,3 +182,7 @@ msgstr "Bicicleta"
 
 msgid "Own bike"
 msgstr "Propia"
+
+# EB Badge (short form)
+msgid "EB discount"
+msgstr "Descuento EB"

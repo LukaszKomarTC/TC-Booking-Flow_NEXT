@@ -2032,12 +2032,18 @@ class Woo_OrderMeta {
 	private static function render_standalone_row( \WC_Order $order, array $record ) : void {
 		$item = $record['item'];
 
-		// Thumbnail: product thumb
-		$thumb_url = $record['product_thumb_url'];
+		// Thumbnail: event image (if has event) → product thumb
+		$thumb_url = '';
+		if ( $record['event_id'] > 0 ) {
+			$thumb_url = self::get_event_image_url( $record['event_id'] );
+		}
+		if ( $thumb_url === '' ) {
+			$thumb_url = $record['product_thumb_url'];
+		}
 
-		// Title: product name linked to product
+		// Title: product name linked to event or product
 		$title = $record['product_name'];
-		$title_url = $record['product_url'];
+		$title_url = $record['event_url'] ?: $record['product_url'];
 
 		// Price: use Woo formatted line subtotal
 		$price_html = $order->get_formatted_line_subtotal( $item );
@@ -2070,6 +2076,52 @@ class Woo_OrderMeta {
 			echo ' <span class="tcbf-qty">&times;&nbsp;' . esc_html( $qty ) . '</span>';
 		}
 		echo '</div>';
+
+		// EB badge (if applicable)
+		if ( $record['eb_eligible'] && $record['eb_amount'] > 0 ) {
+			echo '<div class="tcbf-eb-line">';
+			echo '<span class="tcbf-eb-badge">';
+			echo '<span class="tcbf-eb-icon">⏰</span>';
+			echo '<span class="tcbf-eb-pct">' . esc_html( round( $record['eb_pct'] ) ) . '%</span>';
+			echo '<span class="tcbf-eb-sep">|</span>';
+			echo '<span class="tcbf-eb-amt">' . wp_kses_post( wc_price( $record['eb_amount'] * $qty ) ) . '</span>';
+			echo '<span class="tcbf-eb-label">' . esc_html__( 'EB discount', TC_BF_TEXTDOMAIN ) . '</span>';
+			echo '</span>';
+			echo '</div>';
+		}
+
+		// Meta lines (booking date, event, size)
+		echo '<div class="tcbf-order-meta-lines">';
+
+		// Booking date
+		if ( $record['booking_date'] !== '' ) {
+			echo '<div class="tcbf-meta-line">';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Booking date', TC_BF_TEXTDOMAIN ) . ':</span>';
+			echo '<span class="tcbf-meta-value">' . esc_html( $record['booking_date'] ) . '</span>';
+			echo '</div>';
+		}
+
+		// Event link (if has event)
+		if ( $record['event_id'] > 0 && $record['event_title'] !== '' ) {
+			echo '<div class="tcbf-meta-line">';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Event', TC_BF_TEXTDOMAIN ) . ':</span>';
+			if ( $record['event_url'] ) {
+				echo '<a href="' . esc_url( $record['event_url'] ) . '" class="tcbf-meta-link">' . esc_html( $record['event_title'] ) . '</a>';
+			} else {
+				echo '<span class="tcbf-meta-value">' . esc_html( $record['event_title'] ) . '</span>';
+			}
+			echo '</div>';
+		}
+
+		// Size (for rental items)
+		if ( $record['size'] !== '' ) {
+			echo '<div class="tcbf-meta-line tcbf-talla-line">';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Size', TC_BF_TEXTDOMAIN ) . ':</span>';
+			echo '<span class="tcbf-talla-value">' . esc_html( $record['size'] ) . '</span>';
+			echo '</div>';
+		}
+
+		echo '</div>'; // .tcbf-order-meta-lines
 
 		echo '</div>'; // .tcbf-order-content
 
@@ -2351,11 +2403,9 @@ class Woo_OrderMeta {
 
 		/* Pack footer (totals) */
 		.tcbf-pack-footer {
-			margin-top: 12px;
 			padding: 12px 16px;
 			background: rgba(0, 0, 0, 0.02);
 			border-top: 1px solid rgba(0, 0, 0, 0.06);
-			border-radius: 0 0 6px 6px;
 		}
 		.tcbf-pack-footer-line {
 			display: flex;
