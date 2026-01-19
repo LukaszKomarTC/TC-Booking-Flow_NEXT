@@ -496,6 +496,43 @@ class Woo_OrderMeta {
 		return $formatted_meta;
 	}
 
+	/**
+	 * Filter order totals to hide generic Discount row on order page.
+	 *
+	 * We show partner discount in our enhanced blocks instead, avoiding duplication.
+	 * Only applies to order view (My Account / Thank You), not cart/checkout/emails.
+	 *
+	 * @param array $total_rows Array of total rows
+	 * @param \WC_Order $order The order
+	 * @param string $tax_display Tax display mode
+	 * @return array Filtered total rows
+	 */
+	public static function filter_order_totals_hide_discount( $total_rows, $order, $tax_display ) {
+		// Only filter on frontend order view (not admin, not emails)
+		if ( is_admin() && ! wp_doing_ajax() ) {
+			return $total_rows;
+		}
+
+		// Check if we're in an email context - don't filter emails
+		if ( doing_action( 'woocommerce_email_order_details' ) ||
+		     doing_action( 'woocommerce_email_before_order_table' ) ||
+		     doing_action( 'woocommerce_email_after_order_table' ) ) {
+			return $total_rows;
+		}
+
+		// Only filter if this is a booking order (has our enhanced blocks)
+		if ( ! self::is_booking_order( $order ) ) {
+			return $total_rows;
+		}
+
+		// Remove the discount row - we show it in our enhanced blocks
+		if ( isset( $total_rows['discount'] ) ) {
+			unset( $total_rows['discount'] );
+		}
+
+		return $total_rows;
+	}
+
 	/* =========================================================
 	 * Enhanced discount/commission blocks for order view
 	 * ========================================================= */
@@ -1207,7 +1244,7 @@ class Woo_OrderMeta {
 	 * @param string $size Image size (default: 'woocommerce_thumbnail')
 	 * @return string Image URL or empty string
 	 */
-	private static function get_event_image_url( int $event_id, string $size = 'woocommerce_thumbnail' ) : string {
+	public static function get_event_image_url( int $event_id, string $size = 'woocommerce_thumbnail' ) : string {
 		if ( $event_id <= 0 ) {
 			return '';
 		}
@@ -1372,6 +1409,7 @@ class Woo_OrderMeta {
 			'eb_eligible'       => $eb_eligible,
 			'eb_pct'            => $eb_pct,
 			'eb_amount'         => $eb_amount,
+			'eb_base'           => $eb_base,
 		];
 	}
 
@@ -1428,6 +1466,244 @@ class Woo_OrderMeta {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Calculate pack totals for a group of items.
+	 *
+	 * Uses meta-first approach: prefer stored EB snapshots, fallback to Woo line subtotals.
+	 * Labels defensively: "Pack price before EB" only if base is guaranteed from meta.
+	 *
+	 * @param \WC_Order $order The order object
+	 * @param array $group_items Array of item records in this group
+	 * @return array Pack totals data
+	 */
+	private static function calculate_pack_totals( \WC_Order $order, array $group_items ) : array {
+		$pack_eb_discount = 0.0;
+		$pack_base_price  = 0.0;
+		$has_eb           = false;
+		$base_from_meta   = true; // Track if we have authoritative base prices
+
+		// Tax display mode for order context
+		$inc_tax = ( 'incl' === get_option( 'woocommerce_tax_display_cart' ) );
+
+		foreach ( $group_items as $record ) {
+			$item = $record['item'];
+			$qty  = max( 1, (int) $item->get_quantity() );
+
+			// EB discount: use stored meta amount (per unit * qty)
+			if ( $record['eb_eligible'] && $record['eb_amount'] > 0 ) {
+				$pack_eb_discount += $record['eb_amount'] * $qty;
+				$has_eb = true;
+			}
+
+			// Base price: prefer stored _eb_base_price (per unit * qty)
+			if ( $record['eb_base'] > 0 ) {
+				$pack_base_price += $record['eb_base'] * $qty;
+			} else {
+				// Fallback to Woo line subtotal (before discounts)
+				$pack_base_price += (float) $order->get_line_subtotal( $item, $inc_tax );
+				$base_from_meta = false;
+			}
+		}
+
+		// Calculate pack total (after EB)
+		$pack_total = $pack_base_price - $pack_eb_discount;
+
+		// Determine safe label for base price
+		// Only say "before EB" if we have authoritative base from meta AND there is EB
+		$base_label = ( $base_from_meta && $has_eb )
+			? __( 'Pack price before EB', TC_BF_TEXTDOMAIN )
+			: __( 'Pack price', TC_BF_TEXTDOMAIN );
+
+		return [
+			'base_price'  => $pack_base_price,
+			'base_label'  => $base_label,
+			'eb_discount' => $pack_eb_discount,
+			'pack_total'  => $pack_total,
+			'has_eb'      => $has_eb,
+			'inc_tax'     => $inc_tax,
+		];
+	}
+
+	/**
+	 * Render pack pricing footer inside pack group.
+	 *
+	 * Shows: base price, EB discount (if applicable), pack total.
+	 *
+	 * @param array $pack_totals Pack totals from calculate_pack_totals()
+	 */
+	private static function render_pack_footer( array $pack_totals ) : void {
+		// Only show footer if there's EB or if explicitly requested
+		// For now, always show if EB exists; otherwise skip footer
+		if ( ! $pack_totals['has_eb'] ) {
+			return;
+		}
+
+		echo '<div class="tcbf-pack-footer">';
+
+		// Base price line
+		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
+		echo '<span class="tcbf-pack-footer-label">' . esc_html( $pack_totals['base_label'] ) . '</span>';
+		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $pack_totals['base_price'] ) ) . '</span>';
+		echo '</div>';
+
+		// EB discount line (only if has EB)
+		if ( $pack_totals['has_eb'] && $pack_totals['eb_discount'] > 0 ) {
+			echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">';
+			echo '<span class="tcbf-pack-footer-label">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</span>';
+			echo '<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-' . wp_kses_post( wc_price( $pack_totals['eb_discount'] ) ) . '</span>';
+			echo '</div>';
+		}
+
+		// Pack total line
+		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
+		echo '<span class="tcbf-pack-footer-label">' . esc_html__( 'Pack total', TC_BF_TEXTDOMAIN ) . '</span>';
+		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $pack_totals['pack_total'] ) ) . '</span>';
+		echo '</div>';
+
+		echo '</div>';
+	}
+
+	/**
+	 * Calculate pack totals for cart items.
+	 *
+	 * Public method for use in cart/checkout templates.
+	 *
+	 * @param array $cart_items Array of cart items in this pack group
+	 * @return array Pack totals data
+	 */
+	public static function calculate_cart_pack_totals( array $cart_items ) : array {
+		$pack_eb_discount = 0.0;
+		$pack_base_price  = 0.0;
+		$has_eb           = false;
+		$base_from_meta   = true;
+
+		foreach ( $cart_items as $cart_item ) {
+			$qty = max( 1, (int) $cart_item['quantity'] );
+
+			// EB discount from cart item data
+			$eb_eligible = isset( $cart_item['tcbf_eb_eligible'] ) ? (int) $cart_item['tcbf_eb_eligible'] : 0;
+			$eb_amount   = isset( $cart_item['tcbf_eb_amount'] ) ? (float) $cart_item['tcbf_eb_amount'] : 0.0;
+			$eb_base     = isset( $cart_item['tcbf_eb_base'] ) ? (float) $cart_item['tcbf_eb_base'] : 0.0;
+
+			if ( $eb_eligible && $eb_amount > 0 ) {
+				$pack_eb_discount += $eb_amount * $qty;
+				$has_eb = true;
+			}
+
+			// Base price from meta or line subtotal
+			if ( $eb_base > 0 ) {
+				$pack_base_price += $eb_base * $qty;
+			} else {
+				// Fallback to cart line subtotal
+				$pack_base_price += (float) $cart_item['line_subtotal'];
+				if ( 'incl' === get_option( 'woocommerce_tax_display_cart' ) ) {
+					$pack_base_price += (float) ( $cart_item['line_subtotal_tax'] ?? 0 );
+				}
+				$base_from_meta = false;
+			}
+		}
+
+		$pack_total = $pack_base_price - $pack_eb_discount;
+
+		$base_label = ( $base_from_meta && $has_eb )
+			? __( 'Pack price before EB', TC_BF_TEXTDOMAIN )
+			: __( 'Pack price', TC_BF_TEXTDOMAIN );
+
+		return [
+			'base_price'  => $pack_base_price,
+			'base_label'  => $base_label,
+			'eb_discount' => $pack_eb_discount,
+			'pack_total'  => $pack_total,
+			'has_eb'      => $has_eb,
+		];
+	}
+
+	/**
+	 * Group cart items by tc_group_id.
+	 *
+	 * @return array Grouped cart items: [ group_id => [ cart_key => cart_item, ... ], ... ]
+	 */
+	public static function group_cart_items() : array {
+		$cart = WC()->cart;
+		if ( ! $cart ) {
+			return [];
+		}
+
+		$groups = [];
+		$ungrouped = [];
+
+		foreach ( $cart->get_cart() as $cart_key => $cart_item ) {
+			$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+
+			if ( $group_id > 0 ) {
+				if ( ! isset( $groups[ $group_id ] ) ) {
+					$groups[ $group_id ] = [];
+				}
+				$groups[ $group_id ][ $cart_key ] = $cart_item;
+			} else {
+				$ungrouped[ $cart_key ] = $cart_item;
+			}
+		}
+
+		// Add ungrouped items as individual "groups" with key 0_n
+		$idx = 0;
+		foreach ( $ungrouped as $cart_key => $cart_item ) {
+			$groups[ '0_' . $idx ] = [ $cart_key => $cart_item ];
+			$idx++;
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * Check if cart item is a parent (participation/tour).
+	 *
+	 * @param array $cart_item Cart item data
+	 * @return bool True if parent
+	 */
+	public static function is_cart_item_parent( array $cart_item ) : bool {
+		$role = $cart_item['tc_group_role'] ?? '';
+		if ( $role === 'parent' ) {
+			return true;
+		}
+
+		$scope = $cart_item['tcbf_scope'] ?? ( $cart_item['_tc_scope'] ?? '' );
+		if ( $scope === 'participation' ) {
+			return true;
+		}
+
+		$event_id = isset( $cart_item['_event_id'] ) ? (int) $cart_item['_event_id'] : 0;
+		if ( $event_id > 0 && $scope !== 'rental' ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Render pack footer (public wrapper).
+	 *
+	 * @param array $pack_totals Pack totals data
+	 */
+	public static function output_pack_footer( array $pack_totals ) : void {
+		self::render_pack_footer( $pack_totals );
+	}
+
+	/**
+	 * Output pack styles for cart/checkout context.
+	 *
+	 * Outputs CSS once per page load.
+	 */
+	public static function output_pack_styles_once() : void {
+		static $output = false;
+		if ( $output ) {
+			return;
+		}
+		$output = true;
+
+		self::output_grouped_items_styles();
 	}
 
 	/**
@@ -1491,6 +1767,10 @@ class Woo_OrderMeta {
 		foreach ( $children as $child ) {
 			self::render_child_row( $order, $child );
 		}
+
+		// Calculate and render pack totals footer
+		$pack_totals = self::calculate_pack_totals( $order, $group_items );
+		self::render_pack_footer( $pack_totals );
 
 		// Close pack group container
 		echo '</div>';
@@ -1814,7 +2094,7 @@ class Woo_OrderMeta {
 
 		/* Theme color variable (inherits from theme or fallback) */
 		:root {
-			--tcbf-accent: var(--theme-primary-color, #434c00);
+			--tcbf-accent: var(--shopkeeper-accent, var(--theme-accent, var(--theme-primary-color, #434c00)));
 		}
 
 		/* Order items container */
@@ -2066,6 +2346,46 @@ class Woo_OrderMeta {
 		.tcbf-qty {
 			font-weight: 500;
 			color: #6b7280;
+			font-size: 14px;
+		}
+
+		/* Pack footer (totals) */
+		.tcbf-pack-footer {
+			margin-top: 12px;
+			padding: 12px 16px;
+			background: rgba(0, 0, 0, 0.02);
+			border-top: 1px solid rgba(0, 0, 0, 0.06);
+			border-radius: 0 0 6px 6px;
+		}
+		.tcbf-pack-footer-line {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 4px 0;
+			font-size: 13px;
+		}
+		.tcbf-pack-footer-label {
+			color: #6b7280;
+		}
+		.tcbf-pack-footer-value {
+			font-weight: 600;
+			color: #374151;
+		}
+		.tcbf-pack-footer-discount {
+			color: #059669;
+		}
+		.tcbf-pack-footer-total {
+			border-top: 1px solid rgba(0, 0, 0, 0.08);
+			margin-top: 6px;
+			padding-top: 8px;
+		}
+		.tcbf-pack-footer-total .tcbf-pack-footer-label {
+			font-weight: 600;
+			color: #374151;
+		}
+		.tcbf-pack-footer-total .tcbf-pack-footer-value {
+			font-weight: 700;
+			color: #111827;
 			font-size: 14px;
 		}
 
