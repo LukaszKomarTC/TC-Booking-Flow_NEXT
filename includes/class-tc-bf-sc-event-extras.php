@@ -1742,12 +1742,17 @@ JS;
         // Build cache key (includes product + resource for correct scoping)
         $cache_key = "{$start_ts}|{$end_ts}|{$product_id}|{$resource_id}|" . ( $include_in_cart ? '1' : '0' );
 
+        // [TCBF INVESTIGATION] Log wrapper entry
+        self::tcbf_invest_log('DS', 'ENTER cache_key=' . $cache_key);
+
         if ( isset( $cache[ $cache_key ] ) ) {
+            self::tcbf_invest_log('DS', 'CACHE_HIT returning ' . count($cache[ $cache_key ]) . ' ids');
             return $cache[ $cache_key ];
         }
 
         // Guard: WC_Data_Store must exist
         if ( ! class_exists( 'WC_Data_Store' ) ) {
+            self::tcbf_invest_log('DS', 'GUARD_FAIL: WC_Data_Store class not found');
             $cache[ $cache_key ] = [];
             return [];
         }
@@ -1757,6 +1762,7 @@ JS;
 
             // Guard: method must exist on datastore
             if ( ! method_exists( $data_store, 'get_bookings_in_date_range' ) ) {
+                self::tcbf_invest_log('DS', 'GUARD_FAIL: get_bookings_in_date_range method not found on ' . get_class($data_store));
                 $cache[ $cache_key ] = [];
                 return [];
             }
@@ -1820,6 +1826,7 @@ JS;
 
         } catch ( \Exception $e ) {
             // Datastore load failed (Bookings not active, etc.)
+            self::tcbf_invest_log('DS', 'EXCEPTION: ' . $e->getMessage());
             $cache[ $cache_key ] = [];
             return [];
         }
