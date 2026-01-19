@@ -651,4 +651,509 @@ class Woo_OrderMeta {
 		</style>
 		<?php
 	}
+
+	/* =========================================================
+	 * TCBF Summary Block (replaces Bookings "white patch")
+	 * ========================================================= */
+
+	/**
+	 * Render TCBF Summary block before order table.
+	 *
+	 * Shows clean booking summary with:
+	 * - Event title (linked to event page)
+	 * - Participant name
+	 * - Bike + size (if present)
+	 * - Booking date
+	 *
+	 * Only renders for orders containing booking items (detected by _event_id meta).
+	 *
+	 * @param \WC_Order $order The order object
+	 */
+	public static function render_order_summary_block( $order ) {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return;
+		}
+
+		// Collect booking items from order
+		$booking_items = self::get_booking_items_from_order( $order );
+
+		if ( empty( $booking_items ) ) {
+			return; // Not a booking order, leave Woo default alone
+		}
+
+		// Output styles
+		self::output_summary_styles();
+
+		echo '<div class="tcbf-order-summary">';
+		echo '<h3 class="tcbf-order-summary-heading">' . esc_html__( 'Booking Details', TC_BF_TEXTDOMAIN ) . '</h3>';
+
+		foreach ( $booking_items as $item_data ) {
+			self::render_single_booking_summary( $item_data );
+		}
+
+		echo '</div>';
+	}
+
+	/**
+	 * Render TCBF Summary block for emails.
+	 *
+	 * Same as order summary but with email-safe markup.
+	 *
+	 * @param \WC_Order $order The order object
+	 * @param bool $sent_to_admin Whether email is sent to admin
+	 * @param bool $plain_text Whether email is plain text
+	 * @param \WC_Email $email The email object (optional)
+	 */
+	public static function render_email_summary_block( $order, $sent_to_admin = false, $plain_text = false, $email = null ) {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return;
+		}
+
+		if ( $plain_text ) {
+			return; // Skip for plain text emails
+		}
+
+		// Collect booking items
+		$booking_items = self::get_booking_items_from_order( $order );
+
+		if ( empty( $booking_items ) ) {
+			return;
+		}
+
+		// Email-safe inline styles
+		echo '<div style="margin: 20px 0; padding: 16px 20px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa;">';
+		echo '<h3 style="margin: 0 0 12px; font-size: 16px; font-weight: 700;">' . esc_html__( 'Booking Details', TC_BF_TEXTDOMAIN ) . '</h3>';
+
+		foreach ( $booking_items as $item_data ) {
+			self::render_single_booking_summary_email( $item_data );
+		}
+
+		echo '</div>';
+	}
+
+	/**
+	 * Render enhanced blocks for emails (with visibility rules).
+	 *
+	 * @param \WC_Order $order The order object
+	 * @param bool $sent_to_admin Whether email is sent to admin
+	 * @param bool $plain_text Whether email is plain text
+	 * @param \WC_Email $email The email object (optional)
+	 */
+	public static function render_email_enhanced_blocks( $order, $sent_to_admin = false, $plain_text = false, $email = null ) {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return;
+		}
+
+		if ( $plain_text ) {
+			return;
+		}
+
+		// Detect if this is a customer email (conservative: anything not admin = customer)
+		$is_customer_email = true;
+		if ( $email && is_object( $email ) && property_exists( $email, 'id' ) ) {
+			$email_id = (string) $email->id;
+			// Admin emails typically have 'admin_' prefix or are 'new_order'
+			if ( strpos( $email_id, 'admin_' ) === 0 || $email_id === 'new_order' ) {
+				$is_customer_email = false;
+			}
+		}
+		// Also check sent_to_admin flag
+		if ( $sent_to_admin ) {
+			$is_customer_email = false;
+		}
+
+		$currency = $order->get_currency();
+
+		// === Early Booking Discount Block ===
+		$eb_amount = (float) $order->get_meta( 'early_booking_discount_amount', true );
+		if ( $eb_amount > 0 ) {
+			$eb_pct = (float) $order->get_meta( 'early_booking_discount_pct', true );
+			$eb_sub = $eb_pct > 0
+				? sprintf( __( '%s%% applied to your booking', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
+				: __( 'Applied to your booking', TC_BF_TEXTDOMAIN );
+
+			echo '<div style="margin: 14px 0; padding: 16px 20px; border-radius: 10px; background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%); display: flex; justify-content: space-between; align-items: center;">';
+			echo '<div style="color: #fff;"><strong style="font-size: 15px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</strong><br><span style="opacity: 0.9; font-size: 13px;">' . esc_html( $eb_sub ) . '</span></div>';
+			echo '<div style="color: #fff; font-weight: 800; font-size: 18px;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</div>';
+			echo '</div>';
+		}
+
+		// === Partner Discount Block ===
+		$partner_id = (int) $order->get_meta( 'partner_id', true );
+		if ( $partner_id > 0 ) {
+			$discount_total = (float) $order->get_discount_total() + (float) $order->get_discount_tax();
+			if ( $discount_total > 0 ) {
+				$partner_pct = (float) $order->get_meta( 'partner_discount_pct', true );
+				$partner_sub = $partner_pct > 0
+					? sprintf( __( '%s%% partner discount', TC_BF_TEXTDOMAIN ), number_format_i18n( $partner_pct, 0 ) )
+					: __( 'Partner discount applied', TC_BF_TEXTDOMAIN );
+
+				echo '<div style="margin: 14px 0; padding: 16px 20px; border-radius: 10px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; display: flex; justify-content: space-between; align-items: center;">';
+				echo '<div style="color: #111827;"><strong style="font-size: 15px;">' . esc_html__( 'Partner discount', TC_BF_TEXTDOMAIN ) . '</strong><br><span style="opacity: 0.9; font-size: 13px;">' . esc_html( $partner_sub ) . '</span></div>';
+				echo '<div style="color: #111827; font-weight: 800; font-size: 18px;">-' . wp_kses_post( strip_tags( wc_price( $discount_total, [ 'currency' => $currency ] ), '<span>' ) ) . '</div>';
+				echo '</div>';
+			}
+
+			// === Commission Block (ADMIN EMAIL ONLY - never for customers) ===
+			if ( ! $is_customer_email ) {
+				$commission = (float) $order->get_meta( 'partner_commission', true );
+				if ( $commission > 0 ) {
+					$commission_rate = (float) $order->get_meta( 'partner_commission_rate', true );
+					$comm_sub = $commission_rate > 0
+						? sprintf( __( '%s%% of base total', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
+						: __( 'Based on order total', TC_BF_TEXTDOMAIN );
+
+					echo '<div style="margin: 14px 0; padding: 16px 20px; border-radius: 10px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: 1px solid #c7d2fe; display: flex; justify-content: space-between; align-items: center;">';
+					echo '<div style="color: #111827;"><strong style="font-size: 15px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</strong><br><span style="opacity: 0.9; font-size: 13px;">' . esc_html( $comm_sub ) . '</span></div>';
+					echo '<div style="color: #111827; font-weight: 800; font-size: 18px;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</div>';
+					echo '</div>';
+				}
+			}
+		}
+	}
+
+	/**
+	 * Get booking items from order (items with _event_id meta).
+	 *
+	 * @param \WC_Order $order
+	 * @return array Array of item data arrays
+	 */
+	private static function get_booking_items_from_order( \WC_Order $order ) : array {
+		$booking_items = [];
+
+		foreach ( $order->get_items() as $item_id => $item ) {
+			if ( ! $item instanceof \WC_Order_Item_Product ) {
+				continue;
+			}
+
+			$event_id = (int) $item->get_meta( '_event_id', true );
+			if ( $event_id <= 0 ) {
+				// Also check without underscore
+				$event_id = (int) $item->get_meta( 'event_id', true );
+			}
+
+			if ( $event_id <= 0 ) {
+				continue; // Not a booking item
+			}
+
+			// Get event title
+			$event_title = (string) $item->get_meta( '_event_title', true );
+			if ( $event_title === '' ) {
+				$event_title = (string) $item->get_meta( 'event_title', true );
+			}
+			if ( $event_title === '' ) {
+				$event_title = get_the_title( $event_id );
+			}
+
+			// Get event URL
+			$event_url = get_permalink( $event_id );
+			if ( ! $event_url ) {
+				$product = $item->get_product();
+				$event_url = $product ? $product->get_permalink() : '';
+			}
+
+			// Get participant
+			$participant = (string) $item->get_meta( '_participant', true );
+			if ( $participant === '' ) {
+				$participant = (string) $item->get_meta( 'participant', true );
+			}
+
+			// Get bicycle
+			$bicycle = (string) $item->get_meta( '_bicycle', true );
+			if ( $bicycle === '' ) {
+				$bicycle = (string) $item->get_meta( 'bicycle', true );
+			}
+
+			// Get scope (participation vs rental)
+			$scope = (string) $item->get_meta( '_tc_scope', true );
+			if ( $scope === '' ) {
+				$scope = (string) $item->get_meta( 'tcbf_scope', true );
+			}
+
+			// Skip rental items (they're part of the pack, show only parent)
+			if ( $scope === 'rental' ) {
+				continue;
+			}
+
+			// Get booking date (if available via WooCommerce Bookings)
+			$booking_date = '';
+			if ( class_exists( 'WC_Booking_Data_Store' ) ) {
+				$booking_ids = \WC_Booking_Data_Store::get_booking_ids_from_order_item_id( $item_id );
+				if ( ! empty( $booking_ids ) ) {
+					$booking = new \WC_Booking( (int) $booking_ids[0] );
+					if ( $booking && $booking->get_start() ) {
+						$booking_date = date_i18n( get_option( 'date_format' ), $booking->get_start() );
+					}
+				}
+			}
+
+			// Get size from rental child (if exists)
+			$size = self::get_rental_size_for_pack( $order, $item );
+
+			$booking_items[] = [
+				'item_id'       => $item_id,
+				'event_id'      => $event_id,
+				'event_title'   => $event_title,
+				'event_url'     => $event_url,
+				'participant'   => $participant,
+				'bicycle'       => $bicycle,
+				'size'          => $size,
+				'booking_date'  => $booking_date,
+				'scope'         => $scope,
+			];
+		}
+
+		return $booking_items;
+	}
+
+	/**
+	 * Get rental size for a participation item's pack.
+	 *
+	 * @param \WC_Order $order
+	 * @param \WC_Order_Item_Product $parent_item
+	 * @return string Size (e.g., "M", "L", "XL") or empty
+	 */
+	private static function get_rental_size_for_pack( \WC_Order $order, \WC_Order_Item_Product $parent_item ) : string {
+		$parent_group_id = (int) $parent_item->get_meta( 'tc_group_id', true );
+		if ( $parent_group_id <= 0 ) {
+			return '';
+		}
+
+		// Find matching rental item in the same group
+		foreach ( $order->get_items() as $item_id => $item ) {
+			if ( ! $item instanceof \WC_Order_Item_Product ) {
+				continue;
+			}
+
+			$group_id = (int) $item->get_meta( 'tc_group_id', true );
+			$scope    = (string) $item->get_meta( '_tc_scope', true );
+			if ( $scope === '' ) {
+				$scope = (string) $item->get_meta( 'tcbf_scope', true );
+			}
+
+			if ( $group_id === $parent_group_id && $scope === 'rental' ) {
+				// Found rental child - get size from booking resource
+				if ( class_exists( 'WC_Booking_Data_Store' ) ) {
+					$booking_ids = \WC_Booking_Data_Store::get_booking_ids_from_order_item_id( $item_id );
+					if ( ! empty( $booking_ids ) ) {
+						$booking  = new \WC_Booking( (int) $booking_ids[0] );
+						$resource = $booking ? $booking->get_resource() : null;
+						if ( $resource && is_object( $resource ) ) {
+							$resource_name = $resource->get_name();
+							// Extract size token (S, M, L, XL, XXL)
+							if ( preg_match( '/\b(XXL|XL|[SMLX])\b/i', $resource_name, $matches ) ) {
+								return strtoupper( $matches[1] );
+							}
+							return $resource_name;
+						}
+					}
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Render a single booking summary card (frontend).
+	 *
+	 * @param array $item_data Booking item data
+	 */
+	private static function render_single_booking_summary( array $item_data ) : void {
+		echo '<div class="tcbf-summary-card">';
+
+		// Event title (linked)
+		if ( $item_data['event_title'] !== '' ) {
+			echo '<div class="tcbf-summary-row tcbf-summary-event">';
+			echo '<span class="tcbf-summary-label">' . esc_html__( 'Tour', TC_BF_TEXTDOMAIN ) . '</span>';
+			if ( $item_data['event_url'] ) {
+				echo '<a href="' . esc_url( $item_data['event_url'] ) . '" class="tcbf-summary-value tcbf-event-link">' . esc_html( $item_data['event_title'] ) . '</a>';
+			} else {
+				echo '<span class="tcbf-summary-value">' . esc_html( $item_data['event_title'] ) . '</span>';
+			}
+			echo '</div>';
+		}
+
+		// Date
+		if ( $item_data['booking_date'] !== '' ) {
+			echo '<div class="tcbf-summary-row">';
+			echo '<span class="tcbf-summary-label">' . esc_html__( 'Date', TC_BF_TEXTDOMAIN ) . '</span>';
+			echo '<span class="tcbf-summary-value">' . esc_html( $item_data['booking_date'] ) . '</span>';
+			echo '</div>';
+		}
+
+		// Participant
+		if ( $item_data['participant'] !== '' ) {
+			echo '<div class="tcbf-summary-row">';
+			echo '<span class="tcbf-summary-label">' . esc_html__( 'Participant', TC_BF_TEXTDOMAIN ) . '</span>';
+			echo '<span class="tcbf-summary-value">' . esc_html( $item_data['participant'] ) . '</span>';
+			echo '</div>';
+		}
+
+		// Bike + Size
+		if ( $item_data['bicycle'] !== '' ) {
+			echo '<div class="tcbf-summary-row">';
+			echo '<span class="tcbf-summary-label">' . esc_html__( 'Bike', TC_BF_TEXTDOMAIN ) . '</span>';
+			$bike_text = $item_data['bicycle'];
+			if ( $item_data['size'] !== '' ) {
+				$bike_text .= ' (' . __( 'Size', TC_BF_TEXTDOMAIN ) . ': ' . $item_data['size'] . ')';
+			}
+			echo '<span class="tcbf-summary-value">' . esc_html( $bike_text ) . '</span>';
+			echo '</div>';
+		} elseif ( $item_data['size'] !== '' ) {
+			// Size without bike name
+			echo '<div class="tcbf-summary-row">';
+			echo '<span class="tcbf-summary-label">' . esc_html__( 'Size', TC_BF_TEXTDOMAIN ) . '</span>';
+			echo '<span class="tcbf-summary-value">' . esc_html( $item_data['size'] ) . '</span>';
+			echo '</div>';
+		}
+
+		echo '</div>';
+	}
+
+	/**
+	 * Render a single booking summary for emails (inline styles).
+	 *
+	 * @param array $item_data Booking item data
+	 */
+	private static function render_single_booking_summary_email( array $item_data ) : void {
+		echo '<table style="width: 100%; border-collapse: collapse; margin-bottom: 10px;">';
+
+		// Event title
+		if ( $item_data['event_title'] !== '' ) {
+			echo '<tr>';
+			echo '<td style="padding: 4px 0; color: #6b7280; font-size: 13px; width: 100px;">' . esc_html__( 'Tour', TC_BF_TEXTDOMAIN ) . '</td>';
+			if ( $item_data['event_url'] ) {
+				echo '<td style="padding: 4px 0; font-weight: 600;"><a href="' . esc_url( $item_data['event_url'] ) . '" style="color: #3d61aa; text-decoration: none;">' . esc_html( $item_data['event_title'] ) . '</a></td>';
+			} else {
+				echo '<td style="padding: 4px 0; font-weight: 600;">' . esc_html( $item_data['event_title'] ) . '</td>';
+			}
+			echo '</tr>';
+		}
+
+		// Date
+		if ( $item_data['booking_date'] !== '' ) {
+			echo '<tr>';
+			echo '<td style="padding: 4px 0; color: #6b7280; font-size: 13px;">' . esc_html__( 'Date', TC_BF_TEXTDOMAIN ) . '</td>';
+			echo '<td style="padding: 4px 0;">' . esc_html( $item_data['booking_date'] ) . '</td>';
+			echo '</tr>';
+		}
+
+		// Participant
+		if ( $item_data['participant'] !== '' ) {
+			echo '<tr>';
+			echo '<td style="padding: 4px 0; color: #6b7280; font-size: 13px;">' . esc_html__( 'Participant', TC_BF_TEXTDOMAIN ) . '</td>';
+			echo '<td style="padding: 4px 0;">' . esc_html( $item_data['participant'] ) . '</td>';
+			echo '</tr>';
+		}
+
+		// Bike + Size
+		if ( $item_data['bicycle'] !== '' || $item_data['size'] !== '' ) {
+			echo '<tr>';
+			echo '<td style="padding: 4px 0; color: #6b7280; font-size: 13px;">' . esc_html__( 'Bike', TC_BF_TEXTDOMAIN ) . '</td>';
+			$bike_text = $item_data['bicycle'] !== '' ? $item_data['bicycle'] : '';
+			if ( $item_data['size'] !== '' ) {
+				$bike_text .= $bike_text !== '' ? ' (' . $item_data['size'] . ')' : $item_data['size'];
+			}
+			echo '<td style="padding: 4px 0;">' . esc_html( $bike_text ) . '</td>';
+			echo '</tr>';
+		}
+
+		echo '</table>';
+	}
+
+	/**
+	 * Output CSS styles for summary block (only once per page).
+	 */
+	private static function output_summary_styles() : void {
+		static $output = false;
+		if ( $output ) return;
+		$output = true;
+
+		?>
+		<style>
+		/* TCBF Order Summary Block */
+		.tcbf-order-summary {
+			margin: 0 0 24px;
+		}
+		.tcbf-order-summary-heading {
+			font-size: 18px;
+			font-weight: 700;
+			margin: 0 0 16px;
+		}
+		.tcbf-summary-card {
+			background: transparent;
+			border: 1px solid #e5e7eb;
+			border-radius: 10px;
+			padding: 16px 20px;
+			margin-bottom: 12px;
+		}
+		.tcbf-summary-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			padding: 6px 0;
+			border-bottom: 1px solid #f3f4f6;
+		}
+		.tcbf-summary-row:last-child {
+			border-bottom: none;
+		}
+		.tcbf-summary-label {
+			color: #6b7280;
+			font-size: 13px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			flex-shrink: 0;
+			margin-right: 16px;
+		}
+		.tcbf-summary-value {
+			font-weight: 500;
+			color: #111827;
+			text-align: right;
+		}
+		.tcbf-event-link {
+			color: #3d61aa;
+			text-decoration: none;
+		}
+		.tcbf-event-link:hover {
+			text-decoration: underline;
+		}
+		.tcbf-summary-event .tcbf-summary-value,
+		.tcbf-summary-event .tcbf-event-link {
+			font-weight: 700;
+			font-size: 15px;
+		}
+		</style>
+		<?php
+	}
+
+	/* =========================================================
+	 * Template Loader for Bookings Override
+	 * ========================================================= */
+
+	/**
+	 * Override WooCommerce Bookings template to suppress default booking display.
+	 *
+	 * Only intercepts booking-display.php - we replace it with an empty template
+	 * so our TCBF Summary block is the only booking UI shown.
+	 *
+	 * @param string $template Template path
+	 * @param string $template_name Template name
+	 * @param string $template_path Template path prefix
+	 * @return string Modified template path
+	 */
+	public static function locate_bookings_template( $template, $template_name, $template_path ) {
+		// Only intercept the specific Bookings order display template
+		if ( $template_name !== 'order/booking-display.php' ) {
+			return $template;
+		}
+
+		// Check if we have our override
+		$plugin_template = TC_BF_PATH . 'templates/woocommerce-bookings/' . $template_name;
+		if ( file_exists( $plugin_template ) ) {
+			return $plugin_template;
+		}
+
+		return $template;
+	}
 }

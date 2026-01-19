@@ -144,3 +144,13 @@ msgstr "%s%% del total base"
 
 msgid "Based on order total"
 msgstr "Basado en el total del pedido"
+
+# TCBF Order Summary Block
+msgid "Booking Details"
+msgstr "Detalles de la reserva"
+
+msgid "Tour"
+msgstr "Tour"
+
+msgid "Size"
+msgstr "Talla"
