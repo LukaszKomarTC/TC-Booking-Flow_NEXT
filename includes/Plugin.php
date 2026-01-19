@@ -1194,10 +1194,7 @@ final class Plugin {
 			echo "}\n";
 			echo ".tcbf-pack-footer--cart {\n";
 			echo "  background: rgba(0, 0, 0, 0.02);\n";
-			echo "  border: 1px solid rgba(0, 0, 0, 0.06);\n";
-			echo "  border-radius: 6px;\n";
 			echo "  padding: 10px 14px;\n";
-			echo "  margin-left: 3px;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-line {\n";
 			echo "  display: flex;\n";
