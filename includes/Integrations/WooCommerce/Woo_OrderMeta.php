@@ -1582,10 +1582,21 @@ class Woo_OrderMeta {
 		foreach ( $cart_items as $cart_item ) {
 			$qty = max( 1, (int) $cart_item['quantity'] );
 
-			// EB discount from cart item data
-			$eb_eligible = isset( $cart_item['tcbf_eb_eligible'] ) ? (int) $cart_item['tcbf_eb_eligible'] : 0;
-			$eb_amount   = isset( $cart_item['tcbf_eb_amount'] ) ? (float) $cart_item['tcbf_eb_amount'] : 0.0;
-			$eb_base     = isset( $cart_item['tcbf_eb_base'] ) ? (float) $cart_item['tcbf_eb_base'] : 0.0;
+			// EB data is stored in $cart_item['booking'] array
+			$booking = isset( $cart_item['booking'] ) && is_array( $cart_item['booking'] )
+				? $cart_item['booking']
+				: [];
+
+			// EB discount from booking data (keys match Plugin constants)
+			$eb_eligible = ! empty( $booking['_eb_eligible'] ) ? 1 : 0;
+			$eb_amount   = isset( $booking['_eb_amount'] ) ? (float) $booking['_eb_amount'] : 0.0;
+			$eb_base     = isset( $booking['_eb_base_price'] ) ? (float) $booking['_eb_base_price'] : 0.0;
+			$eb_pct      = isset( $booking['_eb_pct'] ) ? (float) $booking['_eb_pct'] : 0.0;
+
+			// If we have percentage but no amount, calculate it
+			if ( $eb_eligible && $eb_pct > 0 && $eb_amount <= 0 && $eb_base > 0 ) {
+				$eb_amount = round( $eb_base * ( $eb_pct / 100 ), 2 );
+			}
 
 			if ( $eb_eligible && $eb_amount > 0 ) {
 				$pack_eb_discount += $eb_amount * $qty;
