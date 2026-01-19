@@ -40,7 +40,10 @@ require_once TC_BF_PATH . 'includes/Domain/EventMeta.php';
 require_once TC_BF_PATH . 'includes/Admin/Admin_Event_Meta.php';
 
 add_action('plugins_loaded', function () {
-	load_plugin_textdomain( TC_BF_TEXTDOMAIN, false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	// Load translations using absolute path (more reliable across different folder names)
+	$locale = determine_locale();
+	$mofile = TC_BF_PATH . 'languages/' . TC_BF_TEXTDOMAIN . '-' . $locale . '.mo';
+	load_textdomain( TC_BF_TEXTDOMAIN, $mofile );
 	\TC_BF\Plugin::instance();
 	\TC_BF\Sc_Event_Extras::init();
 	\TC_BF\Partner_Portal::init();
