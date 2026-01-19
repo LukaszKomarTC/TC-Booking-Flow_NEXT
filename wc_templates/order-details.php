@@ -14,6 +14,11 @@
  * @package WooCommerce\Templates
  * @version 10.1.0
  *
+ * TCBF Customization:
+ * - Detects booking orders (items with _event_id or tc_group_id)
+ * - Uses grouped parent/child renderer for booking orders
+ * - Falls back to standard Woo loop for non-booking orders
+ *
  * @var bool $show_downloads Controls whether the downloads table should be rendered.
  */
 
@@ -50,94 +55,159 @@ if ( $show_downloads ) {
 		)
 	);
 }
+
+/**
+ * TCBF: Detect if this is a booking order (has _event_id or tc_group_id on any item).
+ * If yes, use our grouped renderer. Otherwise, use standard Woo table.
+ */
+$is_tcbf_booking_order = class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_OrderMeta' )
+	&& \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::is_booking_order( $order );
 ?>
 <section class="woocommerce-order-details">
 	<?php do_action( 'woocommerce_order_details_before_order_table', $order ); ?>
 
 	<h2 class="woocommerce-order-details__title"><?php esc_html_e( 'Order details', 'woocommerce' ); ?></h2>
 
-	<table class="woocommerce-table woocommerce-table--order-details shop_table order_details">
-
-		<thead>
-			<tr>
-				<th class="woocommerce-table__product-name product-name"><?php esc_html_e( 'Product', 'woocommerce' ); ?></th>
-				<th class="woocommerce-table__product-table product-total"><?php esc_html_e( 'Total', 'woocommerce' ); ?></th>
-			</tr>
-		</thead>
-
-		<tbody>
-			<?php
-			do_action( 'woocommerce_order_details_before_order_table_items', $order );
-
-			foreach ( $order_items as $item_id => $item ) {
-				$product = $item->get_product();
-
-				wc_get_template(
-					'order/order-details-item.php',
-					array(
-						'order'              => $order,
-						'item_id'            => $item_id,
-						'item'               => $item,
-						'show_purchase_note' => $show_purchase_note,
-						'purchase_note'      => $product ? $product->get_purchase_note() : '',
-						'product'            => $product,
-					)
-				);
-			}
-
-			do_action( 'woocommerce_order_details_after_order_table_items', $order );
-			?>
-		</tbody>
-
+	<?php if ( $is_tcbf_booking_order ) : ?>
 		<?php
-		if ( ! empty( $actions ) ) :
-			?>
-		<tfoot>
-			<tr>
-				<th class="order-actions--heading"><?php esc_html_e( 'Actions', 'woocommerce' ); ?>:</th>
-				<td>
+		// TCBF grouped renderer (cart-like parent/child display)
+		do_action( 'woocommerce_order_details_before_order_table_items', $order );
+
+		\TC_BF\Integrations\WooCommerce\Woo_OrderMeta::render_grouped_order_items_table( $order );
+
+		do_action( 'woocommerce_order_details_after_order_table_items', $order );
+		?>
+
+		<!-- Totals table for booking orders -->
+		<table class="woocommerce-table woocommerce-table--order-details shop_table order_details tcbf-totals-table">
+			<?php if ( ! empty( $actions ) ) : ?>
+			<tfoot>
+				<tr>
+					<th class="order-actions--heading"><?php esc_html_e( 'Actions', 'woocommerce' ); ?>:</th>
+					<td>
 						<?php
 						$wp_button_class = wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . wc_wp_theme_get_element_class_name( 'button' ) : '';
 						foreach ( $actions as $key => $action ) { // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 							if ( empty( $action['aria-label'] ) ) {
-								// Generate the aria-label based on the action name.
-								/* translators: %1$s Action name, %2$s Order number. */
 								$action_aria_label = sprintf( __( '%1$s order number %2$s', 'woocommerce' ), $action['name'], $order->get_order_number() );
 							} else {
 								$action_aria_label = $action['aria-label'];
 							}
-								echo '<a href="' . esc_url( $action['url'] ) . '" class="woocommerce-button' . esc_attr( $wp_button_class ) . ' button ' . sanitize_html_class( $key ) . ' order-actions-button " aria-label="' . esc_attr( $action_aria_label ) . '">' . esc_html( $action['name'] ) . '</a>';
-								unset( $action_aria_label );
+							echo '<a href="' . esc_url( $action['url'] ) . '" class="woocommerce-button' . esc_attr( $wp_button_class ) . ' button ' . sanitize_html_class( $key ) . ' order-actions-button " aria-label="' . esc_attr( $action_aria_label ) . '">' . esc_html( $action['name'] ) . '</a>';
+							unset( $action_aria_label );
 						}
 						?>
 					</td>
 				</tr>
 			</tfoot>
-			<?php endif ?>
-		<tfoot>
-			<?php
-			foreach ( $order->get_order_item_totals() as $key => $total ) {
-				?>
+			<?php endif; ?>
+			<tfoot>
+				<?php
+				foreach ( $order->get_order_item_totals() as $key => $total ) {
+					?>
 					<tr>
 						<th scope="row"><?php echo esc_html( $total['label'] ); ?></th>
 						<td><?php echo wp_kses_post( $total['value'] ); ?></td>
 					</tr>
 					<?php
-			}
-			?>
-			<?php if ( $order->get_customer_note() ) : ?>
+				}
+				?>
+				<?php if ( $order->get_customer_note() ) : ?>
+					<tr>
+						<th><?php esc_html_e( 'Note:', 'woocommerce' ); ?></th>
+						<td>
+						<?php
+						$customer_note = wc_wptexturize_order_note( $order->get_customer_note() );
+						echo wp_kses( nl2br( $customer_note ), array( 'br' => array() ) );
+						?>
+						</td>
+					</tr>
+				<?php endif; ?>
+			</tfoot>
+		</table>
+
+	<?php else : ?>
+		<!-- Standard WooCommerce table for non-booking orders -->
+		<table class="woocommerce-table woocommerce-table--order-details shop_table order_details">
+
+			<thead>
 				<tr>
-					<th><?php esc_html_e( 'Note:', 'woocommerce' ); ?></th>
+					<th class="woocommerce-table__product-name product-name"><?php esc_html_e( 'Product', 'woocommerce' ); ?></th>
+					<th class="woocommerce-table__product-table product-total"><?php esc_html_e( 'Total', 'woocommerce' ); ?></th>
+				</tr>
+			</thead>
+
+			<tbody>
+				<?php
+				do_action( 'woocommerce_order_details_before_order_table_items', $order );
+
+				foreach ( $order_items as $item_id => $item ) {
+					$product = $item->get_product();
+
+					wc_get_template(
+						'order/order-details-item.php',
+						array(
+							'order'              => $order,
+							'item_id'            => $item_id,
+							'item'               => $item,
+							'show_purchase_note' => $show_purchase_note,
+							'purchase_note'      => $product ? $product->get_purchase_note() : '',
+							'product'            => $product,
+						)
+					);
+				}
+
+				do_action( 'woocommerce_order_details_after_order_table_items', $order );
+				?>
+			</tbody>
+
+			<?php if ( ! empty( $actions ) ) : ?>
+			<tfoot>
+				<tr>
+					<th class="order-actions--heading"><?php esc_html_e( 'Actions', 'woocommerce' ); ?>:</th>
 					<td>
-					<?php
-					$customer_note = wc_wptexturize_order_note( $order->get_customer_note() );
-					echo wp_kses( nl2br( $customer_note ), array( 'br' => array() ) );
-					?>
+						<?php
+						$wp_button_class = wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . wc_wp_theme_get_element_class_name( 'button' ) : '';
+						foreach ( $actions as $key => $action ) { // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+							if ( empty( $action['aria-label'] ) ) {
+								/* translators: %1$s Action name, %2$s Order number. */
+								$action_aria_label = sprintf( __( '%1$s order number %2$s', 'woocommerce' ), $action['name'], $order->get_order_number() );
+							} else {
+								$action_aria_label = $action['aria-label'];
+							}
+							echo '<a href="' . esc_url( $action['url'] ) . '" class="woocommerce-button' . esc_attr( $wp_button_class ) . ' button ' . sanitize_html_class( $key ) . ' order-actions-button " aria-label="' . esc_attr( $action_aria_label ) . '">' . esc_html( $action['name'] ) . '</a>';
+							unset( $action_aria_label );
+						}
+						?>
 					</td>
 				</tr>
+			</tfoot>
 			<?php endif; ?>
-		</tfoot>
-	</table>
+			<tfoot>
+				<?php
+				foreach ( $order->get_order_item_totals() as $key => $total ) {
+					?>
+					<tr>
+						<th scope="row"><?php echo esc_html( $total['label'] ); ?></th>
+						<td><?php echo wp_kses_post( $total['value'] ); ?></td>
+					</tr>
+					<?php
+				}
+				?>
+				<?php if ( $order->get_customer_note() ) : ?>
+					<tr>
+						<th><?php esc_html_e( 'Note:', 'woocommerce' ); ?></th>
+						<td>
+						<?php
+						$customer_note = wc_wptexturize_order_note( $order->get_customer_note() );
+						echo wp_kses( nl2br( $customer_note ), array( 'br' => array() ) );
+						?>
+						</td>
+					</tr>
+				<?php endif; ?>
+			</tfoot>
+		</table>
+	<?php endif; ?>
 
 	<?php do_action( 'woocommerce_order_details_after_order_table', $order ); ?>
 </section>

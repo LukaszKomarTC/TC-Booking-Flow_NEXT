@@ -1128,6 +1128,665 @@ class Woo_OrderMeta {
 	}
 
 	/* =========================================================
+	 * Grouped Order Items Table (Cart-like display)
+	 * ========================================================= */
+
+	/**
+	 * Check if an order contains booking items (has _event_id or tc_group_id on any line item).
+	 *
+	 * Used to determine whether to use grouped renderer or default Woo loop.
+	 *
+	 * @param \WC_Order $order The order object
+	 * @return bool True if order contains booking items
+	 */
+	public static function is_booking_order( \WC_Order $order ) : bool {
+		foreach ( $order->get_items( 'line_item' ) as $item ) {
+			if ( ! $item instanceof \WC_Order_Item_Product ) {
+				continue;
+			}
+
+			// Check for _event_id (primary booking marker)
+			$event_id = self::get_item_meta_ci( $item, '_event_id' );
+			if ( $event_id !== '' && (int) $event_id > 0 ) {
+				return true;
+			}
+
+			// Check for tc_group_id (pack grouping marker)
+			$group_id = self::get_item_meta_ci( $item, 'tc_group_id' );
+			if ( $group_id !== '' && (int) $group_id > 0 ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get item meta case-insensitively (tries with/without underscore, upper/lower).
+	 *
+	 * @param \WC_Order_Item_Product $item The order item
+	 * @param string $key The meta key to look for
+	 * @return string The meta value or empty string
+	 */
+	private static function get_item_meta_ci( \WC_Order_Item_Product $item, string $key ) : string {
+		// Try exact key
+		$value = $item->get_meta( $key, true );
+		if ( $value !== '' ) {
+			return (string) $value;
+		}
+
+		// Try without leading underscore
+		$key_no_underscore = ltrim( $key, '_' );
+		$value = $item->get_meta( $key_no_underscore, true );
+		if ( $value !== '' ) {
+			return (string) $value;
+		}
+
+		// Try with underscore if not present
+		if ( strpos( $key, '_' ) !== 0 ) {
+			$value = $item->get_meta( '_' . $key, true );
+			if ( $value !== '' ) {
+				return (string) $value;
+			}
+		}
+
+		// Try uppercase variants
+		$key_upper = strtoupper( $key_no_underscore );
+		$value = $item->get_meta( $key_upper, true );
+		if ( $value !== '' ) {
+			return (string) $value;
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get event featured image URL.
+	 *
+	 * @param int $event_id The event (post) ID
+	 * @param string $size Image size (default: 'woocommerce_thumbnail')
+	 * @return string Image URL or empty string
+	 */
+	private static function get_event_image_url( int $event_id, string $size = 'woocommerce_thumbnail' ) : string {
+		if ( $event_id <= 0 ) {
+			return '';
+		}
+
+		$thumb_id = get_post_thumbnail_id( $event_id );
+		if ( ! $thumb_id ) {
+			return '';
+		}
+
+		$url = wp_get_attachment_image_url( $thumb_id, $size );
+		return $url ? (string) $url : '';
+	}
+
+	/**
+	 * Render grouped order items table (cart-like parent/child display).
+	 *
+	 * Groups items by tc_group_id, renders parent rows with event thumbnail,
+	 * child rows indented with product thumbnail.
+	 *
+	 * @param \WC_Order $order The order object
+	 */
+	public static function render_grouped_order_items_table( \WC_Order $order ) : void {
+		$items = $order->get_items( 'line_item' );
+
+		if ( empty( $items ) ) {
+			return;
+		}
+
+		// Build item records with normalized metadata
+		$records = [];
+		foreach ( $items as $item_id => $item ) {
+			if ( ! $item instanceof \WC_Order_Item_Product ) {
+				continue;
+			}
+
+			$records[] = self::build_item_record( $order, $item_id, $item );
+		}
+
+		// Group by tc_group_id
+		$groups = [];
+		$standalone = [];
+
+		foreach ( $records as $record ) {
+			if ( $record['group_id'] > 0 ) {
+				$gid = $record['group_id'];
+				if ( ! isset( $groups[ $gid ] ) ) {
+					$groups[ $gid ] = [];
+				}
+				$groups[ $gid ][] = $record;
+			} else {
+				$standalone[] = $record;
+			}
+		}
+
+		// Output styles
+		self::output_grouped_items_styles();
+
+		// Render grouped items
+		echo '<div class="tcbf-order-items">';
+
+		foreach ( $groups as $group_id => $group_items ) {
+			self::render_group( $order, $group_items );
+		}
+
+		// Render standalone items (non-booking products)
+		foreach ( $standalone as $record ) {
+			self::render_standalone_row( $order, $record );
+		}
+
+		echo '</div>';
+	}
+
+	/**
+	 * Build a normalized item record from order item.
+	 *
+	 * @param \WC_Order $order The order
+	 * @param int $item_id The item ID
+	 * @param \WC_Order_Item_Product $item The item
+	 * @return array Item record with normalized fields
+	 */
+	private static function build_item_record( \WC_Order $order, int $item_id, \WC_Order_Item_Product $item ) : array {
+		$product = $item->get_product();
+
+		// Get group metadata (case-insensitive)
+		$group_id = (int) self::get_item_meta_ci( $item, 'tc_group_id' );
+		$role     = self::get_item_meta_ci( $item, 'tc_group_role' );
+		$scope    = self::get_item_meta_ci( $item, 'tcbf_scope' );
+
+		// Fallback: also check _tc_scope
+		if ( $scope === '' ) {
+			$scope = self::get_item_meta_ci( $item, '_tc_scope' );
+		}
+
+		// Get event data
+		$event_id    = (int) self::get_item_meta_ci( $item, '_event_id' );
+		$event_title = self::get_item_meta_ci( $item, '_event_title' );
+
+		// Fallback event title
+		if ( $event_title === '' && $event_id > 0 ) {
+			$event_title = get_the_title( $event_id );
+		}
+
+		// Get participant/bike data
+		$participant = self::get_item_meta_ci( $item, '_participant' );
+		if ( $participant === '' ) {
+			$participant = self::get_item_meta_ci( $item, 'participant' );
+		}
+
+		$bicycle = self::get_item_meta_ci( $item, '_bicycle' );
+		if ( $bicycle === '' ) {
+			$bicycle = self::get_item_meta_ci( $item, 'bicycle' );
+		}
+
+		// Get size from booking resource if available
+		$size = self::get_booking_size_from_item( $item_id );
+
+		// Get product info
+		$product_name = $item->get_name();
+		$product_url  = $product ? $product->get_permalink() : '';
+		$product_thumb_url = '';
+		if ( $product ) {
+			$thumb_id = $product->get_image_id();
+			if ( $thumb_id ) {
+				$product_thumb_url = wp_get_attachment_image_url( $thumb_id, 'woocommerce_thumbnail' );
+			}
+		}
+
+		// Get event URL
+		$event_url = $event_id > 0 ? get_permalink( $event_id ) : '';
+
+		// Get booking date
+		$booking_date = self::get_booking_date_from_item( $item_id );
+
+		return [
+			'item_id'           => $item_id,
+			'item'              => $item,
+			'group_id'          => $group_id,
+			'role'              => $role,
+			'scope'             => $scope,
+			'event_id'          => $event_id,
+			'event_title'       => $event_title,
+			'event_url'         => $event_url,
+			'participant'       => $participant,
+			'bicycle'           => $bicycle,
+			'size'              => $size,
+			'booking_date'      => $booking_date,
+			'product_name'      => $product_name,
+			'product_url'       => $product_url,
+			'product_thumb_url' => $product_thumb_url ?: '',
+			'product'           => $product,
+		];
+	}
+
+	/**
+	 * Get booking size (resource name) from order item.
+	 *
+	 * @param int $item_id Order item ID
+	 * @return string Size string or empty
+	 */
+	private static function get_booking_size_from_item( int $item_id ) : string {
+		if ( ! class_exists( 'WC_Booking_Data_Store' ) ) {
+			return '';
+		}
+
+		$booking_ids = \WC_Booking_Data_Store::get_booking_ids_from_order_item_id( $item_id );
+		if ( empty( $booking_ids ) ) {
+			return '';
+		}
+
+		$booking = new \WC_Booking( (int) $booking_ids[0] );
+		$resource = $booking ? $booking->get_resource() : null;
+
+		if ( $resource && is_object( $resource ) ) {
+			$resource_name = $resource->get_name();
+			// Extract size token (S, M, L, XL, XXL)
+			if ( preg_match( '/\b(XXL|XL|[SMLX]{1,2})\b/i', $resource_name, $matches ) ) {
+				return strtoupper( $matches[1] );
+			}
+			return $resource_name;
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get booking date from order item.
+	 *
+	 * @param int $item_id Order item ID
+	 * @return string Formatted date or empty
+	 */
+	private static function get_booking_date_from_item( int $item_id ) : string {
+		if ( ! class_exists( 'WC_Booking_Data_Store' ) ) {
+			return '';
+		}
+
+		$booking_ids = \WC_Booking_Data_Store::get_booking_ids_from_order_item_id( $item_id );
+		if ( empty( $booking_ids ) ) {
+			return '';
+		}
+
+		$booking = new \WC_Booking( (int) $booking_ids[0] );
+		if ( $booking && $booking->get_start() ) {
+			return date_i18n( get_option( 'date_format' ), $booking->get_start() );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Render a group of items (parent + children).
+	 *
+	 * @param \WC_Order $order The order
+	 * @param array $group_items Array of item records in this group
+	 */
+	private static function render_group( \WC_Order $order, array $group_items ) : void {
+		// Identify parent and children
+		$parent = null;
+		$children = [];
+
+		foreach ( $group_items as $record ) {
+			$is_parent = false;
+
+			// Check role first
+			if ( $record['role'] === 'parent' ) {
+				$is_parent = true;
+			}
+			// Fallback: scope = participation means parent
+			elseif ( $record['scope'] === 'participation' ) {
+				$is_parent = true;
+			}
+			// Fallback: has event_id and not rental scope
+			elseif ( $record['event_id'] > 0 && $record['scope'] !== 'rental' ) {
+				$is_parent = true;
+			}
+
+			if ( $is_parent && $parent === null ) {
+				$parent = $record;
+			} else {
+				$children[] = $record;
+			}
+		}
+
+		// If no parent identified, use first item as parent
+		if ( $parent === null && ! empty( $group_items ) ) {
+			$parent = array_shift( $group_items );
+			$children = $group_items;
+		}
+
+		// Render parent row
+		if ( $parent ) {
+			self::render_parent_row( $order, $parent );
+		}
+
+		// Render child rows
+		foreach ( $children as $child ) {
+			self::render_child_row( $order, $child );
+		}
+	}
+
+	/**
+	 * Render a parent (tour/participation) row.
+	 *
+	 * @param \WC_Order $order The order
+	 * @param array $record Item record
+	 */
+	private static function render_parent_row( \WC_Order $order, array $record ) : void {
+		$item = $record['item'];
+
+		// Thumbnail: event featured image → product thumb → placeholder
+		$thumb_url = '';
+		if ( $record['event_id'] > 0 ) {
+			$thumb_url = self::get_event_image_url( $record['event_id'] );
+		}
+		if ( $thumb_url === '' ) {
+			$thumb_url = $record['product_thumb_url'];
+		}
+
+		// Title: event title linked to event page
+		$title = $record['event_title'] ?: $record['product_name'];
+		$title_url = $record['event_url'] ?: $record['product_url'];
+
+		// Price: use Woo formatted line subtotal
+		$price_html = $order->get_formatted_line_subtotal( $item );
+
+		echo '<div class="tcbf-order-row tcbf-order-row--parent">';
+
+		// Thumbnail
+		echo '<div class="tcbf-order-thumb">';
+		if ( $thumb_url ) {
+			echo '<img src="' . esc_url( $thumb_url ) . '" alt="' . esc_attr( $title ) . '" />';
+		} else {
+			echo '<span class="tcbf-order-thumb--placeholder"></span>';
+		}
+		echo '</div>';
+
+		// Content
+		echo '<div class="tcbf-order-content">';
+
+		// Title
+		echo '<div class="tcbf-order-title">';
+		if ( $title_url ) {
+			echo '<a href="' . esc_url( $title_url ) . '">' . esc_html( $title ) . '</a>';
+		} else {
+			echo esc_html( $title );
+		}
+		echo '</div>';
+
+		// Meta details
+		$meta_parts = [];
+		if ( $record['participant'] !== '' ) {
+			$meta_parts[] = '<span class="tcbf-meta-participant">' . esc_html( $record['participant'] ) . '</span>';
+		}
+		if ( $record['booking_date'] !== '' ) {
+			$meta_parts[] = '<span class="tcbf-meta-date">' . esc_html( $record['booking_date'] ) . '</span>';
+		}
+
+		if ( ! empty( $meta_parts ) ) {
+			echo '<div class="tcbf-order-meta">' . implode( ' &middot; ', $meta_parts ) . '</div>';
+		}
+
+		echo '</div>'; // .tcbf-order-content
+
+		// Price
+		echo '<div class="tcbf-order-price">' . wp_kses_post( $price_html ) . '</div>';
+
+		echo '</div>'; // .tcbf-order-row
+	}
+
+	/**
+	 * Render a child (rental) row.
+	 *
+	 * @param \WC_Order $order The order
+	 * @param array $record Item record
+	 */
+	private static function render_child_row( \WC_Order $order, array $record ) : void {
+		$item = $record['item'];
+
+		// Thumbnail: rental product thumb (NOT event image for child)
+		$thumb_url = $record['product_thumb_url'];
+
+		// Title: product name linked to product
+		$title = $record['product_name'];
+		$title_url = $record['product_url'];
+
+		// Price: use Woo formatted line subtotal
+		$price_html = $order->get_formatted_line_subtotal( $item );
+
+		echo '<div class="tcbf-order-row tcbf-order-row--child">';
+
+		// Thumbnail
+		echo '<div class="tcbf-order-thumb">';
+		if ( $thumb_url ) {
+			echo '<img src="' . esc_url( $thumb_url ) . '" alt="' . esc_attr( $title ) . '" />';
+		} else {
+			echo '<span class="tcbf-order-thumb--placeholder"></span>';
+		}
+		echo '</div>';
+
+		// Content
+		echo '<div class="tcbf-order-content">';
+
+		// Title with "included" badge
+		echo '<div class="tcbf-order-title">';
+		if ( $title_url ) {
+			echo '<a href="' . esc_url( $title_url ) . '">' . esc_html( $title ) . '</a>';
+		} else {
+			echo esc_html( $title );
+		}
+		echo ' <span class="tcbf-badge-included">' . esc_html__( 'Included', TC_BF_TEXTDOMAIN ) . '</span>';
+		echo '</div>';
+
+		// Meta details (bicycle + size)
+		$meta_parts = [];
+		if ( $record['bicycle'] !== '' ) {
+			$meta_parts[] = '<span class="tcbf-meta-bicycle">' . esc_html( $record['bicycle'] ) . '</span>';
+		}
+		if ( $record['size'] !== '' ) {
+			$meta_parts[] = '<span class="tcbf-meta-size">' . esc_html__( 'Size', TC_BF_TEXTDOMAIN ) . ': ' . esc_html( $record['size'] ) . '</span>';
+		}
+
+		if ( ! empty( $meta_parts ) ) {
+			echo '<div class="tcbf-order-meta">' . implode( ' &middot; ', $meta_parts ) . '</div>';
+		}
+
+		echo '</div>'; // .tcbf-order-content
+
+		// Price
+		echo '<div class="tcbf-order-price">' . wp_kses_post( $price_html ) . '</div>';
+
+		echo '</div>'; // .tcbf-order-row
+	}
+
+	/**
+	 * Render a standalone (non-booking) row.
+	 *
+	 * @param \WC_Order $order The order
+	 * @param array $record Item record
+	 */
+	private static function render_standalone_row( \WC_Order $order, array $record ) : void {
+		$item = $record['item'];
+
+		// Thumbnail: product thumb
+		$thumb_url = $record['product_thumb_url'];
+
+		// Title: product name linked to product
+		$title = $record['product_name'];
+		$title_url = $record['product_url'];
+
+		// Price: use Woo formatted line subtotal
+		$price_html = $order->get_formatted_line_subtotal( $item );
+
+		// Quantity
+		$qty = $item->get_quantity();
+
+		echo '<div class="tcbf-order-row tcbf-order-row--standalone">';
+
+		// Thumbnail
+		echo '<div class="tcbf-order-thumb">';
+		if ( $thumb_url ) {
+			echo '<img src="' . esc_url( $thumb_url ) . '" alt="' . esc_attr( $title ) . '" />';
+		} else {
+			echo '<span class="tcbf-order-thumb--placeholder"></span>';
+		}
+		echo '</div>';
+
+		// Content
+		echo '<div class="tcbf-order-content">';
+
+		// Title
+		echo '<div class="tcbf-order-title">';
+		if ( $title_url ) {
+			echo '<a href="' . esc_url( $title_url ) . '">' . esc_html( $title ) . '</a>';
+		} else {
+			echo esc_html( $title );
+		}
+		if ( $qty > 1 ) {
+			echo ' <span class="tcbf-qty">&times;&nbsp;' . esc_html( $qty ) . '</span>';
+		}
+		echo '</div>';
+
+		echo '</div>'; // .tcbf-order-content
+
+		// Price
+		echo '<div class="tcbf-order-price">' . wp_kses_post( $price_html ) . '</div>';
+
+		echo '</div>'; // .tcbf-order-row
+	}
+
+	/**
+	 * Output CSS styles for grouped order items (only once per page).
+	 */
+	private static function output_grouped_items_styles() : void {
+		static $output = false;
+		if ( $output ) return;
+		$output = true;
+
+		?>
+		<style>
+		/* TCBF Grouped Order Items Table */
+		.tcbf-order-items {
+			margin: 0 0 20px;
+		}
+		.tcbf-order-row {
+			display: flex;
+			align-items: flex-start;
+			gap: 16px;
+			padding: 16px 0;
+			border-bottom: 1px solid #e5e7eb;
+			background: transparent;
+		}
+		.tcbf-order-row:last-child {
+			border-bottom: none;
+		}
+		.tcbf-order-row--child {
+			padding-left: 40px;
+			background: #fafafa;
+			border-radius: 0;
+			margin: 0;
+		}
+		.tcbf-order-thumb {
+			flex-shrink: 0;
+			width: 60px;
+			height: 60px;
+		}
+		.tcbf-order-thumb img {
+			width: 60px;
+			height: 60px;
+			object-fit: cover;
+			border-radius: 8px;
+			border: 1px solid #e5e7eb;
+		}
+		.tcbf-order-thumb--placeholder {
+			display: block;
+			width: 60px;
+			height: 60px;
+			background: #f3f4f6;
+			border-radius: 8px;
+			border: 1px solid #e5e7eb;
+		}
+		.tcbf-order-content {
+			flex: 1;
+			min-width: 0;
+		}
+		.tcbf-order-title {
+			font-weight: 600;
+			font-size: 15px;
+			margin-bottom: 4px;
+			line-height: 1.4;
+		}
+		.tcbf-order-title a {
+			color: #3d61aa;
+			text-decoration: none;
+		}
+		.tcbf-order-title a:hover {
+			text-decoration: underline;
+		}
+		.tcbf-order-meta {
+			font-size: 13px;
+			color: #6b7280;
+			line-height: 1.4;
+		}
+		.tcbf-order-price {
+			flex-shrink: 0;
+			font-weight: 600;
+			font-size: 15px;
+			text-align: right;
+			white-space: nowrap;
+		}
+		.tcbf-badge-included {
+			display: inline-block;
+			font-size: 11px;
+			font-weight: 500;
+			color: #059669;
+			background: #d1fae5;
+			padding: 2px 8px;
+			border-radius: 10px;
+			vertical-align: middle;
+			margin-left: 6px;
+		}
+		.tcbf-qty {
+			font-weight: 500;
+			color: #6b7280;
+		}
+		/* Child row indent visual */
+		.tcbf-order-row--child .tcbf-order-thumb {
+			width: 50px;
+			height: 50px;
+		}
+		.tcbf-order-row--child .tcbf-order-thumb img {
+			width: 50px;
+			height: 50px;
+		}
+		.tcbf-order-row--child .tcbf-order-thumb--placeholder {
+			width: 50px;
+			height: 50px;
+		}
+		.tcbf-order-row--child .tcbf-order-title {
+			font-size: 14px;
+		}
+		/* Responsive */
+		@media (max-width: 480px) {
+			.tcbf-order-row {
+				flex-wrap: wrap;
+			}
+			.tcbf-order-row--child {
+				padding-left: 20px;
+			}
+			.tcbf-order-price {
+				width: 100%;
+				text-align: left;
+				margin-top: 8px;
+				padding-left: 76px;
+			}
+		}
+		</style>
+		<?php
+	}
+
+	/* =========================================================
 	 * Template Loader for Bookings Override
 	 * ========================================================= */
 
