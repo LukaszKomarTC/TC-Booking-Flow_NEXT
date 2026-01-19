@@ -175,9 +175,6 @@ final class Plugin {
 		// Method 2: Formatted meta filter (backup - catches edge cases and theme overrides)
 		add_filter('woocommerce_order_item_get_formatted_meta_data', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'filter_order_item_meta' ], 20, 2);
 
-		// ---- Order view: render TCBF Summary block before order table (replaces Bookings white patch)
-		add_action('woocommerce_order_details_before_order_table', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'render_order_summary_block' ], 10, 1);
-
 		// ---- Order view: render enhanced discount/commission blocks after order table
 		add_action('woocommerce_order_details_after_order_table', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'render_enhanced_blocks' ], 10, 1);
 
