@@ -76,15 +76,22 @@ do_action( 'woocommerce_before_cart' ); ?>
 			}
 
 			// Render grouped items first
+			$is_first_pack = true;
 			foreach ( $tcbf_groups as $group_id => $group_items ) :
 				$group_items_array = array_values( $group_items );
 				$pack_totals = \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::calculate_cart_pack_totals( $group_items_array );
 				$is_first_in_group = true;
 				$group_count = count( $group_items );
 				$current_idx = 0;
+
+				// Skip separator for first pack (no need for top spacing)
+				if ( ! $is_first_pack ) :
 				?>
 				<tr class="tcbf-pack-separator"><td colspan="6"></td></tr>
 				<?php
+				endif;
+				$is_first_pack = false;
+				?><?php
 				foreach ( $group_items as $cart_item_key => $cart_item ) :
 					$current_idx++;
 					$is_last_in_group = ( $current_idx === $group_count );
@@ -382,7 +389,7 @@ do_action( 'woocommerce_before_cart' ); ?>
 <?php do_action( 'woocommerce_after_cart' ); ?>
 
 <style>
-/* TCBF Cart Pack Styling */
+/* TCBF Cart Pack Styling - Template-specific only (shared CSS is in Plugin.php) */
 .tcbf-pack-separator td {
 	padding: 9px 0 0 0 !important;
 	border: none !important;
@@ -393,51 +400,6 @@ do_action( 'woocommerce_before_cart' ); ?>
 }
 .tcbf-cart-row--child {
 	border-left: 3px solid color-mix(in srgb, var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) 50%, transparent) !important;
-}
-.tcbf-pack-footer-row td {
-	padding: 0 !important;
-	border: none !important;
-}
-.tcbf-pack-footer-cell {
-	padding: 0 12px 12px 12px !important;
-}
-.tcbf-pack-footer--cart {
-	background: rgba(0, 0, 0, 0.02);
-	border: 1px solid rgba(0, 0, 0, 0.06);
-	border-radius: 6px;
-	padding: 12px 16px;
-	margin-left: 3px;
-}
-.tcbf-pack-footer-line {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 4px 0;
-	font-size: 13px;
-}
-.tcbf-pack-footer-label {
-	color: #6b7280;
-}
-.tcbf-pack-footer-value {
-	font-weight: 600;
-	color: #374151;
-}
-.tcbf-pack-footer-discount {
-	color: #059669;
-}
-.tcbf-pack-footer-total {
-	border-top: 1px solid rgba(0, 0, 0, 0.08);
-	margin-top: 6px;
-	padding-top: 8px;
-}
-.tcbf-pack-footer-total .tcbf-pack-footer-label {
-	font-weight: 600;
-	color: #374151;
-}
-.tcbf-pack-footer-total .tcbf-pack-footer-value {
-	font-weight: 700;
-	color: #111827;
-	font-size: 14px;
 }
 .tcbf-product-link {
 	color: var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00)));
