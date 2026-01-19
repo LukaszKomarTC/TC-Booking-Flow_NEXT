@@ -64,7 +64,16 @@ $is_tcbf_booking_order = class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_
 	&& \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::is_booking_order( $order );
 ?>
 <section class="woocommerce-order-details">
-	<?php do_action( 'woocommerce_order_details_before_order_table', $order ); ?>
+	<?php
+	/**
+	 * TCBF: For booking orders, we skip this action to prevent duplicate
+	 * "Detalles de la reserva" block (our grouped renderer handles everything).
+	 * For non-booking orders, let it run as normal.
+	 */
+	if ( ! $is_tcbf_booking_order ) {
+		do_action( 'woocommerce_order_details_before_order_table', $order );
+	}
+	?>
 
 	<h2 class="woocommerce-order-details__title"><?php esc_html_e( 'Order details', 'woocommerce' ); ?></h2>
 
