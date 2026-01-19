@@ -23,6 +23,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
+// Flag to prevent hook from also rendering pack footers (template handles it)
+global $tcbf_cart_template_loaded;
+$tcbf_cart_template_loaded = true;
+
 // Debug marker to verify this template is being loaded
 echo '<!-- TCBF Cart Template Loaded -->';
 

@@ -1841,6 +1841,12 @@ final class Plugin {
 	 * for each pack group. Uses JavaScript to position them after each pack's last item.
 	 */
 	public function woo_render_cart_pack_footers() {
+		// Skip if our cart template is loaded (it renders footers directly)
+		global $tcbf_cart_template_loaded;
+		if ( ! empty( $tcbf_cart_template_loaded ) ) {
+			return;
+		}
+
 		if ( ! class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_OrderMeta' ) ) {
 			return;
 		}
