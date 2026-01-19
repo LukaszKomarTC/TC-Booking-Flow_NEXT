@@ -14,11 +14,46 @@ if ( ! defined('ABSPATH') ) exit;
 class Woo_OrderMeta {
 
 	// Internal meta key prefixes/keys that should never be displayed to customers
-	const INTERNAL_META_PREFIXES = [ 'TC_', 'TCBF_', 'tcbf_', '_tcbf_', '_tc_', '_eb_', '_gf_' ];
-	const INTERNAL_META_KEYS = [
-		'_event_id', '_event_title', '_participant', '_bicycle', '_participant_email',
-		'event', 'participant', 'email', 'confirmation', '_confirmation',
-		'_custom_cost', '_entry_id',
+	const INTERNAL_META_PREFIXES = [ 'TC_', 'TCBF_', 'tcbf_', '_tcbf_', '_tc_', 'tc_', '_eb_', '_gf_' ];
+
+	// Explicit list of ALL internal meta keys to hide (both with and without underscore prefix)
+	const HIDDEN_META_KEYS = [
+		// TC group/pack meta
+		'tc_group_id', 'TC_GROUP_ID', '_tc_group_id',
+		'tc_group_role', 'TC_GROUP_ROLE', '_tc_group_role',
+
+		// TCBF scope/booking meta
+		'tcbf_scope', 'TCBF_SCOPE', '_tcbf_scope',
+		'tcbf_event_id', 'TCBF_EVENT_ID', '_tcbf_event_id',
+
+		// Event/participant meta (stored without prefix)
+		'event', 'EVENT', '_event',
+		'event_id', '_event_id',
+		'event_title', '_event_title',
+		'participant', 'PARTICIPANT', '_participant',
+		'participant_email', '_participant_email',
+		'bicycle', 'BICYCLE', '_bicycle',
+		'client', 'CLIENT', '_client',
+
+		// Booking/cost meta
+		'confirmation', '_confirmation',
+		'email', '_email',
+		'custom_cost', '_custom_cost',
+		'entry_id', '_entry_id',
+
+		// EB discount meta
+		'eb_pct', '_eb_pct',
+		'eb_amount', '_eb_amount',
+		'eb_eligible', '_eb_eligible',
+		'eb_days_before', '_eb_days_before',
+		'eb_base', '_eb_base',
+		'eb_event_ts', '_eb_event_ts',
+
+		// TC scope
+		'tc_scope', '_tc_scope',
+
+		// GF meta
+		'gf_entry_id', '_gf_entry_id',
 	];
 
 	// Booking meta keys stored on cart items
@@ -387,14 +422,30 @@ class Woo_OrderMeta {
 	}
 
 	/* =========================================================
-	 * Filter: Hide internal meta from order item display
+	 * Filters: Hide internal meta from order item display
 	 * ========================================================= */
 
 	/**
-	 * Remove internal meta keys from order item formatted meta display.
+	 * Add internal meta keys to WooCommerce's hidden order item meta list.
+	 *
+	 * This is the CANONICAL way to hide meta keys in WooCommerce.
+	 * These keys will never be displayed in order views or emails.
+	 *
+	 * @param array $hidden_meta Array of meta keys to hide
+	 * @return array Extended array with our internal keys
+	 */
+	public static function filter_hidden_order_itemmeta( $hidden_meta ) {
+		// Merge our hidden keys with WooCommerce defaults
+		return array_unique( array_merge( $hidden_meta, self::HIDDEN_META_KEYS ) );
+	}
+
+	/**
+	 * Remove internal meta keys from order item formatted meta display (backup filter).
 	 *
 	 * This filter runs whenever Woo prepares item meta for display (My Account order table, emails).
-	 * It prevents internal keys like TC_, TCBF_, _eb_, etc. from cluttering the order view.
+	 * It acts as a backup to catch anything that slips through woocommerce_hidden_order_itemmeta.
+	 *
+	 * Uses aggressive pattern matching: prefix check + explicit list + case-insensitive.
 	 *
 	 * @param array $formatted_meta Array of formatted meta objects
 	 * @param \WC_Order_Item $item The order item
@@ -413,19 +464,31 @@ class Woo_OrderMeta {
 			$key = isset( $meta->key ) ? (string) $meta->key : '';
 			if ( $key === '' ) continue;
 
-			$key_stripped = ltrim( $key, '_' );
+			// Normalize for comparison
+			$key_lower    = strtolower( $key );
+			$key_stripped = ltrim( $key_lower, '_' );
 
-			// Check prefixes
+			// Check prefixes (case-insensitive)
 			foreach ( self::INTERNAL_META_PREFIXES as $prefix ) {
-				if ( stripos( $key, $prefix ) === 0 || stripos( $key_stripped, $prefix ) === 0 ) {
+				$prefix_lower = strtolower( $prefix );
+				if ( strpos( $key_lower, $prefix_lower ) === 0 || strpos( $key_stripped, $prefix_lower ) === 0 ) {
 					unset( $formatted_meta[ $id ] );
 					continue 2;
 				}
 			}
 
-			// Check exact keys
-			if ( in_array( $key, self::INTERNAL_META_KEYS, true ) ||
-			     in_array( $key_stripped, self::INTERNAL_META_KEYS, true ) ) {
+			// Check explicit key list (case-insensitive)
+			foreach ( self::HIDDEN_META_KEYS as $hidden_key ) {
+				if ( strtolower( $hidden_key ) === $key_lower || strtolower( $hidden_key ) === $key_stripped ) {
+					unset( $formatted_meta[ $id ] );
+					continue 2;
+				}
+			}
+
+			// Extra pattern: anything that looks like internal booking meta
+			// Patterns: contains "group_id", "group_role", "scope", starts with numbers as IDs, etc.
+			if ( preg_match( '/^(tc|tcbf|gf|eb)_/i', $key_stripped ) ||
+			     preg_match( '/_(id|scope|role|eligible|amount|pct)$/i', $key_lower ) ) {
 				unset( $formatted_meta[ $id ] );
 			}
 		}

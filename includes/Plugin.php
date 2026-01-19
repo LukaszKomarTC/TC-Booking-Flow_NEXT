@@ -170,6 +170,9 @@ final class Plugin {
 		add_filter('woocommerce_order_item_display_meta_key', [ $this, 'woo_filter_cart_meta_labels' ], 10, 3);
 
 		// ---- Order view: hide internal meta (TC_, TCBF_, _eb_, etc.) from order item display
+		// Method 1: Canonical hidden meta list (most reliable - WooCommerce core mechanism)
+		add_filter('woocommerce_hidden_order_itemmeta', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'filter_hidden_order_itemmeta' ], 10, 1);
+		// Method 2: Formatted meta filter (backup - catches edge cases and theme overrides)
 		add_filter('woocommerce_order_item_get_formatted_meta_data', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'filter_order_item_meta' ], 20, 2);
 
 		// ---- Order view: render enhanced discount/commission blocks after order table
