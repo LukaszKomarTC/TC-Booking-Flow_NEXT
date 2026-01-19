@@ -1804,8 +1804,24 @@ JS;
             }
 
             // New API: product_id as 3rd param, resource_ids array as 5th param
-            $resource_ids = $resource_id > 0 ? array( $resource_id ) : array();
-            $booking_ids  = $data_store->get_bookings_in_date_range( $start_ts, $end_ts, $product_id, $include_in_cart, $resource_ids );
+            $resource_ids_param = $resource_id > 0 ? array( $resource_id ) : array();
+            $booking_ids  = $data_store->get_bookings_in_date_range( $start_ts, $end_ts, $product_id, $include_in_cart, $resource_ids_param );
+
+            // CRITICAL FIX: WC Bookings Data Store ignores $resource_ids filter!
+            // It returns ALL bookings for the product. We must filter manually.
+            if ( is_array( $booking_ids ) && $resource_id > 0 ) {
+                $filtered_ids = [];
+                foreach ( $booking_ids as $bid ) {
+                    // Handle both int IDs and WC_Booking objects
+                    $booking_obj = is_object( $bid ) ? $bid : ( function_exists( 'get_wc_booking' ) ? get_wc_booking( $bid ) : null );
+                    if ( $booking_obj && method_exists( $booking_obj, 'get_resource_id' ) ) {
+                        if ( (int) $booking_obj->get_resource_id() === $resource_id ) {
+                            $filtered_ids[] = is_object( $bid ) ? $booking_obj->get_id() : $bid;
+                        }
+                    }
+                }
+                $booking_ids = $filtered_ids;
+            }
 
             // [TCBF INVESTIGATION] STEP 2 continued - Log DS output
             self::tcbf_invest_log('DS', 'booking_ids_count=' . (is_array($booking_ids) ? count($booking_ids) : -1));
