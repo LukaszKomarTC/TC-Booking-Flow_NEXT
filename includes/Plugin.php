@@ -212,6 +212,9 @@ final class Plugin {
 		// ---- Cart display: pack-aware cart count (header badge shows packs, not line items)
 		add_filter('woocommerce_cart_contents_count', [ $this, 'woo_filter_cart_contents_count_as_packs' ], 20, 1);
 
+		// ---- Cart display: render pack footer rows after cart items
+		add_action('woocommerce_cart_contents', [ $this, 'woo_render_cart_pack_footers' ], 10);
+
 		// ---- Pack Grouping: atomic cart behavior for participation + rental
 		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping') ) {
 			\TC_BF\Integrations\WooCommerce\Pack_Grouping::init();
@@ -1158,28 +1161,17 @@ final class Plugin {
 			echo "  position: relative;\n";
 			echo "}\n";
 
-			echo "\n/* Parent item styling */\n";
+			echo "\n/* Parent item styling - theme border via border-left */\n";
 			echo ".tcbf-pack-role-parent {\n";
 			echo "  background: rgba(224, 231, 255, 0.15) !important;\n";
-			echo "  box-shadow: inset 3px 0 0 #6366f1 !important;\n";
+			echo "  border-left: 3px solid var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) !important;\n";
 			echo "}\n";
 
-			echo "\n/* Child item styling */\n";
+			echo "\n/* Child item styling - softer border */\n";
 			echo ".tcbf-pack-role-child {\n";
 			echo "  background: rgba(243, 244, 246, 0.4) !important;\n";
-			echo "  box-shadow: inset 3px 0 0 #d1d5db !important;\n";
+			echo "  border-left: 3px solid color-mix(in srgb, var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) 50%, transparent) !important;\n";
 			echo "  padding-left: 20px !important;\n";
-			echo "}\n";
-
-			echo "\n/* Add visual connection between parent and child */\n";
-			echo ".tcbf-pack-role-child::before {\n";
-			echo "  content: '';\n";
-			echo "  position: absolute;\n";
-			echo "  left: 8px;\n";
-			echo "  top: 50%;\n";
-			echo "  width: 8px;\n";
-			echo "  height: 2px;\n";
-			echo "  background: #d1d5db;\n";
 			echo "}\n";
 
 			echo "\n/* Scope-specific refinements */\n";
@@ -1189,6 +1181,54 @@ final class Plugin {
 
 			echo ".tcbf-pack-scope-rental.tcbf-pack-role-child {\n";
 			echo "  opacity: 0.92;\n";
+			echo "}\n";
+
+			echo "\n/* Pack footer rows in cart */\n";
+			echo ".tcbf-pack-footer-row td {\n";
+			echo "  padding: 0 !important;\n";
+			echo "  border: none !important;\n";
+			echo "  background: transparent !important;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-cell {\n";
+			echo "  padding: 8px 12px 16px 12px !important;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer--cart {\n";
+			echo "  background: rgba(0, 0, 0, 0.02);\n";
+			echo "  border: 1px solid rgba(0, 0, 0, 0.06);\n";
+			echo "  border-radius: 6px;\n";
+			echo "  padding: 10px 14px;\n";
+			echo "  margin-left: 3px;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-line {\n";
+			echo "  display: flex;\n";
+			echo "  justify-content: space-between;\n";
+			echo "  align-items: center;\n";
+			echo "  padding: 3px 0;\n";
+			echo "  font-size: 13px;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-label {\n";
+			echo "  color: #6b7280;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-value {\n";
+			echo "  font-weight: 600;\n";
+			echo "  color: #374151;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-discount {\n";
+			echo "  color: #059669;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-total {\n";
+			echo "  border-top: 1px solid rgba(0, 0, 0, 0.08);\n";
+			echo "  margin-top: 4px;\n";
+			echo "  padding-top: 6px;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-total .tcbf-pack-footer-label {\n";
+			echo "  font-weight: 600;\n";
+			echo "  color: #374151;\n";
+			echo "}\n";
+			echo ".tcbf-pack-footer-total .tcbf-pack-footer-value {\n";
+			echo "  font-weight: 700;\n";
+			echo "  color: #111827;\n";
+			echo "  font-size: 14px;\n";
 			echo "}\n";
 
 			echo "\n/* ===== Pack UI Polish (Phase 9A/9C) ===== */\n";
@@ -1699,8 +1739,31 @@ final class Plugin {
 			$event_id = isset( $cart_item['booking'][ self::BK_EVENT_ID ] ) ? (int) $cart_item['booking'][ self::BK_EVENT_ID ] : 0;
 		}
 
-		// If we have an event, wrap thumbnail with link
+		// If we have an event, use event's featured image and link
 		if ( $event_id > 0 ) {
+			// Get event's featured image URL
+			$event_image_url = '';
+			if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_OrderMeta' ) ) {
+				$event_image_url = \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::get_event_image_url( $event_id );
+			}
+
+			// If event has a featured image, replace the thumbnail image
+			if ( $event_image_url ) {
+				// Replace the src attribute in the img tag
+				$thumbnail = preg_replace(
+					'/src=["\'][^"\']*["\']/',
+					'src="' . esc_url( $event_image_url ) . '"',
+					$thumbnail
+				);
+				// Also replace srcset to avoid responsive images loading product images
+				$thumbnail = preg_replace(
+					'/srcset=["\'][^"\']*["\']/',
+					'',
+					$thumbnail
+				);
+			}
+
+			// Wrap with event link
 			$event_url = get_permalink( $event_id );
 			if ( $event_url ) {
 				// Check if thumbnail is already wrapped in a link (avoid double-wrapping)
@@ -1777,6 +1840,88 @@ final class Plugin {
 			return \TC_BF\Integrations\WooCommerce\Woo::get_pack_aware_cart_count( (int) $count );
 		}
 		return $count;
+	}
+
+	/**
+	 * Render pack footer rows in cart table.
+	 *
+	 * Outputs footer rows with pack totals (base price, EB discount, pack total)
+	 * for each pack group. Uses JavaScript to position them after each pack's last item.
+	 */
+	public function woo_render_cart_pack_footers() {
+		if ( ! class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_OrderMeta' ) ) {
+			return;
+		}
+
+		$cart = WC()->cart;
+		if ( ! $cart ) {
+			return;
+		}
+
+		// Group cart items by tc_group_id
+		$groups = [];
+		foreach ( $cart->get_cart() as $cart_key => $cart_item ) {
+			$group_id = isset( $cart_item['tc_group_id'] ) ? (int) $cart_item['tc_group_id'] : 0;
+			if ( $group_id > 0 ) {
+				if ( ! isset( $groups[ $group_id ] ) ) {
+					$groups[ $group_id ] = [];
+				}
+				$groups[ $group_id ][] = $cart_item;
+			}
+		}
+
+		if ( empty( $groups ) ) {
+			return;
+		}
+
+		// Output footer rows for each pack group
+		foreach ( $groups as $group_id => $group_items ) {
+			$pack_totals = \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::calculate_cart_pack_totals( $group_items );
+
+			// Only show footer if pack has EB discount
+			if ( ! $pack_totals['has_eb'] ) {
+				continue;
+			}
+
+			?>
+			<tr class="tcbf-pack-footer-row" data-tcbf-group="<?php echo esc_attr( $group_id ); ?>">
+				<td colspan="6" class="tcbf-pack-footer-cell">
+					<div class="tcbf-pack-footer tcbf-pack-footer--cart">
+						<div class="tcbf-pack-footer-line tcbf-pack-footer-base">
+							<span class="tcbf-pack-footer-label"><?php echo esc_html( $pack_totals['base_label'] ); ?></span>
+							<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $pack_totals['base_price'] ) ); ?></span>
+						</div>
+						<?php if ( $pack_totals['eb_discount'] > 0 ) : ?>
+						<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">
+							<span class="tcbf-pack-footer-label"><?php esc_html_e( 'Early booking discount', 'tc-booking-flow-next' ); ?></span>
+							<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-<?php echo wp_kses_post( wc_price( $pack_totals['eb_discount'] ) ); ?></span>
+						</div>
+						<?php endif; ?>
+						<div class="tcbf-pack-footer-line tcbf-pack-footer-total">
+							<span class="tcbf-pack-footer-label"><?php esc_html_e( 'Pack total', 'tc-booking-flow-next' ); ?></span>
+							<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $pack_totals['pack_total'] ) ); ?></span>
+						</div>
+					</div>
+				</td>
+			</tr>
+			<?php
+		}
+
+		// Output JavaScript to move footer rows after their pack's last item
+		?>
+		<script>
+		(function() {
+			document.querySelectorAll('.tcbf-pack-footer-row').forEach(function(footerRow) {
+				var groupId = footerRow.getAttribute('data-tcbf-group');
+				var packItems = document.querySelectorAll('tr.tcbf-pack-group-' + groupId);
+				if (packItems.length > 0) {
+					var lastItem = packItems[packItems.length - 1];
+					lastItem.parentNode.insertBefore(footerRow, lastItem.nextSibling);
+				}
+			});
+		})();
+		</script>
+		<?php
 	}
 
 	/**
