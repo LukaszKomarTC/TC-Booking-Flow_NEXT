@@ -1189,8 +1189,15 @@ final class Plugin {
 			echo "  border: none !important;\n";
 			echo "  background: transparent !important;\n";
 			echo "}\n";
+			echo ".tcbf-pack-footer-row td::before,\n";
+			echo ".tcbf-pack-footer-row td::after {\n";
+			echo "  display: none !important;\n";
+			echo "  content: none !important;\n";
+			echo "}\n";
 			echo ".tcbf-pack-footer-cell {\n";
 			echo "  padding: 8px 0 16px 0 !important;\n";
+			echo "  width: 100% !important;\n";
+			echo "  display: table-cell !important;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer--cart {\n";
 			echo "  background: rgba(0, 0, 0, 0.02);\n";
