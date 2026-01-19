@@ -76,15 +76,22 @@ do_action( 'woocommerce_before_cart' ); ?>
 			}
 
 			// Render grouped items first
+			$is_first_pack = true;
 			foreach ( $tcbf_groups as $group_id => $group_items ) :
 				$group_items_array = array_values( $group_items );
 				$pack_totals = \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::calculate_cart_pack_totals( $group_items_array );
 				$is_first_in_group = true;
 				$group_count = count( $group_items );
 				$current_idx = 0;
+
+				// Skip separator for first pack (no need for top spacing)
+				if ( ! $is_first_pack ) :
 				?>
 				<tr class="tcbf-pack-separator"><td colspan="6"></td></tr>
 				<?php
+				endif;
+				$is_first_pack = false;
+				?><?php
 				foreach ( $group_items as $cart_item_key => $cart_item ) :
 					$current_idx++;
 					$is_last_in_group = ( $current_idx === $group_count );
