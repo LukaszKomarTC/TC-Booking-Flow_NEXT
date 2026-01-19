@@ -1764,44 +1764,11 @@ JS;
             // so method_exists() returns false even though the method works via proxy.
             // The try/catch handles any actual errors.
 
-            // [TCBF INVESTIGATION] STEP 2 - Log wrapper inputs
-            self::tcbf_invest_log('DS', 'start_ts=' . $start_ts . ' (' . date('Y-m-d H:i', $start_ts) . ')');
-            self::tcbf_invest_log('DS', 'end_ts=' . $end_ts . ' (' . date('Y-m-d H:i', $end_ts) . ')');
-            self::tcbf_invest_log('DS', 'product_id=' . $product_id
-                . ' wc_type=' . (wc_get_product($product_id) ? wc_get_product($product_id)->get_type() : 'n/a')
-            );
-            self::tcbf_invest_log('DS', 'resource_id=' . $resource_id
-                . ' post_type=' . get_post_type($resource_id)
-            );
-
-            // [TCBF INVESTIGATION] STEP 3 - Ground truth check (independent of Woo APIs)
-            $truth = get_posts([
-                'post_type'      => 'wc_booking',
-                'post_status'    => 'any',
-                'fields'         => 'ids',
-                'posts_per_page' => 5,
-                'meta_query'     => [
-                    [
-                        'key'   => '_booking_resource_id',
-                        'value' => $resource_id,
-                    ],
-                ],
-            ]);
-            self::tcbf_invest_log('TRUTH', 'bookings_for_resource=' . count($truth)
-                . ' sample_ids=' . implode(',', array_slice($truth, 0, 5))
-            );
-
-            // [TCBF INVESTIGATION] STEP 4 - Inspect one booking if exists
-            if ( ! empty( $truth ) && class_exists( 'WC_Booking' ) ) {
-                $b = new \WC_Booking( $truth[0] );
-                self::tcbf_invest_log('BOOKING', 'booking_id=' . $truth[0]);
-                self::tcbf_invest_log('BOOKING', 'booking_product_id=' . $b->get_product_id() . ' vs passed_product_id=' . $product_id);
-                self::tcbf_invest_log('BOOKING', 'booking_resource_id=' . $b->get_resource_id() . ' vs passed_resource_id=' . $resource_id);
-                self::tcbf_invest_log('BOOKING', 'booking_start=' . $b->get_start() . ' (' . date('Y-m-d H:i', $b->get_start()) . ')');
-                self::tcbf_invest_log('BOOKING', 'booking_end=' . $b->get_end() . ' (' . date('Y-m-d H:i', $b->get_end()) . ')');
-                self::tcbf_invest_log('BOOKING', 'booking_status=' . $b->get_status());
-                self::tcbf_invest_log('BOOKING', 'date_overlap? start_ts=' . $start_ts . ' <= booking_end=' . $b->get_end() . ' AND end_ts=' . $end_ts . ' >= booking_start=' . $b->get_start());
-            }
+            // Debug: log query params (gated by ?tcbf_debug_avail=1)
+            self::tcbf_invest_log('DS', sprintf(
+                'query: product=%d resource=%d range=%s→%s',
+                $product_id, $resource_id, date('Y-m-d', $start_ts), date('Y-m-d', $end_ts)
+            ));
 
             // New API: product_id as 3rd param, resource_ids array as 5th param
             $resource_ids_param = $resource_id > 0 ? array( $resource_id ) : array();
@@ -1809,25 +1776,22 @@ JS;
 
             // CRITICAL FIX: WC Bookings Data Store ignores $resource_ids filter!
             // It returns ALL bookings for the product. We must filter manually.
+            // Uses direct meta lookup for performance (avoids loading full WC_Booking objects).
             if ( is_array( $booking_ids ) && $resource_id > 0 ) {
                 $filtered_ids = [];
                 foreach ( $booking_ids as $bid ) {
-                    // Handle both int IDs and WC_Booking objects
-                    $booking_obj = is_object( $bid ) ? $bid : ( function_exists( 'get_wc_booking' ) ? get_wc_booking( $bid ) : null );
-                    if ( $booking_obj && method_exists( $booking_obj, 'get_resource_id' ) ) {
-                        if ( (int) $booking_obj->get_resource_id() === $resource_id ) {
-                            $filtered_ids[] = is_object( $bid ) ? $booking_obj->get_id() : $bid;
-                        }
+                    $bid_int = is_object( $bid ) ? (int) $bid->get_id() : (int) $bid;
+                    // Direct meta lookup — faster than loading full WC_Booking object
+                    $booking_resource = (int) get_post_meta( $bid_int, '_booking_resource_id', true );
+                    if ( $booking_resource === $resource_id ) {
+                        $filtered_ids[] = $bid_int;
                     }
                 }
                 $booking_ids = $filtered_ids;
             }
 
-            // [TCBF INVESTIGATION] STEP 2 continued - Log DS output
-            self::tcbf_invest_log('DS', 'booking_ids_count=' . (is_array($booking_ids) ? count($booking_ids) : -1));
-            if ( ! empty( $booking_ids ) && is_array( $booking_ids ) ) {
-                self::tcbf_invest_log('DS', 'sample_booking_id=' . $booking_ids[0]);
-            }
+            // Debug: log result count (gated by ?tcbf_debug_avail=1)
+            self::tcbf_invest_log('DS', 'result: ' . count($booking_ids) . ' booking(s) for resource');
 
             // Ensure array return
             if ( ! is_array( $booking_ids ) ) {
@@ -1846,15 +1810,12 @@ JS;
     }
 
     /**
-     * Temporary investigation logger for availability debugging.
+     * Availability debug logger (gated).
      *
-     * Logs to TCBF admin logging window (Settings → Logging) when:
-     * 1. Debug mode is enabled in plugin settings
-     * 2. Query param ?tcbf_debug_avail=1 is present
-     *
+     * Logs to TCBF admin logging window only when query param ?tcbf_debug_avail=1 is present.
      * All lines prefixed with [TCBF-AVAIL] for easy filtering.
      *
-     * @param string $tag     Short tag: AV, DS, TRUTH, BOOKING
+     * @param string $tag     Short tag (e.g., DS, AV)
      * @param string $message Log message
      */
     private static function tcbf_invest_log( string $tag, string $message ) : void {
