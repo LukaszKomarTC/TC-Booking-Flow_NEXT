@@ -1314,14 +1314,6 @@ final class Plugin {
 			echo "  border-collapse: separate !important;\n";
 			echo "  border-spacing: 0 !important;\n";
 			echo "}\n";
-			echo "\n";
-			echo "/* 20px gap above each pack parent (looks like true margin) */\n";
-			echo ".woocommerce-cart-form__contents tbody tr.tcbf-pack-role-parent {\n";
-			echo "  border-top: 20px solid transparent;\n";
-			echo "}\n";
-			echo ".woocommerce-cart-form__contents tbody tr.tcbf-pack-role-parent:first-of-type {\n";
-			echo "  border-top: 0;\n";
-			echo "}\n";
 
 			echo "\n/* Partner Coupon Styling in Cart Totals */\n";
 			echo ".cart_totals .coupon,\n";
