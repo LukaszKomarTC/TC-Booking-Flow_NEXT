@@ -1686,9 +1686,6 @@ class Woo_OrderMeta {
 
 		echo '<div class="tcbf-order-row tcbf-order-row--child">';
 
-		// Arrow indicator for child
-		echo '<span class="tcbf-child-arrow">→</span>';
-
 		// Thumbnail
 		echo '<div class="tcbf-order-thumb">';
 		if ( $thumb_url ) {
@@ -1815,6 +1812,11 @@ class Woo_OrderMeta {
 		<style>
 		/* ===== TCBF Grouped Order Items - Cart-like Pack UI ===== */
 
+		/* Theme color variable (inherits from theme or fallback) */
+		:root {
+			--tcbf-accent: var(--theme-primary-color, #434c00);
+		}
+
 		/* Order items container */
 		.tcbf-order-items {
 			margin: 0 0 24px;
@@ -1823,11 +1825,7 @@ class Woo_OrderMeta {
 		/* Pack group wrapper - visual grouping like cart */
 		.tcbf-pack-group {
 			background: rgba(255, 255, 255, 0.6);
-			border: 1px solid rgba(0, 0, 0, 0.08);
-			border-radius: 12px;
-			padding: 16px;
 			margin-bottom: 18px;
-			border-left: 3px solid #3d61aa;
 		}
 		.tcbf-pack-group:last-child {
 			margin-bottom: 0;
@@ -1838,26 +1836,17 @@ class Woo_OrderMeta {
 			display: flex;
 			align-items: flex-start;
 			gap: 16px;
-			padding: 12px 0;
 			background: transparent;
 		}
 		.tcbf-order-row--parent {
 			border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+			border-left: 3px solid var(--tcbf-accent);
+			padding: 10px 10px 10px 20px;
 		}
 		.tcbf-order-row--child {
-			padding-left: 12px;
-			margin-top: 8px;
 			position: relative;
-		}
-
-		/* Child arrow indicator */
-		.tcbf-child-arrow {
-			position: absolute;
-			left: 0;
-			top: 18px;
-			font-size: 14px;
-			color: #9ca3af;
-			font-weight: 500;
+			border-left: 3px solid color-mix(in srgb, var(--tcbf-accent) 50%, transparent);
+			padding: 10px 10px 10px 40px;
 		}
 
 		/* Thumbnails */
@@ -1906,7 +1895,7 @@ class Woo_OrderMeta {
 			color: #111827;
 		}
 		.tcbf-order-title a {
-			color: #3d61aa;
+			color: var(--tcbf-accent);
 			text-decoration: none;
 		}
 		.tcbf-order-title a:hover {
@@ -2019,7 +2008,7 @@ class Woo_OrderMeta {
 			font-weight: 500;
 		}
 		.tcbf-meta-link {
-			color: #3d61aa;
+			color: var(--tcbf-accent);
 			text-decoration: none;
 		}
 		.tcbf-meta-link:hover {
@@ -2082,9 +2071,6 @@ class Woo_OrderMeta {
 
 		/* Responsive - tablet */
 		@media (max-width: 768px) {
-			.tcbf-pack-group {
-				padding: 12px;
-			}
 			.tcbf-order-thumb {
 				width: 60px;
 				height: 60px;
@@ -2119,21 +2105,17 @@ class Woo_OrderMeta {
 				flex-wrap: wrap;
 				gap: 12px;
 			}
-			.tcbf-order-row--child {
-				padding-left: 24px;
+			.tcbf-order-row--parent {
+				padding: 10px 8px 10px 16px;
 			}
-			.tcbf-child-arrow {
-				left: 8px;
-				top: 14px;
+			.tcbf-order-row--child {
+				padding: 10px 8px 10px 28px;
 			}
 			.tcbf-order-price {
 				width: 100%;
 				text-align: left;
 				margin-top: 4px;
 				font-size: 15px;
-			}
-			.tcbf-order-row--child .tcbf-order-price {
-				padding-left: 66px;
 			}
 			.tcbf-participant-badge {
 				font-size: 11px;
