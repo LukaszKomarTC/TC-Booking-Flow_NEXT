@@ -1569,7 +1569,6 @@ class Woo_OrderMeta {
 
 		// EB badge line (if applicable)
 		if ( $record['eb_eligible'] && ( $record['eb_pct'] > 0 || $record['eb_amount'] > 0 ) ) {
-			$eb_label = self::localize_qtranslate( '[:en]EB discount[:es]Descuento RA[:]' );
 			echo '<div class="tcbf-eb-line">';
 			echo '<span class="tcbf-eb-badge">';
 			echo '<span class="tcbf-eb-icon">⏰</span>';
@@ -1578,7 +1577,7 @@ class Woo_OrderMeta {
 				echo '<span class="tcbf-eb-sep">|</span>';
 			}
 			echo '<span class="tcbf-eb-amt">' . wp_kses_post( wc_price( $record['eb_amount'] ) ) . '</span>';
-			echo '<span class="tcbf-eb-label">' . esc_html( $eb_label ) . '</span>';
+			echo '<span class="tcbf-eb-label">' . esc_html__( 'EB discount', TC_BF_TEXTDOMAIN ) . '</span>';
 			echo '</span>';
 			echo '</div>';
 		}
@@ -1588,18 +1587,16 @@ class Woo_OrderMeta {
 
 		// Fecha de la reserva
 		if ( $record['booking_date'] !== '' ) {
-			$fecha_label = self::localize_qtranslate( '[:en]Booking date[:es]Fecha de la reserva[:]' );
 			echo '<div class="tcbf-meta-line">';
-			echo '<span class="tcbf-meta-label">' . esc_html( $fecha_label ) . ':</span>';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Booking date', TC_BF_TEXTDOMAIN ) . ':</span>';
 			echo '<span class="tcbf-meta-value">' . esc_html( $record['booking_date'] ) . '</span>';
 			echo '</div>';
 		}
 
 		// Evento (event title)
 		if ( $record['event_title'] !== '' ) {
-			$evento_label = self::localize_qtranslate( '[:en]Event[:es]Evento[:]' );
 			echo '<div class="tcbf-meta-line">';
-			echo '<span class="tcbf-meta-label">' . esc_html( $evento_label ) . ':</span>';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Event', TC_BF_TEXTDOMAIN ) . ':</span>';
 			if ( $record['event_url'] ) {
 				echo '<a href="' . esc_url( $record['event_url'] ) . '" class="tcbf-meta-value tcbf-meta-link">' . esc_html( $record['event_title'] ) . '</a>';
 			} else {
@@ -1610,11 +1607,9 @@ class Woo_OrderMeta {
 
 		// Bicicleta: Propia (only if no rental child)
 		if ( ! $has_rental ) {
-			$bici_label = self::localize_qtranslate( '[:en]Bike[:es]Bicicleta[:]' );
-			$propia_label = self::localize_qtranslate( '[:en]Own[:es]Propia[:]' );
 			echo '<div class="tcbf-meta-line">';
-			echo '<span class="tcbf-meta-label">' . esc_html( $bici_label ) . ':</span>';
-			echo '<span class="tcbf-meta-value">' . esc_html( $propia_label ) . '</span>';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Bike', TC_BF_TEXTDOMAIN ) . ':</span>';
+			echo '<span class="tcbf-meta-value">' . esc_html__( 'Own', TC_BF_TEXTDOMAIN ) . '</span>';
 			echo '</div>';
 		}
 
@@ -1671,27 +1666,6 @@ class Woo_OrderMeta {
 	}
 
 	/**
-	 * Localize text using qTranslateXT format.
-	 *
-	 * @param string $text Text with [:en]..[:es]..[:] format
-	 * @return string Localized text
-	 */
-	private static function localize_qtranslate( string $text ) : string {
-		if ( function_exists( 'qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage' ) ) {
-			return qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $text );
-		}
-		// Fallback: extract Spanish (default)
-		if ( preg_match( '/\[:es\](.*?)\[:/', $text, $matches ) ) {
-			return $matches[1];
-		}
-		// Fallback: extract English
-		if ( preg_match( '/\[:en\](.*?)\[:/', $text, $matches ) ) {
-			return $matches[1];
-		}
-		return $text;
-	}
-
-	/**
 	 * Render a child (rental) row.
 	 *
 	 * @param \WC_Order $order The order
@@ -1709,10 +1683,6 @@ class Woo_OrderMeta {
 
 		// Price: use Woo formatted line subtotal
 		$price_html = $order->get_formatted_line_subtotal( $item );
-
-		// Localized labels
-		$included_label = self::localize_qtranslate( '[:en]Rental included in the pack[:es]Incluido en el pack[:]' );
-		$talla_label = self::localize_qtranslate( '[:en]Size[:es]Talla[:]' );
 
 		echo '<div class="tcbf-order-row tcbf-order-row--child">';
 
@@ -1742,12 +1712,11 @@ class Woo_OrderMeta {
 
 		// "Rental included in the pack" badge line
 		echo '<div class="tcbf-rental-badge-line">';
-		echo '<span class="tcbf-badge-included">🚲 ' . esc_html( $included_label ) . '</span>';
+		echo '<span class="tcbf-badge-included">🚲 ' . esc_html__( 'Rental included in the pack', TC_BF_TEXTDOMAIN ) . '</span>';
 		echo '</div>';
 
 		// EB badge line for child (if applicable)
 		if ( $record['eb_eligible'] && ( $record['eb_pct'] > 0 || $record['eb_amount'] > 0 ) ) {
-			$eb_label = self::localize_qtranslate( '[:en]EB discount[:es]Descuento RA[:]' );
 			echo '<div class="tcbf-eb-line">';
 			echo '<span class="tcbf-eb-badge">';
 			echo '<span class="tcbf-eb-icon">⏰</span>';
@@ -1756,7 +1725,7 @@ class Woo_OrderMeta {
 				echo '<span class="tcbf-eb-sep">|</span>';
 			}
 			echo '<span class="tcbf-eb-amt">' . wp_kses_post( wc_price( $record['eb_amount'] ) ) . '</span>';
-			echo '<span class="tcbf-eb-label">' . esc_html( $eb_label ) . '</span>';
+			echo '<span class="tcbf-eb-label">' . esc_html__( 'EB discount', TC_BF_TEXTDOMAIN ) . '</span>';
 			echo '</span>';
 			echo '</div>';
 		}
@@ -1764,7 +1733,7 @@ class Woo_OrderMeta {
 		// Talla line
 		if ( $record['size'] !== '' ) {
 			echo '<div class="tcbf-meta-line tcbf-talla-line">';
-			echo '<span class="tcbf-meta-label">' . esc_html( $talla_label ) . ':</span>';
+			echo '<span class="tcbf-meta-label">' . esc_html__( 'Size', TC_BF_TEXTDOMAIN ) . ':</span>';
 			echo '<span class="tcbf-meta-value tcbf-talla-value">' . esc_html( $record['size'] ) . '</span>';
 			echo '</div>';
 		}
