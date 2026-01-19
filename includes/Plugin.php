@@ -22,6 +22,7 @@ require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Pack_Grouping.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Template_Loader.php';
 
 /**
  * TC Booking Flow Plugin Main Class (Orchestrator)
