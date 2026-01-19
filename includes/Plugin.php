@@ -1190,11 +1190,13 @@ final class Plugin {
 			echo "  background: transparent !important;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-cell {\n";
-			echo "  padding: 8px 12px 16px 12px !important;\n";
+			echo "  padding: 8px 0 16px 0 !important;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer--cart {\n";
 			echo "  background: rgba(0, 0, 0, 0.02);\n";
 			echo "  padding: 10px 14px;\n";
+			echo "  width: 100%;\n";
+			echo "  box-sizing: border-box;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-line {\n";
 			echo "  display: flex;\n";
