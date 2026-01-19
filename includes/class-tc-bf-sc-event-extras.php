@@ -395,6 +395,7 @@ final class Sc_Event_Extras {
                             $booking_ids = self::get_booking_ids_in_range_cached(
                                 $start_ts,
                                 $end_ts,
+                                $prod_id,
                                 (int) $resource->ID,
                                 true // include in-cart bookings
                             );
@@ -1720,15 +1721,16 @@ JS;
      *
      * @param int  $start_ts        Start timestamp
      * @param int  $end_ts          End timestamp
+     * @param int  $product_id      Bookable product ID
      * @param int  $resource_id     Resource ID (0 for all)
      * @param bool $include_in_cart Whether to include in-cart bookings
      * @return array Booking IDs array
      */
-    private static function get_booking_ids_in_range_cached( int $start_ts, int $end_ts, int $resource_id, bool $include_in_cart = true ) : array {
+    private static function get_booking_ids_in_range_cached( int $start_ts, int $end_ts, int $product_id, int $resource_id, bool $include_in_cart = true ) : array {
         static $cache = [];
 
-        // Build cache key
-        $cache_key = "{$start_ts}|{$end_ts}|{$resource_id}|" . ( $include_in_cart ? '1' : '0' );
+        // Build cache key (includes product + resource for correct scoping)
+        $cache_key = "{$start_ts}|{$end_ts}|{$product_id}|{$resource_id}|" . ( $include_in_cart ? '1' : '0' );
 
         if ( isset( $cache[ $cache_key ] ) ) {
             return $cache[ $cache_key ];
@@ -1749,7 +1751,9 @@ JS;
                 return [];
             }
 
-            $booking_ids = $data_store->get_bookings_in_date_range( $start_ts, $end_ts, $resource_id, $include_in_cart );
+            // New API: product_id as 3rd param, resource_ids array as 5th param
+            $resource_ids = $resource_id > 0 ? array( $resource_id ) : array();
+            $booking_ids  = $data_store->get_bookings_in_date_range( $start_ts, $end_ts, $product_id, $include_in_cart, $resource_ids );
 
             // Ensure array return
             if ( ! is_array( $booking_ids ) ) {
