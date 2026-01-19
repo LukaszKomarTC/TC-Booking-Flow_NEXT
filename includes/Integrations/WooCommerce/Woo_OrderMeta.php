@@ -13,6 +13,14 @@ if ( ! defined('ABSPATH') ) exit;
  */
 class Woo_OrderMeta {
 
+	// Internal meta key prefixes/keys that should never be displayed to customers
+	const INTERNAL_META_PREFIXES = [ 'TC_', 'TCBF_', 'tcbf_', '_tcbf_', '_tc_', '_eb_', '_gf_' ];
+	const INTERNAL_META_KEYS = [
+		'_event_id', '_event_title', '_participant', '_bicycle', '_participant_email',
+		'event', 'participant', 'email', 'confirmation', '_confirmation',
+		'_custom_cost', '_entry_id',
+	];
+
 	// Booking meta keys stored on cart items
 	const BK_EVENT_ID      = '_event_id';
 	const BK_EVENT_TITLE   = '_event_title';
@@ -376,5 +384,208 @@ class Woo_OrderMeta {
 			0, // Not customer note
 			true // Added by system
 		);
+	}
+
+	/* =========================================================
+	 * Filter: Hide internal meta from order item display
+	 * ========================================================= */
+
+	/**
+	 * Remove internal meta keys from order item formatted meta display.
+	 *
+	 * This filter runs whenever Woo prepares item meta for display (My Account order table, emails).
+	 * It prevents internal keys like TC_, TCBF_, _eb_, etc. from cluttering the order view.
+	 *
+	 * @param array $formatted_meta Array of formatted meta objects
+	 * @param \WC_Order_Item $item The order item
+	 * @return array Filtered meta array
+	 */
+	public static function filter_order_item_meta( $formatted_meta, $item ) {
+		// Only affect frontend + emails (skip wp-admin order edit for debugging)
+		if ( is_admin() && ! wp_doing_ajax() && ! defined( 'DOING_CRON' ) ) {
+			// Allow in admin if it's email preview or AJAX
+			if ( ! doing_action( 'woocommerce_email_order_details' ) ) {
+				return $formatted_meta;
+			}
+		}
+
+		foreach ( $formatted_meta as $id => $meta ) {
+			$key = isset( $meta->key ) ? (string) $meta->key : '';
+			if ( $key === '' ) continue;
+
+			$key_stripped = ltrim( $key, '_' );
+
+			// Check prefixes
+			foreach ( self::INTERNAL_META_PREFIXES as $prefix ) {
+				if ( stripos( $key, $prefix ) === 0 || stripos( $key_stripped, $prefix ) === 0 ) {
+					unset( $formatted_meta[ $id ] );
+					continue 2;
+				}
+			}
+
+			// Check exact keys
+			if ( in_array( $key, self::INTERNAL_META_KEYS, true ) ||
+			     in_array( $key_stripped, self::INTERNAL_META_KEYS, true ) ) {
+				unset( $formatted_meta[ $id ] );
+			}
+		}
+
+		return $formatted_meta;
+	}
+
+	/* =========================================================
+	 * Enhanced discount/commission blocks for order view
+	 * ========================================================= */
+
+	/**
+	 * Render enhanced discount and commission blocks after order table.
+	 *
+	 * Shows:
+	 * - Early Booking discount (if applicable)
+	 * - Partner discount (if applicable)
+	 * - Partner commission (admin or partner-owner only)
+	 *
+	 * @param \WC_Order $order The order object
+	 */
+	public static function render_enhanced_blocks( $order ) {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return;
+		}
+
+		// Output styles (once per page)
+		self::output_enhanced_styles();
+
+		$currency = $order->get_currency();
+
+		// === Early Booking Discount Block ===
+		$eb_amount = (float) $order->get_meta( 'early_booking_discount_amount', true );
+		$eb_pct    = (float) $order->get_meta( 'early_booking_discount_pct', true );
+
+		if ( $eb_amount > 0 ) {
+			$eb_sub = $eb_pct > 0
+				? sprintf( __( '%s%% applied to your booking', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
+				: __( 'Applied to your booking', TC_BF_TEXTDOMAIN );
+
+			echo '<div class="tcbf-enhanced-wrap tcbf-eb-enhanced">';
+			echo '<div>';
+			echo '<div class="tcbf-enhanced-title">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<div class="tcbf-enhanced-sub">' . esc_html( $eb_sub ) . '</div>';
+			echo '</div>';
+			echo '<div class="tcbf-enhanced-amount">-' . wp_kses_post( wc_price( $eb_amount, [ 'currency' => $currency ] ) ) . '</div>';
+			echo '</div>';
+		}
+
+		// === Partner Discount Block ===
+		$partner_id = (int) $order->get_meta( 'partner_id', true );
+		if ( $partner_id > 0 ) {
+			// Use Woo authoritative discount (same as portal)
+			$discount_total = (float) $order->get_discount_total() + (float) $order->get_discount_tax();
+			$partner_pct    = (float) $order->get_meta( 'partner_discount_pct', true );
+
+			if ( $discount_total > 0 ) {
+				$partner_sub = $partner_pct > 0
+					? sprintf( __( '%s%% partner discount', TC_BF_TEXTDOMAIN ), number_format_i18n( $partner_pct, 0 ) )
+					: __( 'Partner discount applied', TC_BF_TEXTDOMAIN );
+
+				echo '<div class="tcbf-enhanced-wrap tcbf-partner-enhanced">';
+				echo '<div>';
+				echo '<div class="tcbf-enhanced-title">' . esc_html__( 'Partner discount', TC_BF_TEXTDOMAIN ) . '</div>';
+				echo '<div class="tcbf-enhanced-sub">' . esc_html( $partner_sub ) . '</div>';
+				echo '</div>';
+				echo '<div class="tcbf-enhanced-amount">-' . wp_kses_post( wc_price( $discount_total, [ 'currency' => $currency ] ) ) . '</div>';
+				echo '</div>';
+			}
+
+			// === Commission Block (Admin / Partner-owner only) ===
+			$viewer_id = get_current_user_id();
+			$is_admin  = current_user_can( 'manage_woocommerce' );
+			$is_partner_owner = ( $partner_id > 0 && $viewer_id === $partner_id );
+
+			if ( $is_admin || $is_partner_owner ) {
+				$commission = (float) $order->get_meta( 'partner_commission', true );
+
+				if ( $commission > 0 ) {
+					$commission_rate = (float) $order->get_meta( 'partner_commission_rate', true );
+					$comm_sub = $commission_rate > 0
+						? sprintf( __( '%s%% of base total', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
+						: __( 'Based on order total', TC_BF_TEXTDOMAIN );
+
+					echo '<div class="tcbf-enhanced-wrap tcbf-commission-enhanced">';
+					echo '<div>';
+					echo '<div class="tcbf-enhanced-title">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
+					echo '<div class="tcbf-enhanced-sub">' . esc_html( $comm_sub ) . '</div>';
+					echo '</div>';
+					echo '<div class="tcbf-enhanced-amount">' . wp_kses_post( wc_price( $commission, [ 'currency' => $currency ] ) ) . '</div>';
+					echo '</div>';
+				}
+			}
+		}
+	}
+
+	/**
+	 * Output CSS styles for enhanced blocks (only once per page).
+	 */
+	private static function output_enhanced_styles() {
+		static $output = false;
+		if ( $output ) return;
+		$output = true;
+
+		?>
+		<style>
+		/* Enhanced discount/commission blocks */
+		.tcbf-enhanced-wrap {
+			margin: 14px 0;
+			border-radius: 10px;
+			padding: 16px 20px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 16px;
+		}
+		.tcbf-enhanced-title {
+			font-weight: 700;
+			font-size: 15px;
+		}
+		.tcbf-enhanced-sub {
+			opacity: 0.9;
+			font-size: 13px;
+			margin-top: 2px;
+		}
+		.tcbf-enhanced-amount {
+			font-weight: 800;
+			font-size: 18px;
+			white-space: nowrap;
+		}
+		/* Early Booking - dark gradient, white text */
+		.tcbf-eb-enhanced {
+			background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
+		}
+		.tcbf-eb-enhanced .tcbf-enhanced-title,
+		.tcbf-eb-enhanced .tcbf-enhanced-sub,
+		.tcbf-eb-enhanced .tcbf-enhanced-amount {
+			color: #fff;
+		}
+		/* Partner discount - light green gradient */
+		.tcbf-partner-enhanced {
+			background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+			border: 1px solid #bbf7d0;
+		}
+		.tcbf-partner-enhanced .tcbf-enhanced-title,
+		.tcbf-partner-enhanced .tcbf-enhanced-sub,
+		.tcbf-partner-enhanced .tcbf-enhanced-amount {
+			color: #111827;
+		}
+		/* Commission - light indigo gradient */
+		.tcbf-commission-enhanced {
+			background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+			border: 1px solid #c7d2fe;
+		}
+		.tcbf-commission-enhanced .tcbf-enhanced-title,
+		.tcbf-commission-enhanced .tcbf-enhanced-sub,
+		.tcbf-commission-enhanced .tcbf-enhanced-amount {
+			color: #111827;
+		}
+		</style>
+		<?php
 	}
 }
