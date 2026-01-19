@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Only overrides specific templates needed for TCBF functionality:
  * - woocommerce/order/order-details.php (grouped order items)
+ * - woocommerce/cart/cart.php (pack grouping in cart)
+ * - woocommerce/checkout/review-order.php (pack grouping in checkout)
  * - woocommerce-bookings/order/booking-summary-list.php (clean fallback)
  * - woocommerce-bookings/order/booking-display.php (suppress default)
  *
@@ -26,7 +28,9 @@ final class Template_Loader {
 	 */
 	private const TEMPLATE_MAP = [
 		// WooCommerce core templates
-		'order/order-details.php' => 'woocommerce',
+		'order/order-details.php'      => 'woocommerce',
+		'cart/cart.php'                => 'woocommerce',
+		'checkout/review-order.php'    => 'woocommerce',
 
 		// WooCommerce Bookings templates
 		'order/booking-summary-list.php' => 'woocommerce-bookings',

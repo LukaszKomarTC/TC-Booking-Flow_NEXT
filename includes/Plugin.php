@@ -179,6 +179,9 @@ final class Plugin {
 		// ---- Order view: render enhanced discount/commission blocks after order table
 		add_action('woocommerce_order_details_after_order_table', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'render_enhanced_blocks' ], 10, 1);
 
+		// ---- Order view: hide Woo's generic Discount row (we show partner discount in enhanced blocks)
+		add_filter('woocommerce_get_order_item_totals', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'filter_order_totals_hide_discount' ], 10, 3);
+
 		// ---- Email: render TCBF Summary block before order table
 		add_action('woocommerce_email_before_order_table', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'render_email_summary_block' ], 10, 4);
 
