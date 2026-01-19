@@ -187,8 +187,10 @@ final class Plugin {
 		// ---- Email: render enhanced discount/commission blocks after order table (with visibility rules)
 		add_action('woocommerce_email_after_order_table', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'render_email_enhanced_blocks' ], 10, 4);
 
-		// ---- Bookings template override: suppress default "white patch" booking display
-		add_filter('woocommerce_locate_template', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'locate_bookings_template' ], 20, 3);
+		// ---- Template Loader: WooCommerce + Bookings template overrides (theme wins, can be disabled)
+		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Template_Loader') ) {
+			\TC_BF\Integrations\WooCommerce\Template_Loader::init();
+		}
 
 		// ---- Cart display: render participant and pack badges after item name (priority 10 = shows first)
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 10, 2);
