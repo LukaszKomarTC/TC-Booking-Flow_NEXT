@@ -116,3 +116,31 @@ msgstr "Estados pagables:"
 
 msgid "Download CSV"
 msgstr "Descargar CSV"
+
+# Enhanced discount/commission blocks
+msgid "Early booking discount"
+msgstr "Descuento reserva anticipada"
+
+msgid "%s%% applied to your booking"
+msgstr "%s%% aplicado a tu reserva"
+
+msgid "Applied to your booking"
+msgstr "Aplicado a tu reserva"
+
+msgid "Partner discount"
+msgstr "Descuento de socio"
+
+msgid "%s%% partner discount"
+msgstr "%s%% descuento de socio"
+
+msgid "Partner discount applied"
+msgstr "Descuento de socio aplicado"
+
+msgid "Partner commission"
+msgstr "Comisión de socio"
+
+msgid "%s%% of base total"
+msgstr "%s%% del total base"
+
+msgid "Based on order total"
+msgstr "Basado en el total del pedido"

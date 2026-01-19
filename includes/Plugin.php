@@ -169,6 +169,12 @@ final class Plugin {
 		// ---- Cart display: hide WooCommerce Bookings meta fields we don't want to show
 		add_filter('woocommerce_order_item_display_meta_key', [ $this, 'woo_filter_cart_meta_labels' ], 10, 3);
 
+		// ---- Order view: hide internal meta (TC_, TCBF_, _eb_, etc.) from order item display
+		add_filter('woocommerce_order_item_get_formatted_meta_data', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'filter_order_item_meta' ], 20, 2);
+
+		// ---- Order view: render enhanced discount/commission blocks after order table
+		add_action('woocommerce_order_details_after_order_table', [ Integrations\WooCommerce\Woo_OrderMeta::class, 'render_enhanced_blocks' ], 10, 1);
+
 		// ---- Cart display: render participant and pack badges after item name (priority 10 = shows first)
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 10, 2);
 
