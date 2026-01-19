@@ -1760,12 +1760,9 @@ JS;
         try {
             $data_store = \WC_Data_Store::load( 'booking' );
 
-            // Guard: method must exist on datastore
-            if ( ! method_exists( $data_store, 'get_bookings_in_date_range' ) ) {
-                self::tcbf_invest_log('DS', 'GUARD_FAIL: get_bookings_in_date_range method not found on ' . get_class($data_store));
-                $cache[ $cache_key ] = [];
-                return [];
-            }
+            // NOTE: Removed method_exists() guard - WC_Data_Store is a proxy that uses __call()
+            // so method_exists() returns false even though the method works via proxy.
+            // The try/catch handles any actual errors.
 
             // [TCBF INVESTIGATION] STEP 2 - Log wrapper inputs
             self::tcbf_invest_log('DS', 'start_ts=' . $start_ts . ' (' . date('Y-m-d H:i', $start_ts) . ')');
