@@ -2148,33 +2148,4 @@ class Woo_OrderMeta {
 		<?php
 	}
 
-	/* =========================================================
-	 * Template Loader for Bookings Override
-	 * ========================================================= */
-
-	/**
-	 * Override WooCommerce Bookings template to suppress default booking display.
-	 *
-	 * Only intercepts booking-display.php - we replace it with an empty template
-	 * so our TCBF Summary block is the only booking UI shown.
-	 *
-	 * @param string $template Template path
-	 * @param string $template_name Template name
-	 * @param string $template_path Template path prefix
-	 * @return string Modified template path
-	 */
-	public static function locate_bookings_template( $template, $template_name, $template_path ) {
-		// Only intercept the specific Bookings order display template
-		if ( $template_name !== 'order/booking-display.php' ) {
-			return $template;
-		}
-
-		// Check if we have our override
-		$plugin_template = TC_BF_PATH . 'templates/woocommerce-bookings/' . $template_name;
-		if ( file_exists( $plugin_template ) ) {
-			return $plugin_template;
-		}
-
-		return $template;
-	}
 }

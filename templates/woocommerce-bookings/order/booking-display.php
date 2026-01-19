@@ -1,23 +1,15 @@
 <?php
 /**
- * TCBF Override: Suppress WooCommerce Bookings default order display.
+ * Booking display in order (TCBF override - intentionally empty)
  *
- * This template intentionally outputs nothing.
- * The "Reserva #xxxx Confirmada..." block is replaced by our TCBF Summary block,
- * rendered via woocommerce_order_details_before_order_table hook.
+ * This template suppresses the default WooCommerce Bookings "booking display"
+ * output in order views. TCBF handles booking display via the grouped renderer
+ * in Woo_OrderMeta::render_grouped_order_items_table().
  *
- * Why suppress:
- * - Removes the "white patch" styling that doesn't match site design
- * - Prevents duplicate booking information (we show our own styled summary)
- * - Gives us full control over booking display across all contexts
- *
- * @see TC_BF\Integrations\WooCommerce\Woo_OrderMeta::render_order_summary_block()
- * @since 0.6.0
+ * @see \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::render_grouped_order_items_table()
+ * @package TC_Booking_Flow
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+defined( 'ABSPATH' ) || exit;
 
-// Intentionally empty - TCBF Summary block handles booking display.
-return;
+// Intentionally empty - TCBF grouped renderer handles booking display.
