@@ -1183,13 +1183,20 @@ final class Plugin {
 			echo "  opacity: 0.92;\n";
 			echo "}\n";
 
-			echo "\n/* Pack footer rows in cart */\n";
+			echo "\n/* Pack footer rows - shared styles */\n";
 			echo ".tcbf-pack-footer-row td {\n";
-			echo "  display: block !important;\n";
-			echo "  width: 100% !important;\n";
 			echo "  padding: 8px 0 16px 0 !important;\n";
 			echo "  border: none !important;\n";
 			echo "  background: transparent !important;\n";
+			echo "}\n";
+			echo "\n/* Cart-specific: fix for theme's flex/table hacks */\n";
+			echo ".woocommerce-cart-form__contents .tcbf-pack-footer-row td {\n";
+			echo "  display: block !important;\n";
+			echo "  width: 100% !important;\n";
+			echo "}\n";
+			echo "\n/* Checkout-specific: keep normal table-cell behavior */\n";
+			echo ".tcbf-checkout-table .tcbf-pack-footer-row td {\n";
+			echo "  display: table-cell !important;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-row td::before,\n";
 			echo ".tcbf-pack-footer-row td::after {\n";
