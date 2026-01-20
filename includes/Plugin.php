@@ -1203,7 +1203,8 @@ final class Plugin {
 			echo "  display: none !important;\n";
 			echo "  content: none !important;\n";
 			echo "}\n";
-			echo ".tcbf-pack-footer--cart {\n";
+			echo ".tcbf-pack-footer--cart,\n";
+			echo ".tcbf-pack-footer--checkout {\n";
 			echo "  background: rgba(0, 0, 0, 0.02);\n";
 			echo "  padding: 10px 14px;\n";
 			echo "}\n";

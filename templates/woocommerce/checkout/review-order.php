@@ -252,51 +252,6 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 .tcbf-checkout-row--child td {
 	padding-left: 12px !important;
 }
-.tcbf-pack-footer-row td {
-	padding: 0 !important;
-	border: none !important;
-}
-.tcbf-pack-footer-cell {
-	padding: 8px 0 16px 3px !important;
-}
-.tcbf-pack-footer--checkout {
-	background: rgba(0, 0, 0, 0.02);
-	border: 1px solid rgba(0, 0, 0, 0.06);
-	border-radius: 6px;
-	padding: 10px 14px;
-	margin-left: 0;
-}
-.tcbf-pack-footer-line {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 3px 0;
-	font-size: 12px;
-}
-.tcbf-pack-footer-label {
-	color: #6b7280;
-}
-.tcbf-pack-footer-value {
-	font-weight: 600;
-	color: #374151;
-}
-.tcbf-pack-footer-discount {
-	color: #059669;
-}
-.tcbf-pack-footer-total {
-	border-top: 1px solid rgba(0, 0, 0, 0.08);
-	margin-top: 4px;
-	padding-top: 6px;
-}
-.tcbf-pack-footer-total .tcbf-pack-footer-label {
-	font-weight: 600;
-	color: #374151;
-}
-.tcbf-pack-footer-total .tcbf-pack-footer-value {
-	font-weight: 700;
-	color: #111827;
-	font-size: 13px;
-}
 .tcbf-checkout-link {
 	color: var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00)));
 }
