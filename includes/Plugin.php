@@ -1263,47 +1263,8 @@ final class Plugin {
 			echo "  line-height: 1.2;\n";
 			echo "}\n";
 
-			echo "\n/* Notification badge (admin/partner only - operational indicator) */\n";
-			echo "/* Perfect circle approach: aspect-ratio + border-radius 50% + box-sizing */\n";
-			echo ".tcbf-notify-badge {\n";
-			echo "  display: inline-flex;\n";
-			echo "  align-items: center;\n";
-			echo "  justify-content: center;\n";
-			echo "  margin-top: 6px;\n";
-			echo "  margin-left: 8px;\n";
-			echo "  padding: 5px;\n";
-			echo "  min-width: 22px;\n";
-			echo "  min-height: 22px;\n";
-			echo "  aspect-ratio: 1 / 1;\n";  /* Forces perfect square regardless of content */
-			echo "  border-radius: 50%;\n";    /* Makes square into perfect circle */
-			echo "  font-size: 13px;\n";
-			echo "  line-height: 1;\n";
-			echo "  font-weight: 700;\n";
-			echo "  border: 1px solid rgba(0, 0, 0, 0.15);\n";
-			echo "  opacity: 0.9;\n";
-			echo "  background: #f3f4f6;\n";
-			echo "  box-sizing: border-box;\n"; /* Padding included in dimensions */
-			echo "}\n";
-			echo "\n";
-			echo ".tcbf-notify-badge.is-yes {\n";
-			echo "  background: #d1fae5;\n";
-			echo "  color: #065f46;\n";
-			echo "  border-color: #34d399;\n";
-			echo "}\n";
-			echo "\n";
-			echo ".tcbf-notify-badge.is-yes::before {\n";
-			echo "  content: \"✓\";\n";
-			echo "}\n";
-			echo "\n";
-			echo ".tcbf-notify-badge.is-no {\n";
-			echo "  background: #fee2e2;\n";
-			echo "  color: #991b1b;\n";
-			echo "  border-color: #fca5a5;\n";
-			echo "}\n";
-			echo "\n";
-			echo ".tcbf-notify-badge.is-no::before {\n";
-			echo "  content: \"✕\";\n";
-			echo "}\n";
+			// Notification UI CSS (admin/partner badges, future: notification content)
+			$this->output_notification_css();
 
 			echo "\n/* Child 'Included in pack' badge: remove left margin, add top */\n";
 			echo ".tcbf-pack-role-child .tcbf-pack-badge-inline {\n";
@@ -1501,6 +1462,67 @@ final class Plugin {
 
 		echo "</style>\n";
 		echo "<!-- /TC Booking Flow: Enhanced Field CSS -->\n";
+	}
+
+	/**
+	 * Output notification UI CSS.
+	 *
+	 * Separated from main CSS to allow independent expansion for:
+	 * - Admin/partner notification badges (current)
+	 * - Notification content blocks (future)
+	 * - Alert/warning banners (future)
+	 *
+	 * Called from output_form_field_css() on cart/checkout pages.
+	 */
+	private function output_notification_css() : void {
+		echo "\n/* ===== Notification UI CSS (tcbf-notifications) ===== */\n";
+
+		// --- Notification badge (admin/partner only - operational indicator) ---
+		echo "/* Perfect circle approach: aspect-ratio + border-radius 50% + box-sizing */\n";
+		echo ".tcbf-notify-badge {\n";
+		echo "  display: inline-flex;\n";
+		echo "  align-items: center;\n";
+		echo "  justify-content: center;\n";
+		echo "  margin-top: 6px;\n";
+		echo "  margin-left: 8px;\n";
+		echo "  padding: 5px;\n";
+		echo "  min-width: 22px;\n";
+		echo "  min-height: 22px;\n";
+		echo "  aspect-ratio: 1 / 1;\n";
+		echo "  border-radius: 50%;\n";
+		echo "  font-size: 13px;\n";
+		echo "  line-height: 1;\n";
+		echo "  font-weight: 700;\n";
+		echo "  border: 1px solid rgba(0, 0, 0, 0.15);\n";
+		echo "  opacity: 0.9;\n";
+		echo "  background: #f3f4f6;\n";
+		echo "  box-sizing: border-box;\n";
+		echo "}\n";
+		echo "\n";
+		echo ".tcbf-notify-badge.is-yes {\n";
+		echo "  background: #d1fae5;\n";
+		echo "  color: #065f46;\n";
+		echo "  border-color: #34d399;\n";
+		echo "}\n";
+		echo "\n";
+		echo ".tcbf-notify-badge.is-yes::before {\n";
+		echo "  content: \"✓\";\n";
+		echo "}\n";
+		echo "\n";
+		echo ".tcbf-notify-badge.is-no {\n";
+		echo "  background: #fee2e2;\n";
+		echo "  color: #991b1b;\n";
+		echo "  border-color: #fca5a5;\n";
+		echo "}\n";
+		echo "\n";
+		echo ".tcbf-notify-badge.is-no::before {\n";
+		echo "  content: \"✕\";\n";
+		echo "}\n";
+
+		// --- Future: Notification content blocks ---
+		// Add styles for .tcbf-notification-block, .tcbf-notification-banner, etc.
+
+		echo "/* /Notification UI CSS */\n";
 	}
 
 	/**

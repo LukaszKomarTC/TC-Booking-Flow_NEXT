@@ -27,13 +27,7 @@ defined( 'ABSPATH' ) || exit;
 global $tcbf_cart_template_loaded;
 $tcbf_cart_template_loaded = true;
 
-// Debug marker to verify this template is being loaded
-echo '<!-- TCBF Cart Template Loaded -->';
-
-// Output pack styles once
-if ( class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' ) ) {
-	\TC_BF\Integrations\WooCommerce\Woo_OrderMeta::output_pack_styles_once();
-}
+// Cart/checkout pack UI CSS is injected via Plugin.php (wp_head). Order pages use Woo_OrderMeta styles.
 
 do_action( 'woocommerce_before_cart' ); ?>
 
