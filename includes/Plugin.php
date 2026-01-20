@@ -1184,14 +1184,12 @@ final class Plugin {
 			echo "}\n";
 
 			echo "\n/* Pack footer rows in cart */\n";
-			echo ".tcbf-pack-footer-row {\n";
-			echo "  display: table-row !important;\n";
-			echo "}\n";
 			echo ".tcbf-pack-footer-row td {\n";
+			echo "  display: block !important;\n";
+			echo "  width: 100% !important;\n";
 			echo "  padding: 8px 0 16px 0 !important;\n";
 			echo "  border: none !important;\n";
 			echo "  background: transparent !important;\n";
-			echo "  display: table-cell !important;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-row td::before,\n";
 			echo ".tcbf-pack-footer-row td::after {\n";
