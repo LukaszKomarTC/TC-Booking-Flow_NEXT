@@ -1185,7 +1185,7 @@ final class Plugin {
 
 			echo "\n/* Pack footer rows - shared styles */\n";
 			echo ".tcbf-pack-footer-row td {\n";
-			echo "  padding: 8px 0 16px 0 !important;\n";
+			echo "  padding: 0 0 9px 0 !important;\n";
 			echo "  border: none !important;\n";
 			echo "  background: transparent !important;\n";
 			echo "}\n";
@@ -1266,7 +1266,7 @@ final class Plugin {
 			// Notification UI CSS (admin/partner badges, future: notification content)
 			$this->output_notification_css();
 
-			echo "\n/* Child 'Included in pack' badge: remove left margin, add top */\n";
+			echo "\n/* Child 'Included in tour pack' badge: remove left margin, add top */\n";
 			echo ".tcbf-pack-role-child .tcbf-pack-badge-inline {\n";
 			echo "  margin-left: 0 !important;\n";
 			echo "  margin-top: 6px;\n";
@@ -1346,11 +1346,11 @@ final class Plugin {
 			echo "  margin-left: 0 !important;\n";
 			echo "}\n";
 
-			echo "/* Apply indentation ONLY to child row variation/meta details */\n";
+			echo "/* Child row variation: clean alignment with product name */\n";
 			echo ".woocommerce-checkout #order_review .woocommerce-checkout-review-order-table tr.tcbf-pack-role-child td.product-name dl.variation {\n";
-			echo "  margin-top: 6px;\n";
-			echo "  padding-left: 14px;\n";
-			echo "  border-left: 2px solid rgba(0,0,0,.10);\n";
+			echo "  margin-top: 0;\n";
+			echo "  padding-left: 0;\n";
+			echo "  border-left: none;\n";
 			echo "}\n";
 
 			echo "/* Visually emphasize parent product name */\n";
@@ -1691,11 +1691,11 @@ final class Plugin {
 		}
 
 		// ==================================================================
-		// CHILD ITEM (Rental) - Show "Included in pack" badge
+		// CHILD ITEM (Rental) - Show "Included in tour pack" badge
 		// ==================================================================
 		if ( $role === 'child' && $scope === 'rental' ) {
-			// Multilingual text
-			$badge_text = Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack[:en]Included in pack[:]' );
+			// Multilingual text (consistent across cart, checkout, order summary)
+			$badge_text = Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack de la salida[:en]Included in the tour pack[:]' );
 
 			echo '<div class="tcbf-pack-badge-inline">';
 			echo '<span class="tcbf-pack-badge-inline__icon">📦</span>';
