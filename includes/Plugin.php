@@ -1200,6 +1200,10 @@ final class Plugin {
 			echo "  background: rgba(0, 0, 0, 0.02);\n";
 			echo "  padding: 10px 14px;\n";
 			echo "}\n";
+			echo ".tcbf-pack-footer--checkout {\n";
+			echo "  background: rgba(0, 0, 0, 0.02);\n";
+			echo "  padding: 10px 14px;\n";
+			echo "}\n";
 			echo ".tcbf-pack-footer-line {\n";
 			echo "  display: flex;\n";
 			echo "  justify-content: space-between;\n";
