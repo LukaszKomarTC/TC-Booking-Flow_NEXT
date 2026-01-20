@@ -88,10 +88,10 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 
 							echo wc_get_formatted_cart_item_data( $cart_item );
 
-							// Add "Included in tour pack" badge for child items
+							// Add "Part of tour pack" badge for child items
 							if ( ! $is_parent ) {
-								$badge_text = \TC_BF\Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack de la salida[:en]Included in the tour pack[:]' );
-								echo '<div class="tcbf-pack-badge-inline"><span class="tcbf-pack-badge-inline__icon">📦</span><span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span></div>';
+								$badge_text = \TC_BF\Integrations\WooCommerce\Woo::translate( '[:es]Parte del pack de la salida[:en]Part of the tour pack[:]' );
+								echo '<div class="tcbf-pack-badge-inline"><span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span></div>';
 							}
 							?>
 						</td>

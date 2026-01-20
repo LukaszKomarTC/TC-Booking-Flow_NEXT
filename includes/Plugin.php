@@ -1266,7 +1266,7 @@ final class Plugin {
 			// Notification UI CSS (admin/partner badges, future: notification content)
 			$this->output_notification_css();
 
-			echo "\n/* Child 'Included in tour pack' badge: remove left margin, add top */\n";
+			echo "\n/* Child 'Part of tour pack' badge: remove left margin, add top */\n";
 			echo ".tcbf-pack-role-child .tcbf-pack-badge-inline {\n";
 			echo "  margin-left: 0 !important;\n";
 			echo "  margin-top: 6px;\n";
@@ -1691,14 +1691,13 @@ final class Plugin {
 		}
 
 		// ==================================================================
-		// CHILD ITEM (Rental) - Show "Included in tour pack" badge
+		// CHILD ITEM (Rental) - Show "Part of tour pack" badge
 		// ==================================================================
 		if ( $role === 'child' && $scope === 'rental' ) {
 			// Multilingual text (consistent across cart, checkout, order summary)
-			$badge_text = Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack de la salida[:en]Included in the tour pack[:]' );
+			$badge_text = Integrations\WooCommerce\Woo::translate( '[:es]Parte del pack de la salida[:en]Part of the tour pack[:]' );
 
 			echo '<div class="tcbf-pack-badge-inline">';
-			echo '<span class="tcbf-pack-badge-inline__icon">📦</span>';
 			echo '<span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span>';
 			echo '</div>';
 		}
