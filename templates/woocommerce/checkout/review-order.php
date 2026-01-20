@@ -80,17 +80,19 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 					<tr class="<?php echo esc_attr( apply_filters( 'woocommerce_cart_item_class', 'cart_item', $cart_item, $cart_item_key ) ); ?> <?php echo esc_attr( $row_class ); ?>">
 						<td class="product-name">
 							<?php
-							// Link to event page if available
-							if ( $event_url && $is_parent ) {
-								echo '<a href="' . esc_url( $event_url ) . '" class="tcbf-checkout-link">' . wp_kses_post( $product_name ) . '</a>';
-							} else {
-								echo wp_kses_post( $product_name );
-							}
+							// No links at checkout stage - clean presentation
+							echo wp_kses_post( $product_name );
 							echo '&nbsp;<strong class="product-quantity">&times;&nbsp;' . esc_html( $cart_item['quantity'] ) . '</strong>';
 
 							do_action( 'woocommerce_checkout_cart_item_product_name', $cart_item, $cart_item_key );
 
 							echo wc_get_formatted_cart_item_data( $cart_item );
+
+							// Add "Included in tour pack" badge for child items
+							if ( ! $is_parent ) {
+								$badge_text = \TC_BF\Integrations\WooCommerce\Woo::translate( '[:es]Incluido en el pack de la salida[:en]Included in the tour pack[:]' );
+								echo '<div class="tcbf-pack-badge-inline"><span class="tcbf-pack-badge-inline__icon">📦</span><span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span></div>';
+							}
 							?>
 						</td>
 						<td class="product-total">

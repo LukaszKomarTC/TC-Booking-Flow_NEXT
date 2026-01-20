@@ -1998,9 +1998,10 @@ class Woo_OrderMeta {
 		}
 		echo '</div>';
 
-		// "Rental included in the pack" badge line
+		// "Included in tour pack" badge line (consistent with cart/checkout)
+		$badge_text = Woo::translate( '[:es]Incluido en el pack de la salida[:en]Included in the tour pack[:]' );
 		echo '<div class="tcbf-rental-badge-line">';
-		echo '<span class="tcbf-badge-included">🚲 ' . esc_html__( 'Rental included in the pack', TC_BF_TEXTDOMAIN ) . '</span>';
+		echo '<span class="tcbf-badge-included">📦 ' . esc_html( $badge_text ) . '</span>';
 		echo '</div>';
 
 		// EB badge line for child (if applicable)
@@ -2354,7 +2355,7 @@ class Woo_OrderMeta {
 			text-decoration: underline;
 		}
 
-		/* Rental "included in pack" badge */
+		/* "Included in tour pack" badge */
 		.tcbf-rental-badge-line {
 			margin-bottom: 6px;
 		}
