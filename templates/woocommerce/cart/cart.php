@@ -30,10 +30,8 @@ $tcbf_cart_template_loaded = true;
 // Debug marker to verify this template is being loaded
 echo '<!-- TCBF Cart Template Loaded -->';
 
-// Output pack styles once
-if ( class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' ) ) {
-	\TC_BF\Integrations\WooCommerce\Woo_OrderMeta::output_pack_styles_once();
-}
+// Note: Cart/Checkout CSS is provided by Plugin.php via wp_head hook.
+// Order Summary CSS is separately provided by Woo_OrderMeta::output_grouped_items_styles().
 
 do_action( 'woocommerce_before_cart' ); ?>
 
