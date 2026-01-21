@@ -495,13 +495,6 @@ final class Settings {
 				<?php submit_button( esc_html__( 'Sync Notifications', 'tc-booking-flow-next' ), 'secondary', 'tcbf_sync_notifications', false ); ?>
 			</form>
 
-			<p class="description">
-				<strong><?php echo esc_html__( 'CLI:', 'tc-booking-flow-next' ); ?></strong>
-				<code>wp tcbf notifications sync</code> |
-				<code>wp tcbf notifications status</code> |
-				<code>wp tcbf notifications validate &lt;form_id&gt;</code>
-			</p>
-
 		<?php endif;
 	}
 }

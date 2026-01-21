@@ -6,7 +6,6 @@ if ( ! defined('ABSPATH') ) exit;
 // Load extracted classes
 require_once TC_BF_PATH . 'includes/Support/Money.php';
 require_once TC_BF_PATH . 'includes/Support/Logger.php';
-require_once TC_BF_PATH . 'includes/Support/CLI.php';
 require_once TC_BF_PATH . 'includes/Domain/EventConfig.php';
 require_once TC_BF_PATH . 'includes/Domain/Ledger.php';
 require_once TC_BF_PATH . 'includes/Domain/PartnerResolver.php';
@@ -122,9 +121,6 @@ final class Plugin {
 			\TC_BF\Admin\Settings::init();
 			\TC_BF\Admin\Partners::init();
 		}
-
-		// CLI commands
-		\TC_BF\Support\CLI::register();
 
 		// ---- GF: dynamic EB% population (field 172)
 		add_filter('gform_field_value_early_booking_discount_pct', [ $this, 'gf_populate_eb_pct' ]);
