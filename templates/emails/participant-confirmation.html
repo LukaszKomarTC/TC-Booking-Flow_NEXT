@@ -1,25 +1,25 @@
-<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; color: #333;">
+<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 14px; color: #333;">
 
   <!-- HEADER -->
   <div style="padding: 20px 10px; text-align: center; background-color: #434c00; color: white;">
     <img src="https://tossacycling.com/wp-content/uploads/2022/01/TC_logo-1-e1643588124162.png" alt="Tossa Cycling" width="150" height="97" style="display: block; margin: 0 auto;" />
-    <h1 style="margin: 15px 0 5px 0; font-size: 24px; font-weight: bold;">[:en]Booking Confirmed[:es]Reserva Confirmada[:]</h1>
+    <h1 style="margin: 15px 0 5px 0; font-size: 22px; font-weight: bold;">[:en]Booking Confirmed[:es]Reserva Confirmada[:]</h1>
   </div>
 
   <!-- GREETING -->
   <div style="padding: 20px;">
-    <p>[:en]Hello[:es]Hola[:] {[:en]Participants[:es]Participante[:] (Nombre):2.3},</p>
+    <p style="font-size: 14px;">[:en]Hello[:es]Hola[:] {[:en]Participants[:es]Participante[:] (Nombre):2.3},</p>
 
-    <p style="font-size: 16px;">
+    <p style="font-size: 14px;">
       [:en]Thank you for booking with Tossa Cycling! Your reservation is confirmed.[:es]Gracias por reservar con Tossa Cycling. Tu reserva esta confirmada.[:]
     </p>
   </div>
 
   <!-- EVENT DETAILS -->
   <div style="padding: 0 20px;">
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
       <tr style="background-color: #f5f5f5;">
-        <td colspan="2" style="padding: 12px; font-weight: bold; font-size: 16px; border-bottom: 2px solid #434c00;">
+        <td colspan="2" style="padding: 12px; font-weight: bold; font-size: 15px; border-bottom: 2px solid #434c00;">
           {Event:1}
         </td>
       </tr>
@@ -45,7 +45,7 @@
   <!-- BIKE RENTAL SECTION (conditional: rental selected) -->
   [gravityforms action="conditional" merge_tag="{[:en]Bicycle rental[:es]Alquiler de bicicleta[:]:106}" condition="isnot" value=""]
   <div style="padding: 0 20px;">
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fafafa;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fafafa; font-size: 14px;">
       <tr>
         <td colspan="2" style="padding: 12px; font-weight: bold; border-bottom: 1px solid #ddd;">
           [:en]Bike Rental[:es]Alquiler de Bicicleta[:]
@@ -81,7 +81,7 @@
 
   <!-- PRICING BREAKDOWN -->
   <div style="padding: 0 20px;">
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px;">
       <!-- Official Price -->
       <tr>
         <td style="padding: 10px; background-color: #f5f5f5;">
@@ -95,10 +95,10 @@
       <!-- Early Booking Discount (conditional) -->
       [gravityforms action="conditional" merge_tag="{Descuento reserva anticipada:175}" condition="greater_than" value="0"]
       <tr>
-        <td style="padding: 10px; background-color: #3d61aa; color: white;">
+        <td style="padding: 10px; background-color: #ede9fe; color: #5b21b6;">
           <strong>[:en]Early booking[:es]Reserva anticipada[:] (-{Early Booking Discount %:172}%)</strong>
         </td>
-        <td style="padding: 10px; text-align: right; background-color: #3d61aa; color: white; font-weight: bold;">
+        <td style="padding: 10px; text-align: right; background-color: #ede9fe; color: #5b21b6; font-weight: bold;">
           -{Descuento reserva anticipada:175}
         </td>
       </tr>
@@ -118,10 +118,10 @@
 
       <!-- Total -->
       <tr>
-        <td style="padding: 12px; background-color: #434c00; color: white; font-weight: bold; font-size: 16px;">
+        <td style="padding: 12px; background-color: #434c00; color: white; font-weight: bold;">
           <strong>Total</strong>
         </td>
-        <td style="padding: 12px; text-align: right; background-color: #434c00; color: white; font-weight: bold; font-size: 18px;">
+        <td style="padding: 12px; text-align: right; background-color: #434c00; color: white; font-weight: bold; font-size: 16px;">
           {Total client:168}
         </td>
       </tr>
@@ -133,7 +133,7 @@
   </div>
 
   <!-- LINKS -->
-  <div style="padding: 20px;">
+  <div style="padding: 20px; font-size: 14px;">
     <p>
       [:en]View event details[:es]Ver detalles del evento[:]:
       <a href="https://tossacycling.com/?p={Event:20}" style="color: #434c00;">[:en]Event Page[:es]Pagina del Evento[:]</a>
