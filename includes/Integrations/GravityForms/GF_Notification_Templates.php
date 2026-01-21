@@ -110,10 +110,10 @@ final class GF_Notification_Templates {
 			return $result;
 		}
 
-		Logger::info( "TCBF Notification Sync: Starting for form {$form_id}", [
+		Logger::log( "TCBF Notification Sync: Starting for form {$form_id}", [
 			'form_title' => $form['title'] ?? 'Unknown',
 			'dry_run'    => $dry_run,
-		] );
+		], 'info' );
 
 		$notifications = $form['notifications'] ?? [];
 		$updated = false;
@@ -147,11 +147,11 @@ final class GF_Notification_Templates {
 			if ( is_wp_error( $update_result ) ) {
 				$result['success'] = false;
 				$result['errors'][] = "Failed to save form: " . $update_result->get_error_message();
-				Logger::error( "TCBF Notification Sync: Failed to save form {$form_id}", [
+				Logger::log( "TCBF Notification Sync: Failed to save form {$form_id}", [
 					'error' => $update_result->get_error_message(),
-				] );
+				], 'error' );
 			} else {
-				Logger::info( "TCBF Notification Sync: Form {$form_id} saved successfully" );
+				Logger::log( "TCBF Notification Sync: Form {$form_id} saved successfully", [], 'info' );
 			}
 		}
 
@@ -183,7 +183,7 @@ final class GF_Notification_Templates {
 		$validation = GF_Notification_Config::validate_form_fields( $form_id, $type );
 		if ( ! $validation['valid'] ) {
 			$message = "Skipping {$notification_id}: missing fields - " . implode( ', ', $validation['missing'] );
-			Logger::warning( "TCBF Notification Sync: {$message}" );
+			Logger::log( "TCBF Notification Sync: {$message}", [], 'warning' );
 			return [
 				'action'  => 'error',
 				'message' => $message,
@@ -194,7 +194,7 @@ final class GF_Notification_Templates {
 		$template_html = self::load_template( $template_config['template'] );
 		if ( $template_html === null ) {
 			$message = "Skipping {$notification_id}: template file not found - {$template_config['template']}";
-			Logger::warning( "TCBF Notification Sync: {$message}" );
+			Logger::log( "TCBF Notification Sync: {$message}", [], 'warning' );
 			return [
 				'action'  => 'error',
 				'message' => $message,
@@ -211,7 +211,7 @@ final class GF_Notification_Templates {
 
 		if ( $notification === null ) {
 			$message = "Skipping {$notification_id}: failed to build notification (missing conditional logic)";
-			Logger::warning( "TCBF Notification Sync: {$message}" );
+			Logger::log( "TCBF Notification Sync: {$message}", [], 'warning' );
 			return [
 				'action'  => 'error',
 				'message' => $message,
@@ -226,7 +226,7 @@ final class GF_Notification_Templates {
 			? "[DRY RUN] Would {$action} {$notification_id}"
 			: "{$action}d {$notification_id}";
 
-		Logger::info( "TCBF Notification Sync: {$message}" );
+		Logger::log( "TCBF Notification Sync: {$message}", [], 'info' );
 
 		return [
 			'action'       => $action,
@@ -470,7 +470,7 @@ final class GF_Notification_Templates {
 			if ( strpos( $id, self::ID_PREFIX ) === 0 ) {
 				unset( $notifications[ $id ] );
 				$updated = true;
-				Logger::info( "TCBF Notification Sync: Removed {$id} from form {$form_id}" );
+				Logger::log( "TCBF Notification Sync: Removed {$id} from form {$form_id}", [], 'info' );
 			}
 		}
 
