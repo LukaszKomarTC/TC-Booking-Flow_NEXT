@@ -1,0 +1,106 @@
+<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; color: #333;">
+
+  <!-- HEADER -->
+  <div style="padding: 15px; background-color: #434c00; color: white;">
+    <h2 style="margin: 0; font-size: 18px;">[TCBF] New Booking Confirmed</h2>
+  </div>
+
+  <!-- BOOKING DETAILS -->
+  <div style="padding: 20px; background-color: #f9f9f9;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd; width: 35%;"><strong>Event</strong></td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">{Event:1}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Date</strong></td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">{Start date:131}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Participant</strong></td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">{[:en]Participants[:es]Participante[:] (Nombre):2.3} {[:en]Participants[:es]Participante[:] (Apellidos):2.6}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Email</strong></td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">{Email:21}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Phone</strong></td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">{[:es]Telefono[:en]Phone number[:]:123}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- BIKE RENTAL (conditional) -->
+  [gravityforms action="conditional" merge_tag="{[:en]Bicycle rental[:es]Alquiler de bicicleta[:]:106}" condition="isnot" value=""]
+  <div style="padding: 0 20px 20px 20px; background-color: #f9f9f9;">
+    <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #ddd;">
+      <tr style="background-color: #eee;">
+        <td colspan="2" style="padding: 8px; font-weight: bold;">Bike Rental</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; width: 35%;"><strong>Model</strong></td>
+        <td style="padding: 8px;">{Bike model and size:146}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><strong>Pedals</strong></td>
+        <td style="padding: 8px;">{[:en]Type of pedals[:es]Tipo de pedales[:]:60}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><strong>Helmet</strong></td>
+        <td style="padding: 8px;">{[:en]Helmet (obligatory)[:es]Casco (obligatorio)[:]:61}</td>
+      </tr>
+    </table>
+  </div>
+  [/gravityforms]
+
+  <!-- PRICING -->
+  <div style="padding: 0 20px 20px 20px; background-color: #f9f9f9;">
+    <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #ddd;">
+      <tr style="background-color: #eee;">
+        <td colspan="2" style="padding: 8px; font-weight: bold;">Pricing</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; width: 35%;"><strong>Total (official)</strong></td>
+        <td style="padding: 8px;">{Total:76}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><strong>Total (client)</strong></td>
+        <td style="padding: 8px;">{Total client:168}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- PARTNER INFO (conditional) -->
+  [gravityforms action="conditional" merge_tag="{Discount code:154}" condition="isnot" value=""]
+  <div style="padding: 0 20px 20px 20px; background-color: #f9f9f9;">
+    <table style="width: 100%; border-collapse: collapse; background-color: #fff3e0; border: 1px solid #ffcc80;">
+      <tr style="background-color: #ffe0b2;">
+        <td colspan="2" style="padding: 8px; font-weight: bold;">Partner Attribution</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; width: 35%;"><strong>Code</strong></td>
+        <td style="padding: 8px;">{Discount code:154}</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><strong>Discount</strong></td>
+        <td style="padding: 8px;">{Partner Discount %:152}% ({Discount amount:164})</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><strong>Commission</strong></td>
+        <td style="padding: 8px;">{Partner commission %:161}% ({Partner commission amount:165})</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><strong>Partner Email</strong></td>
+        <td style="padding: 8px;">{Partner email:153}</td>
+      </tr>
+    </table>
+  </div>
+  [/gravityforms]
+
+  <!-- INTERNAL IDS -->
+  <div style="padding: 20px; background-color: #f0f0f0; font-size: 12px; color: #666;">
+    <strong>Internal:</strong> Entry #{entry_id} | Event ID: {Event:20} | User: {[:en]User[:es]Usuario[:]:5} ({User ID:167})
+  </div>
+
+</div>

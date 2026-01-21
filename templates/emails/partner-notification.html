@@ -1,0 +1,142 @@
+<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; color: #333;">
+
+  <!-- HEADER -->
+  <div style="padding: 20px 10px; text-align: center; background-color: #434c00; color: white;">
+    <img src="https://tossacycling.com/wp-content/uploads/2022/01/TC_logo-1-e1643588124162.png" alt="Tossa Cycling" width="150" height="97" style="display: block; margin: 0 auto;" />
+    <h1 style="margin: 15px 0 5px 0; font-size: 24px; font-weight: bold;">Notificacion del Partner</h1>
+  </div>
+
+  <!-- GREETING -->
+  <div style="padding: 20px;">
+    <p>Nueva reserva realizada con tu codigo de partner.</p>
+  </div>
+
+  <!-- BOOKING DETAILS -->
+  <div style="padding: 0 20px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+      <tr style="background-color: #f5f5f5;">
+        <td colspan="2" style="padding: 12px; font-weight: bold; font-size: 16px; border-bottom: 2px solid #434c00;">
+          {Event:1}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; width: 40%;">
+          <strong>Fecha</strong>
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          {Start date:131}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          <strong>Participante</strong>
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          {[:en]Participants[:es]Participante[:] (Nombre):2.3} {Participant family name masked:151}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          <strong>Email</strong>
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          {Participant email masked:150}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- BIKE RENTAL (conditional) -->
+  [gravityforms action="conditional" merge_tag="{[:en]Bicycle rental[:es]Alquiler de bicicleta[:]:106}" condition="isnot" value=""]
+  <div style="padding: 0 20px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fafafa;">
+      <tr>
+        <td colspan="2" style="padding: 12px; font-weight: bold; border-bottom: 1px solid #ddd;">
+          Alquiler de Bicicleta
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; width: 40%;">
+          <strong>Bicicleta</strong>
+        </td>
+        <td style="padding: 10px;">
+          {Bike model and size:146}
+        </td>
+      </tr>
+    </table>
+  </div>
+  [/gravityforms]
+
+  <!-- PRICING -->
+  <div style="padding: 0 20px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 2px solid #434c00;">
+      <tr>
+        <td style="padding: 10px; width: 50%;">
+          <strong>Precio oficial</strong>
+        </td>
+        <td style="padding: 10px; text-align: right;">
+          {Total:76}
+        </td>
+      </tr>
+      <tr style="background-color: #f5f5f5;">
+        <td style="padding: 10px;">
+          <strong>Descuento ({Discount code:154})</strong>
+        </td>
+        <td style="padding: 10px; text-align: right;">
+          -{Partner Discount %:152}% ({Discount amount:164})
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px;">
+          <strong>Precio cliente</strong>
+        </td>
+        <td style="padding: 10px; text-align: right;">
+          {Total client:168}
+        </td>
+      </tr>
+    </table>
+
+    <p style="background-color: #e8f5e9; padding: 12px; text-align: center; margin-bottom: 20px;">
+      <strong>Tu comision ({Partner commission %:161}%):</strong> {Partner commission amount:165}
+    </p>
+  </div>
+
+  <!-- LINKS -->
+  <div style="padding: 20px;">
+    <p>
+      <a href="https://tossacycling.com/mi-cuenta/partner/" style="color: #434c00;">Ver tu portal de partner</a>
+    </p>
+    <p>
+      <a href="https://tossacycling.com/contacto" style="color: #434c00;">Contactanos</a>
+    </p>
+    <p style="margin-top: 20px;">
+      Saludos,<br/>
+      <em>Tossa Cycling</em>
+    </p>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="padding: 30px 10px 20px 10px; text-align: center; background-color: #434c00; color: white;">
+    <img src="https://tossacycling.com/wp-content/uploads/2022/01/TC_logo-1-e1643588124162.png" alt="Tossa Cycling" width="100" height="65" style="opacity: 0.5; display: block; margin: 0 auto;" />
+    <table style="width: 150px; margin: 15px auto; border-spacing: 10px;">
+      <tr>
+        <td style="text-align: center;">
+          <a href="https://www.instagram.com/tossacycling/" title="Instagram">
+            <img src="https://tossacycling.com/wp-content/uploads/2021/02/insta_footer.png" alt="Instagram" width="32" height="32" />
+          </a>
+        </td>
+        <td style="text-align: center;">
+          <a href="https://www.facebook.com/Tossa-Cycling-100602045285384" title="Facebook">
+            <img src="https://tossacycling.com/wp-content/uploads/2021/02/fb_footer.png" alt="Facebook" width="32" height="32" />
+          </a>
+        </td>
+        <td style="text-align: center;">
+          <a href="https://wa.me/34673690458" title="WhatsApp">
+            <img src="https://tossacycling.com/wp-content/uploads/2021/02/whatsapp_footer-e1612791863165.png" alt="WhatsApp" width="32" height="32" />
+          </a>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+</div>

@@ -1,0 +1,148 @@
+<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; color: #333;">
+
+  <!-- HEADER -->
+  <div style="padding: 20px 10px; text-align: center; background-color: #434c00; color: white;">
+    <img src="https://tossacycling.com/wp-content/uploads/2022/01/TC_logo-1-e1643588124162.png" alt="Tossa Cycling" width="150" height="97" style="display: block; margin: 0 auto;" />
+    <h1 style="margin: 15px 0 5px 0; font-size: 24px; font-weight: bold;">[:en]Booking Confirmed[:es]Reserva Confirmada[:]</h1>
+  </div>
+
+  <!-- GREETING -->
+  <div style="padding: 20px;">
+    <p>[:en]Hello[:es]Hola[:] {[:en]Participants[:es]Participante[:] (Nombre):2.3},</p>
+
+    <p style="font-size: 16px;">
+      [:en]Thank you for booking with Tossa Cycling! Your reservation is confirmed.[:es]Gracias por reservar con Tossa Cycling. Tu reserva esta confirmada.[:]
+    </p>
+  </div>
+
+  <!-- EVENT DETAILS -->
+  <div style="padding: 0 20px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+      <tr style="background-color: #f5f5f5;">
+        <td colspan="2" style="padding: 12px; font-weight: bold; font-size: 16px; border-bottom: 2px solid #434c00;">
+          {Event:1}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; width: 40%;">
+          <strong>[:en]Date[:es]Fecha[:]</strong>
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          {Start date:131}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          <strong>[:en]Participant[:es]Participante[:]</strong>
+        </td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">
+          {[:en]Participants[:es]Participante[:] (Nombre):2.3} {[:en]Participants[:es]Participante[:] (Apellidos):2.6}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- BIKE RENTAL SECTION (conditional: rental selected) -->
+  [gravityforms action="conditional" merge_tag="{[:en]Bicycle rental[:es]Alquiler de bicicleta[:]:106}" condition="isnot" value=""]
+  <div style="padding: 0 20px;">
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #fafafa;">
+      <tr>
+        <td colspan="2" style="padding: 12px; font-weight: bold; border-bottom: 1px solid #ddd;">
+          [:en]Bike Rental[:es]Alquiler de Bicicleta[:]
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; width: 40%;">
+          <strong>[:en]Bicycle[:es]Bicicleta[:]</strong>
+        </td>
+        <td style="padding: 10px;">
+          {Bike model and size:146}
+        </td>
+      </tr>
+      [gravityforms action="conditional" merge_tag="{Bike image src:148}" condition="isnot" value=""]
+      <tr>
+        <td colspan="2" style="padding: 10px; text-align: center;">
+          <img src="{Bike image src:148}" alt="{Bike model and size:146}" style="max-width: 200px; height: auto;" />
+        </td>
+      </tr>
+      [/gravityforms]
+      <tr>
+        <td style="padding: 10px;">
+          <strong>[:en]Pedals[:es]Pedales[:]</strong>
+        </td>
+        <td style="padding: 10px;">
+          {[:en]Type of pedals[:es]Tipo de pedales[:]:60}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 10px;">
+          <strong>[:en]Helmet[:es]Casco[:]</strong>
+        </td>
+        <td style="padding: 10px;">
+          {[:en]Helmet (obligatory)[:es]Casco (obligatorio)[:]:61}
+        </td>
+      </tr>
+    </table>
+  </div>
+  [/gravityforms]
+
+  <!-- NO BIKE RENTAL (conditional: no rental) -->
+  [gravityforms action="conditional" merge_tag="{[:en]Bicycle rental[:es]Alquiler de bicicleta[:]:106}" condition="is" value=""]
+  <div style="padding: 0 20px;">
+    <p style="background-color: #f5f5f5; padding: 12px; margin-bottom: 20px;">
+      <strong>[:en]Bike Rental[:es]Alquiler de Bicicleta[:]:</strong> [:en]No (own bicycle)[:es]No (bicicleta propia)[:]
+    </p>
+  </div>
+  [/gravityforms]
+
+  <!-- TOTAL -->
+  <div style="padding: 0 20px;">
+    <div style="padding: 15px; border: 2px solid #434c00; text-align: center; margin-bottom: 15px;">
+      <strong style="font-size: 18px;">[:en]Total[:es]Total[:]: {Total:76}</strong>
+    </div>
+    <p style="background-color: #f0f0f0; padding: 10px; font-size: 12px; color: #666; text-align: center;">
+      [:en]Your booking is refundable up to 8 days before the event date.[:es]Tu reserva es reembolsable hasta 8 dias antes de la fecha del evento.[:]
+    </p>
+  </div>
+
+  <!-- LINKS -->
+  <div style="padding: 20px;">
+    <p>
+      [:en]View event details[:es]Ver detalles del evento[:]:
+      <a href="https://tossacycling.com/?p={Event:20}" style="color: #434c00;">[:en]Event Page[:es]Pagina del Evento[:]</a>
+    </p>
+    <p>
+      [:en]Questions?[:es]Preguntas?[:]
+      <a href="https://tossacycling.com/contacto" style="color: #434c00;">[:en]Contact us[:es]Contactanos[:]</a>
+    </p>
+    <p style="margin-top: 20px;">
+      [:en]Best regards[:es]Saludos[:],<br/>
+      <em>Tossa Cycling</em>
+    </p>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="padding: 30px 10px 20px 10px; text-align: center; background-color: #434c00; color: white;">
+    <img src="https://tossacycling.com/wp-content/uploads/2022/01/TC_logo-1-e1643588124162.png" alt="Tossa Cycling" width="100" height="65" style="opacity: 0.5; display: block; margin: 0 auto;" />
+    <table style="width: 150px; margin: 15px auto; border-spacing: 10px;">
+      <tr>
+        <td style="text-align: center;">
+          <a href="https://www.instagram.com/tossacycling/" title="Instagram">
+            <img src="https://tossacycling.com/wp-content/uploads/2021/02/insta_footer.png" alt="Instagram" width="32" height="32" />
+          </a>
+        </td>
+        <td style="text-align: center;">
+          <a href="https://www.facebook.com/Tossa-Cycling-100602045285384" title="Facebook">
+            <img src="https://tossacycling.com/wp-content/uploads/2021/02/fb_footer.png" alt="Facebook" width="32" height="32" />
+          </a>
+        </td>
+        <td style="text-align: center;">
+          <a href="https://wa.me/34673690458" title="WhatsApp">
+            <img src="https://tossacycling.com/wp-content/uploads/2021/02/whatsapp_footer-e1612791863165.png" alt="WhatsApp" width="32" height="32" />
+          </a>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+</div>
