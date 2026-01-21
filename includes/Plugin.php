@@ -20,6 +20,7 @@ require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Participants_Li
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Notifications_Ledger.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Notification_Config.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Notification_Templates.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Field_Population.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
