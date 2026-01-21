@@ -80,36 +80,23 @@ final class Partner_Portal {
     }
 
     /**
-     * Check if the custom 'invoiced' status is registered on this site
-     */
-    private static function has_invoiced_status() : bool {
-        if ( ! function_exists( 'wc_get_order_statuses' ) ) {
-            return false;
-        }
-        return array_key_exists( 'wc-invoiced', wc_get_order_statuses() );
-    }
-
-    /**
-     * Get payable statuses (includes 'invoiced' only if it exists)
+     * Get payable statuses (paid-equivalent statuses for commission calculations).
+     *
+     * Uses Woo_StatusPolicy as the single source of truth.
      */
     private static function get_payable_statuses() : array {
-        $statuses = self::BASE_PAYABLE_STATUSES;
-        if ( self::has_invoiced_status() ) {
-            $statuses[] = 'invoiced';
+        if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_StatusPolicy' ) ) {
+            return \TC_BF\Integrations\WooCommerce\Woo_StatusPolicy::get_paid_equivalent_statuses();
         }
-        return $statuses;
+        // Fallback if policy class not loaded
+        return self::BASE_PAYABLE_STATUSES;
     }
 
     /**
      * Get all visible statuses for portal query
      */
     private static function get_visible_statuses() : array {
-        $statuses = [ 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ];
-        if ( self::has_invoiced_status() ) {
-            // Insert after 'completed'
-            $pos = array_search( 'completed', $statuses, true );
-            array_splice( $statuses, $pos + 1, 0, 'invoiced' );
-        }
+        $statuses = [ 'pending', 'processing', 'on-hold', 'completed', 'invoiced', 'cancelled', 'refunded', 'failed' ];
         return $statuses;
     }
 
@@ -604,22 +591,19 @@ final class Partner_Portal {
      * @param int    $partner_filter Selected partner (0 = all, for admin mode)
      */
     private static function render_filter_form( string $date_from, string $date_to, string $status, int $partner_filter = 0 ) : void {
-        // Build status options dynamically (only include 'invoiced' if registered)
+        // Build status options (invoiced is always available, registered by TCBF)
         $status_opts = [
             ''              => __( 'Any', TC_BF_TEXTDOMAIN ),
             'wc-pending'    => 'Pending',
             'wc-processing' => 'Processing',
             'wc-on-hold'    => 'On hold',
             'wc-completed'  => 'Completed',
+            'wc-invoiced'   => 'Invoiced',
+            'wc-settled'    => 'Settled',
+            'wc-cancelled'  => 'Cancelled',
+            'wc-refunded'   => 'Refunded',
+            'wc-failed'     => 'Failed',
         ];
-
-        if ( self::has_invoiced_status() ) {
-            $status_opts['wc-invoiced'] = 'Invoiced';
-        }
-
-        $status_opts['wc-cancelled'] = 'Cancelled';
-        $status_opts['wc-refunded']  = 'Refunded';
-        $status_opts['wc-failed']    = 'Failed';
 
         echo '<form method="get" action="' . esc_url( wc_get_account_endpoint_url( self::ENDPOINT ) ) . '" style="margin: 0 0 16px;">';
 
