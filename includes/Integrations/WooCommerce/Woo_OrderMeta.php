@@ -497,10 +497,10 @@ class Woo_OrderMeta {
 	}
 
 	/**
-	 * Filter order totals to hide generic Discount row on order page.
+	 * Filter order totals to style the discount row (green) on order page.
 	 *
-	 * We show partner discount in our enhanced blocks instead, avoiding duplication.
-	 * Only applies to order view (My Account / Thank You), not cart/checkout/emails.
+	 * Instead of hiding the discount row, we style it green to match cart/checkout.
+	 * The discount row appears between Subtotal and Total.
 	 *
 	 * @param array $total_rows Array of total rows
 	 * @param \WC_Order $order The order
@@ -508,26 +508,26 @@ class Woo_OrderMeta {
 	 * @return array Filtered total rows
 	 */
 	public static function filter_order_totals_hide_discount( $total_rows, $order, $tax_display ) {
-		// Only filter on frontend order view (not admin, not emails)
+		// Only style on frontend order view (not admin, not emails)
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			return $total_rows;
 		}
 
-		// Check if we're in an email context - don't filter emails
+		// Check if we're in an email context - don't modify emails
 		if ( doing_action( 'woocommerce_email_order_details' ) ||
 		     doing_action( 'woocommerce_email_before_order_table' ) ||
 		     doing_action( 'woocommerce_email_after_order_table' ) ) {
 			return $total_rows;
 		}
 
-		// Only filter if this is a booking order (has our enhanced blocks)
+		// Only style if this is a booking order
 		if ( ! self::is_booking_order( $order ) ) {
 			return $total_rows;
 		}
 
-		// Remove the discount row - we show it in our enhanced blocks
+		// Style the discount row green (wrap value in styled span)
 		if ( isset( $total_rows['discount'] ) ) {
-			unset( $total_rows['discount'] );
+			$total_rows['discount']['value'] = '<span class="tcbf-discount-value">' . $total_rows['discount']['value'] . '</span>';
 		}
 
 		return $total_rows;
@@ -538,12 +538,15 @@ class Woo_OrderMeta {
 	 * ========================================================= */
 
 	/**
-	 * Render enhanced discount and commission blocks after order table.
+	 * Render explainer block (EB + Commission) after order totals.
 	 *
-	 * Shows:
-	 * - Early Booking discount (if applicable)
-	 * - Partner discount (if applicable)
-	 * - Partner commission (admin or partner-owner only)
+	 * Layout:
+	 * - Divider (only if EB or commission visible)
+	 * - EB (left) + Commission (right) side-by-side
+	 * - If only EB: full width
+	 * - If only Commission: full width
+	 *
+	 * Note: Partner discount is now shown inline in totals (green row).
 	 *
 	 * @param \WC_Order $order The order object
 	 */
@@ -552,78 +555,85 @@ class Woo_OrderMeta {
 			return;
 		}
 
-		// Output styles (once per page)
-		self::output_enhanced_styles();
+		// Only render for booking orders
+		if ( ! self::is_booking_order( $order ) ) {
+			return;
+		}
 
 		$currency = $order->get_currency();
 
-		// === Early Booking Discount Block ===
+		// === Gather data ===
 		$eb_amount = (float) $order->get_meta( 'early_booking_discount_amount', true );
 		$eb_pct    = (float) $order->get_meta( 'early_booking_discount_pct', true );
+		$has_eb    = ( $eb_amount > 0 );
 
-		if ( $eb_amount > 0 ) {
-			$eb_sub = $eb_pct > 0
-				? sprintf( __( '%s%% applied to your booking', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
-				: __( 'Applied to your booking', TC_BF_TEXTDOMAIN );
-
-			echo '<div class="tcbf-enhanced-wrap tcbf-eb-enhanced">';
-			echo '<div>';
-			echo '<div class="tcbf-enhanced-title">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
-			echo '<div class="tcbf-enhanced-sub">' . esc_html( $eb_sub ) . '</div>';
-			echo '</div>';
-			echo '<div class="tcbf-enhanced-amount">-' . wp_kses_post( wc_price( $eb_amount, [ 'currency' => $currency ] ) ) . '</div>';
-			echo '</div>';
-		}
-
-		// === Partner Discount Block ===
+		// Commission visibility
 		$partner_id = (int) $order->get_meta( 'partner_id', true );
+		$commission = 0.0;
+		$commission_rate = 0.0;
+		$show_commission = false;
+
 		if ( $partner_id > 0 ) {
-			// Use Woo authoritative discount (same as portal)
-			$discount_total = (float) $order->get_discount_total() + (float) $order->get_discount_tax();
-			$partner_pct    = (float) $order->get_meta( 'partner_discount_pct', true );
-
-			if ( $discount_total > 0 ) {
-				$partner_sub = $partner_pct > 0
-					? sprintf( __( '%s%% partner discount', TC_BF_TEXTDOMAIN ), number_format_i18n( $partner_pct, 0 ) )
-					: __( 'Partner discount applied', TC_BF_TEXTDOMAIN );
-
-				echo '<div class="tcbf-enhanced-wrap tcbf-partner-enhanced">';
-				echo '<div>';
-				echo '<div class="tcbf-enhanced-title">' . esc_html__( 'Partner discount', TC_BF_TEXTDOMAIN ) . '</div>';
-				echo '<div class="tcbf-enhanced-sub">' . esc_html( $partner_sub ) . '</div>';
-				echo '</div>';
-				echo '<div class="tcbf-enhanced-amount">-' . wp_kses_post( wc_price( $discount_total, [ 'currency' => $currency ] ) ) . '</div>';
-				echo '</div>';
-			}
-
-			// === Commission Block (Admin / Partner-owner only) ===
 			$viewer_id = get_current_user_id();
-			$is_admin  = current_user_can( 'manage_woocommerce' );
-			$is_partner_owner = ( $partner_id > 0 && $viewer_id === $partner_id );
+			$is_admin  = current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+			$is_partner_owner = ( $viewer_id === $partner_id && user_can( $viewer_id, 'hotel' ) );
 
 			if ( $is_admin || $is_partner_owner ) {
 				$commission = (float) $order->get_meta( 'partner_commission', true );
-
-				if ( $commission > 0 ) {
-					$commission_rate = (float) $order->get_meta( 'partner_commission_rate', true );
-					$comm_sub = $commission_rate > 0
-						? sprintf( __( '%s%% of base total', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
-						: __( 'Based on order total', TC_BF_TEXTDOMAIN );
-
-					echo '<div class="tcbf-enhanced-wrap tcbf-commission-enhanced">';
-					echo '<div>';
-					echo '<div class="tcbf-enhanced-title">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
-					echo '<div class="tcbf-enhanced-sub">' . esc_html( $comm_sub ) . '</div>';
-					echo '</div>';
-					echo '<div class="tcbf-enhanced-amount">' . wp_kses_post( wc_price( $commission, [ 'currency' => $currency ] ) ) . '</div>';
-					echo '</div>';
-				}
+				$commission_rate = (float) $order->get_meta( 'partner_commission_rate', true );
+				$show_commission = ( $commission > 0 );
 			}
 		}
+
+		// Nothing to show? Exit early
+		if ( ! $has_eb && ! $show_commission ) {
+			return;
+		}
+
+		// Output styles (once per page)
+		self::output_enhanced_styles();
+
+		// === Render divider + explainer block ===
+		echo '<div class="tcbf-order-explainer">';
+		echo '<div class="tcbf-explainer-divider"></div>';
+		echo '<div class="tcbf-explainer-content' . ( $has_eb && $show_commission ? ' tcbf-explainer-two-col' : '' ) . '">';
+
+		// === EB column ===
+		if ( $has_eb ) {
+			$eb_sub = $eb_pct > 0
+				? sprintf( __( '%s%% applied', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
+				: __( 'Applied to booking', TC_BF_TEXTDOMAIN );
+
+			echo '<div class="tcbf-explainer-item tcbf-explainer-eb">';
+			echo '<div class="tcbf-explainer-label">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<div class="tcbf-explainer-row">';
+			echo '<span class="tcbf-explainer-sub">' . esc_html( $eb_sub ) . '</span>';
+			echo '<span class="tcbf-explainer-amount">-' . wp_kses_post( wc_price( $eb_amount, [ 'currency' => $currency ] ) ) . '</span>';
+			echo '</div>';
+			echo '</div>';
+		}
+
+		// === Commission column ===
+		if ( $show_commission ) {
+			$comm_sub = $commission_rate > 0
+				? sprintf( __( '%s%% of base', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
+				: __( 'Based on order total', TC_BF_TEXTDOMAIN );
+
+			echo '<div class="tcbf-explainer-item tcbf-explainer-commission">';
+			echo '<div class="tcbf-explainer-label">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<div class="tcbf-explainer-row">';
+			echo '<span class="tcbf-explainer-sub">' . esc_html( $comm_sub ) . '</span>';
+			echo '<span class="tcbf-explainer-amount">' . wp_kses_post( wc_price( $commission, [ 'currency' => $currency ] ) ) . '</span>';
+			echo '</div>';
+			echo '</div>';
+		}
+
+		echo '</div>'; // .tcbf-explainer-content
+		echo '</div>'; // .tcbf-order-explainer
 	}
 
 	/**
-	 * Output CSS styles for enhanced blocks (only once per page).
+	 * Output CSS styles for order summary and enhanced blocks (only once per page).
 	 */
 	private static function output_enhanced_styles() {
 		static $output = false;
@@ -632,58 +642,78 @@ class Woo_OrderMeta {
 
 		?>
 		<style>
-		/* Enhanced discount/commission blocks */
-		.tcbf-enhanced-wrap {
-			margin: 14px 0;
-			border-radius: 10px;
-			padding: 16px 20px;
+		/* Discount row in totals - green styling */
+		.tcbf-discount-value {
+			color: #15803d;
+			font-weight: 600;
+		}
+		.woocommerce-table--order-details tr th:has(+ td .tcbf-discount-value),
+		.woocommerce-table--order-details tr td:has(.tcbf-discount-value) {
+			background-color: #f0fdf4;
+		}
+
+		/* Explainer block (EB + Commission) */
+		.tcbf-order-explainer {
+			margin-top: 20px;
+		}
+		.tcbf-explainer-divider {
+			border-top: 1px solid #e5e7eb;
+			margin-bottom: 16px;
+		}
+		.tcbf-explainer-content {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.tcbf-explainer-content.tcbf-explainer-two-col {
+			flex-direction: row;
+			gap: 24px;
+		}
+		.tcbf-explainer-item {
+			flex: 1;
+			padding: 12px 16px;
+			background: #f9fafb;
+			border: 1px solid #e5e7eb;
+		}
+		.tcbf-explainer-label {
+			font-weight: 600;
+			font-size: 13px;
+			color: #374151;
+			margin-bottom: 4px;
+		}
+		.tcbf-explainer-row {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			gap: 16px;
 		}
-		.tcbf-enhanced-title {
+		.tcbf-explainer-sub {
+			font-size: 12px;
+			color: #6b7280;
+		}
+		.tcbf-explainer-amount {
 			font-weight: 700;
 			font-size: 15px;
-		}
-		.tcbf-enhanced-sub {
-			opacity: 0.9;
-			font-size: 13px;
-			margin-top: 2px;
-		}
-		.tcbf-enhanced-amount {
-			font-weight: 800;
-			font-size: 18px;
-			white-space: nowrap;
-		}
-		/* Early Booking - dark gradient, white text */
-		.tcbf-eb-enhanced {
-			background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
-		}
-		.tcbf-eb-enhanced .tcbf-enhanced-title,
-		.tcbf-eb-enhanced .tcbf-enhanced-sub,
-		.tcbf-eb-enhanced .tcbf-enhanced-amount {
-			color: #fff;
-		}
-		/* Partner discount - light green gradient */
-		.tcbf-partner-enhanced {
-			background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-			border: 1px solid #bbf7d0;
-		}
-		.tcbf-partner-enhanced .tcbf-enhanced-title,
-		.tcbf-partner-enhanced .tcbf-enhanced-sub,
-		.tcbf-partner-enhanced .tcbf-enhanced-amount {
 			color: #111827;
 		}
-		/* Commission - light indigo gradient */
-		.tcbf-commission-enhanced {
-			background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-			border: 1px solid #c7d2fe;
+		/* EB specific - subtle purple accent */
+		.tcbf-explainer-eb {
+			border-left: 3px solid #7c3aed;
 		}
-		.tcbf-commission-enhanced .tcbf-enhanced-title,
-		.tcbf-commission-enhanced .tcbf-enhanced-sub,
-		.tcbf-commission-enhanced .tcbf-enhanced-amount {
-			color: #111827;
+		.tcbf-explainer-eb .tcbf-explainer-amount {
+			color: #7c3aed;
+		}
+		/* Commission specific - subtle indigo accent */
+		.tcbf-explainer-commission {
+			border-left: 3px solid #4f46e5;
+		}
+		.tcbf-explainer-commission .tcbf-explainer-amount {
+			color: #4f46e5;
+		}
+		/* Responsive */
+		@media (max-width: 600px) {
+			.tcbf-explainer-content.tcbf-explainer-two-col {
+				flex-direction: column;
+			}
 		}
 		</style>
 		<?php
@@ -771,6 +801,10 @@ class Woo_OrderMeta {
 	/**
 	 * Render enhanced blocks for emails (with visibility rules).
 	 *
+	 * Email layout:
+	 * - Partner discount is shown in WooCommerce's native totals (no separate block)
+	 * - EB and Commission shown as explainer rows (email-safe table layout)
+	 *
 	 * @param \WC_Order $order The order object
 	 * @param bool $sent_to_admin Whether email is sent to admin
 	 * @param bool $plain_text Whether email is plain text
@@ -801,52 +835,97 @@ class Woo_OrderMeta {
 
 		$currency = $order->get_currency();
 
-		// === Early Booking Discount Block ===
+		// === Gather data ===
 		$eb_amount = (float) $order->get_meta( 'early_booking_discount_amount', true );
-		if ( $eb_amount > 0 ) {
-			$eb_pct = (float) $order->get_meta( 'early_booking_discount_pct', true );
-			$eb_sub = $eb_pct > 0
-				? sprintf( __( '%s%% applied to your booking', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
-				: __( 'Applied to your booking', TC_BF_TEXTDOMAIN );
+		$eb_pct    = (float) $order->get_meta( 'early_booking_discount_pct', true );
+		$has_eb    = ( $eb_amount > 0 );
 
-			echo '<div style="margin: 14px 0; padding: 16px 20px; border-radius: 10px; background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%); display: flex; justify-content: space-between; align-items: center;">';
-			echo '<div style="color: #fff;"><strong style="font-size: 15px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</strong><br><span style="opacity: 0.9; font-size: 13px;">' . esc_html( $eb_sub ) . '</span></div>';
-			echo '<div style="color: #fff; font-weight: 800; font-size: 18px;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</div>';
-			echo '</div>';
+		// Commission visibility (admin emails only)
+		$partner_id = (int) $order->get_meta( 'partner_id', true );
+		$commission = 0.0;
+		$commission_rate = 0.0;
+		$show_commission = false;
+
+		if ( $partner_id > 0 && ! $is_customer_email ) {
+			$commission = (float) $order->get_meta( 'partner_commission', true );
+			$commission_rate = (float) $order->get_meta( 'partner_commission_rate', true );
+			$show_commission = ( $commission > 0 );
 		}
 
-		// === Partner Discount Block ===
-		$partner_id = (int) $order->get_meta( 'partner_id', true );
-		if ( $partner_id > 0 ) {
-			$discount_total = (float) $order->get_discount_total() + (float) $order->get_discount_tax();
-			if ( $discount_total > 0 ) {
-				$partner_pct = (float) $order->get_meta( 'partner_discount_pct', true );
-				$partner_sub = $partner_pct > 0
-					? sprintf( __( '%s%% partner discount', TC_BF_TEXTDOMAIN ), number_format_i18n( $partner_pct, 0 ) )
-					: __( 'Partner discount applied', TC_BF_TEXTDOMAIN );
+		// Nothing to show? Exit early
+		if ( ! $has_eb && ! $show_commission ) {
+			return;
+		}
 
-				echo '<div style="margin: 14px 0; padding: 16px 20px; border-radius: 10px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; display: flex; justify-content: space-between; align-items: center;">';
-				echo '<div style="color: #111827;"><strong style="font-size: 15px;">' . esc_html__( 'Partner discount', TC_BF_TEXTDOMAIN ) . '</strong><br><span style="opacity: 0.9; font-size: 13px;">' . esc_html( $partner_sub ) . '</span></div>';
-				echo '<div style="color: #111827; font-weight: 800; font-size: 18px;">-' . wp_kses_post( strip_tags( wc_price( $discount_total, [ 'currency' => $currency ] ), '<span>' ) ) . '</div>';
+		// === Render explainer table (email-safe) ===
+		echo '<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 16px;">';
+		echo '<tr><td colspan="2" style="padding-bottom: 12px;"></td></tr>';
+
+		if ( $has_eb && $show_commission ) {
+			// Two-column layout
+			echo '<tr>';
+
+			// EB cell
+			$eb_sub = $eb_pct > 0
+				? sprintf( __( '%s%% applied', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
+				: __( 'Applied to booking', TC_BF_TEXTDOMAIN );
+			echo '<td width="48%" style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #7c3aed; vertical-align: top;">';
+			echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
+			echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $eb_sub ) . '</td>';
+			echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #7c3aed;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+			echo '</tr></table>';
+			echo '</td>';
+
+			echo '<td width="4%"></td>';
+
+			// Commission cell
+			$comm_sub = $commission_rate > 0
+				? sprintf( __( '%s%% of base', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
+				: __( 'Based on order total', TC_BF_TEXTDOMAIN );
+			echo '<td width="48%" style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #4f46e5; vertical-align: top;">';
+			echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
+			echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $comm_sub ) . '</td>';
+			echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #4f46e5;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+			echo '</tr></table>';
+			echo '</td>';
+
+			echo '</tr>';
+		} else {
+			// Single column (full width)
+			echo '<tr><td colspan="2">';
+
+			if ( $has_eb ) {
+				$eb_sub = $eb_pct > 0
+					? sprintf( __( '%s%% applied', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
+					: __( 'Applied to booking', TC_BF_TEXTDOMAIN );
+				echo '<div style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #7c3aed;">';
+				echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
+				echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
+				echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $eb_sub ) . '</td>';
+				echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #7c3aed;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+				echo '</tr></table>';
 				echo '</div>';
 			}
 
-			// === Commission Block (ADMIN EMAIL ONLY - never for customers) ===
-			if ( ! $is_customer_email ) {
-				$commission = (float) $order->get_meta( 'partner_commission', true );
-				if ( $commission > 0 ) {
-					$commission_rate = (float) $order->get_meta( 'partner_commission_rate', true );
-					$comm_sub = $commission_rate > 0
-						? sprintf( __( '%s%% of base total', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
-						: __( 'Based on order total', TC_BF_TEXTDOMAIN );
-
-					echo '<div style="margin: 14px 0; padding: 16px 20px; border-radius: 10px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: 1px solid #c7d2fe; display: flex; justify-content: space-between; align-items: center;">';
-					echo '<div style="color: #111827;"><strong style="font-size: 15px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</strong><br><span style="opacity: 0.9; font-size: 13px;">' . esc_html( $comm_sub ) . '</span></div>';
-					echo '<div style="color: #111827; font-weight: 800; font-size: 18px;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</div>';
-					echo '</div>';
-				}
+			if ( $show_commission ) {
+				$comm_sub = $commission_rate > 0
+					? sprintf( __( '%s%% of base', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
+					: __( 'Based on order total', TC_BF_TEXTDOMAIN );
+				echo '<div style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #4f46e5;">';
+				echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
+				echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
+				echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $comm_sub ) . '</td>';
+				echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #4f46e5;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+				echo '</tr></table>';
+				echo '</div>';
 			}
+
+			echo '</td></tr>';
 		}
+
+		echo '</table>';
 	}
 
 	/**
