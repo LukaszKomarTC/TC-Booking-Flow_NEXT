@@ -199,6 +199,7 @@ final class Plugin {
 		// ---- Cart display: show EB discount badge after item name (priority 15 = shows after participant badge)
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
 		add_action('woocommerce_after_mini_cart_item_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
+		add_action('woocommerce_checkout_cart_item_product_name', [ $this, 'woo_cart_item_eb_badge' ], 15, 2);
 
 		// ---- Cart display: add event link to participation items (title)
 		add_filter('woocommerce_cart_item_name', [ $this, 'woo_add_pack_badge_to_title' ], 10, 3);
@@ -1081,7 +1082,7 @@ final class Plugin {
 
 			echo "\n/* ===== Cart Item Footer (for EB badges) ===== */\n";
 			echo ".tcbf-cart-item-footer {\n";
-			echo "  margin-top: 12px;\n";
+			echo "  margin-top: 8px;\n";
 			echo "  display: flex;\n";
 			echo "  flex-direction: column;\n";
 			echo "  gap: 8px;\n";
@@ -1116,7 +1117,7 @@ final class Plugin {
 			echo ".tcbf-pack-badge-inline {\n";
 			echo "  background: rgba(107, 114, 128, 0.12);\n";
 			echo "  color: rgba(55, 65, 81, 0.7);\n";
-			echo "  padding: 3px 8px;\n";
+			echo "  padding: 2px 6px;\n";
 			echo "  border-radius: 4px;\n";
 			echo "  font-size: 11px;\n";
 			echo "  font-weight: 500;\n";
@@ -1126,12 +1127,8 @@ final class Plugin {
 			echo "  margin-left: 8px;\n";
 			echo "  vertical-align: middle;\n";
 			echo "}\n";
-			echo ".tcbf-pack-badge-inline__icon {\n";
-			echo "  font-size: 11px;\n";
-			echo "  opacity: 0.7;\n";
-			echo "}\n";
 			echo ".tcbf-pack-badge-inline__text {\n";
-			echo "  font-style: italic;\n";
+			echo "  /* No italic - clean label */\n";
 			echo "}\n";
 
 			echo "\n/* Participant Badge (for pack parent items) */\n";
