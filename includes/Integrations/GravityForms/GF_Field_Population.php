@@ -43,7 +43,8 @@ final class GF_Field_Population {
 	 * Initialize field population hooks
 	 */
 	public static function init(): void {
-		add_filter( 'gform_pre_submission', [ __CLASS__, 'populate_derived_fields' ], 10, 1 );
+		// Use gform_pre_submission action (runs before entry is saved)
+		add_action( 'gform_pre_submission', [ __CLASS__, 'populate_derived_fields' ], 10, 1 );
 	}
 
 	/**
@@ -53,14 +54,31 @@ final class GF_Field_Population {
 	 */
 	public static function populate_derived_fields( array $form ): void {
 		$form_id = (int) ( $form['id'] ?? 0 );
+		if ( $form_id <= 0 ) {
+			return;
+		}
 
-		// Only process configured forms
+		// Check if this is a configured form (or use settings form ID as fallback)
 		$configured_forms = GF_Notification_Config::get_configured_forms();
-		if ( ! isset( $configured_forms[ $form_id ] ) ) {
+		$settings_form_id = (int) get_option( 'tc_bf_form_id', 0 );
+
+		// Process if form is configured OR matches settings form ID
+		if ( ! isset( $configured_forms[ $form_id ] ) && $form_id !== $settings_form_id ) {
+			Logger::log( 'gf_field_population.skipped', [
+				'form_id' => $form_id,
+				'settings_form_id' => $settings_form_id,
+				'reason' => 'form_not_configured',
+			] );
 			return;
 		}
 
 		$field_map = self::get_field_map( $form_id );
+
+		Logger::log( 'gf_field_population.start', [
+			'form_id' => $form_id,
+			'rental_type_raw' => $_POST[ 'input_' . $field_map['rental_type'] ] ?? 'NOT_SET',
+			'email_raw' => $_POST[ 'input_' . $field_map['email'] ] ?? 'NOT_SET',
+		] );
 
 		// Populate masked email (field 150)
 		self::populate_masked_email( $field_map );
@@ -146,28 +164,51 @@ final class GF_Field_Population {
 
 		// Get rental type selection
 		$rental_type = sanitize_text_field( $_POST[ 'input_' . $field_map['rental_type'] ] ?? '' );
+
+		Logger::log( 'gf_field_population.bike_start', [
+			'rental_type' => $rental_type,
+			'rental_type_upper' => strtoupper( $rental_type ),
+		] );
+
 		if ( empty( $rental_type ) ) {
 			// No rental selected - clear the field
 			$_POST[ $target_field ] = '';
 			return;
 		}
 
-		// Map rental type to bike field
+		// Map rental type to bike field (case-insensitive)
 		$bike_field_map = [
 			'ROAD'   => $field_map['bike_road'],
 			'MTB'    => $field_map['bike_mtb'],
-			'eMTB'   => $field_map['bike_emtb'],
 			'EMTB'   => $field_map['bike_emtb'],
 			'GRAVEL' => $field_map['bike_gravel'],
 		];
 
-		$bike_field_id = $bike_field_map[ strtoupper( $rental_type ) ] ?? null;
+		$rental_key = strtoupper( $rental_type );
+		$bike_field_id = $bike_field_map[ $rental_key ] ?? null;
+
+		Logger::log( 'gf_field_population.bike_field', [
+			'rental_key' => $rental_key,
+			'bike_field_id' => $bike_field_id,
+			'bike_input_key' => $bike_field_id ? 'input_' . $bike_field_id : 'N/A',
+		] );
+
 		if ( ! $bike_field_id ) {
+			Logger::log( 'gf_field_population.bike_no_field', [
+				'rental_key' => $rental_key,
+				'available_keys' => array_keys( $bike_field_map ),
+			] );
 			return;
 		}
 
 		// Get selected bike value (format: {product_id}_{resource_id})
 		$bike_value = sanitize_text_field( $_POST[ 'input_' . $bike_field_id ] ?? '' );
+
+		Logger::log( 'gf_field_population.bike_value', [
+			'bike_field_id' => $bike_field_id,
+			'bike_value' => $bike_value,
+		] );
+
 		if ( empty( $bike_value ) || strpos( $bike_value, 'not_avail' ) === 0 ) {
 			return;
 		}
@@ -175,6 +216,10 @@ final class GF_Field_Population {
 		// Parse product and resource IDs
 		$parts = explode( '_', $bike_value, 2 );
 		if ( count( $parts ) !== 2 ) {
+			Logger::log( 'gf_field_population.bike_parse_error', [
+				'bike_value' => $bike_value,
+				'parts_count' => count( $parts ),
+			] );
 			return;
 		}
 

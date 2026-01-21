@@ -1,4 +1,4 @@
-<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; color: #333;">
+<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 14px; color: #333;">
 
   <!-- HEADER -->
   <div style="padding: 15px; background-color: #434c00; color: white;">
@@ -7,7 +7,7 @@
 
   <!-- BOOKING DETAILS -->
   <div style="padding: 20px; background-color: #f9f9f9;">
-    <table style="width: 100%; border-collapse: collapse;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
       <tr>
         <td style="padding: 8px 0; border-bottom: 1px solid #ddd; width: 35%;"><strong>Event</strong></td>
         <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">{Event:1}</td>
@@ -34,7 +34,7 @@
   <!-- BIKE RENTAL (conditional) -->
   [gravityforms action="conditional" merge_tag="{[:en]Bicycle rental[:es]Alquiler de bicicleta[:]:106}" condition="isnot" value=""]
   <div style="padding: 0 20px 20px 20px; background-color: #f9f9f9;">
-    <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #ddd;">
+    <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #ddd; font-size: 14px;">
       <tr style="background-color: #eee;">
         <td colspan="2" style="padding: 8px; font-weight: bold;">Bike Rental</td>
       </tr>
@@ -56,7 +56,7 @@
 
   <!-- PRICING -->
   <div style="padding: 0 20px 20px 20px; background-color: #f9f9f9;">
-    <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #ddd;">
+    <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #ddd; font-size: 14px;">
       <tr style="background-color: #eee;">
         <td colspan="2" style="padding: 8px; font-weight: bold;">Pricing</td>
       </tr>
@@ -64,15 +64,26 @@
         <td style="padding: 8px; width: 35%;"><strong>Official price</strong></td>
         <td style="padding: 8px;">{S:173}</td>
       </tr>
+
+      <!-- Early Booking (conditional) -->
       [gravityforms action="conditional" merge_tag="{Descuento reserva anticipada:175}" condition="greater_than" value="0"]
-      <tr style="background-color: #e8eaf6;">
-        <td style="padding: 8px;"><strong>Early booking (-{Early Booking Discount %:172}%)</strong></td>
-        <td style="padding: 8px; color: #3d61aa; font-weight: bold;">-{Descuento reserva anticipada:175}</td>
+      <tr style="background-color: #ede9fe;">
+        <td style="padding: 8px; color: #5b21b6;"><strong>Early booking (-{Early Booking Discount %:172}%)</strong></td>
+        <td style="padding: 8px; color: #5b21b6; font-weight: bold;">-{Descuento reserva anticipada:175}</td>
       </tr>
       [/gravityforms]
-      <tr>
-        <td style="padding: 8px;"><strong>Total (client)</strong></td>
-        <td style="padding: 8px; font-weight: bold;">{Total client:168}</td>
+
+      <!-- Partner Discount (conditional) -->
+      [gravityforms action="conditional" merge_tag="{Discount code:154}" condition="isnot" value=""]
+      <tr style="background-color: #f0fdf4;">
+        <td style="padding: 8px; color: #14532d;"><strong>Partner discount (-{Partner Discount %:152}%)</strong></td>
+        <td style="padding: 8px; color: #059669; font-weight: bold;">-{Descuento partner:176}</td>
+      </tr>
+      [/gravityforms]
+
+      <tr style="background-color: #434c00;">
+        <td style="padding: 8px; color: white;"><strong>Total (client)</strong></td>
+        <td style="padding: 8px; color: white; font-weight: bold;">{Total client:168}</td>
       </tr>
     </table>
   </div>
@@ -80,7 +91,7 @@
   <!-- PARTNER INFO (conditional) -->
   [gravityforms action="conditional" merge_tag="{Discount code:154}" condition="isnot" value=""]
   <div style="padding: 0 20px 20px 20px; background-color: #f9f9f9;">
-    <table style="width: 100%; border-collapse: collapse; background-color: #fff3e0; border: 1px solid #ffcc80;">
+    <table style="width: 100%; border-collapse: collapse; background-color: #fff3e0; border: 1px solid #ffcc80; font-size: 14px;">
       <tr style="background-color: #ffe0b2;">
         <td colspan="2" style="padding: 8px; font-weight: bold;">Partner Attribution</td>
       </tr>
@@ -89,16 +100,12 @@
         <td style="padding: 8px;">{Discount code:154}</td>
       </tr>
       <tr>
-        <td style="padding: 8px;"><strong>Discount</strong></td>
-        <td style="padding: 8px;">{Partner Discount %:152}% ({Descuento partner:176})</td>
-      </tr>
-      <tr>
-        <td style="padding: 8px;"><strong>Commission</strong></td>
-        <td style="padding: 8px;">{Partner commission %:161}% ({Partner commission amount:165})</td>
-      </tr>
-      <tr>
         <td style="padding: 8px;"><strong>Partner Email</strong></td>
         <td style="padding: 8px;">{Partner email:153}</td>
+      </tr>
+      <tr style="background-color: #e0f2fe;">
+        <td style="padding: 8px; color: #0369a1;"><strong>Commission ({Partner commission %:161}%)</strong></td>
+        <td style="padding: 8px; color: #0369a1; font-weight: bold;">{Partner commission amount:165}</td>
       </tr>
     </table>
   </div>
