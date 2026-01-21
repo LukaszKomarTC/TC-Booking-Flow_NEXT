@@ -45,14 +45,23 @@ class Woo_OfflineGateway {
 	const META_SETTLEMENT_TIMESTAMP = '_tcbf_settlement_timestamp';
 
 	/**
+	 * Legacy meta keys (for backward compatibility shim).
+	 *
+	 * @deprecated Planned removal after external readers are fully migrated (target: 1–2 releases).
+	 */
+	const LEGACY_META_CHANNEL = '_tc_settlement_channel';
+	const LEGACY_META_USER_ID = '_tc_settlement_user_id';
+	const LEGACY_META_PARTNER_CODE = '_tc_partner_code';
+	const META_LEGACY_MIRRORED = '_tcbf_settlement_legacy_mirrored';
+
+	/**
 	 * Initialize gateway registration.
 	 */
 	public static function init() : void {
 		// Register gateway class with WooCommerce
 		add_filter( 'woocommerce_payment_gateways', [ __CLASS__, 'register_gateway' ] );
 
-		// Process order after checkout (confirm bookings, set metadata)
-		add_action( 'woocommerce_thankyou_' . self::GATEWAY_ID, [ __CLASS__, 'process_order_confirmation' ], 10, 1 );
+		// Note: Booking confirmation happens in process_payment() - no thankyou hook needed
 	}
 
 	/**
@@ -64,34 +73,6 @@ class Woo_OfflineGateway {
 	public static function register_gateway( array $gateways ) : array {
 		$gateways[] = Woo_OfflineGateway_Handler::class;
 		return $gateways;
-	}
-
-	/**
-	 * Process order confirmation after checkout.
-	 *
-	 * - Confirms WC Bookings
-	 * - Sets settlement metadata
-	 *
-	 * @param int $order_id Order ID.
-	 */
-	public static function process_order_confirmation( int $order_id ) : void {
-		$order = wc_get_order( $order_id );
-		if ( ! $order ) {
-			return;
-		}
-
-		// Only process for our gateway
-		if ( $order->get_payment_method() !== self::GATEWAY_ID ) {
-			return;
-		}
-
-		// Confirm bookings immediately
-		self::confirm_order_bookings( $order );
-
-		\TC_BF\Support\Logger::log( 'offline_gateway.order_confirmed', [
-			'order_id' => $order_id,
-			'status'   => $order->get_status(),
-		] );
 	}
 
 	/**
@@ -198,15 +179,15 @@ class Woo_OfflineGateway_Handler extends \WC_Payment_Gateway {
 		$this->id                 = Woo_OfflineGateway::GATEWAY_ID;
 		$this->icon               = '';
 		$this->has_fields         = false;
-		$this->method_title       = __( 'Offline / Partner Invoice', 'tc-booking-flow' );
-		$this->method_description = __( 'Allows partners and admins to place orders without immediate payment. Orders are invoiced and settled monthly.', 'tc-booking-flow' );
+		$this->method_title       = __( 'Offline / Partner Invoice', TC_BF_TEXTDOMAIN );
+		$this->method_description = __( 'Allows partners and admins to place orders without immediate payment. Orders are invoiced and settled monthly.', TC_BF_TEXTDOMAIN );
 
 		// Load settings
 		$this->init_form_fields();
 		$this->init_settings();
 
-		$this->title       = $this->get_option( 'title', __( 'Partner Invoice', 'tc-booking-flow' ) );
-		$this->description = $this->get_option( 'description', __( 'Order will be added to your monthly invoice.', 'tc-booking-flow' ) );
+		$this->title       = $this->get_option( 'title', __( 'Partner Invoice', TC_BF_TEXTDOMAIN ) );
+		$this->description = $this->get_option( 'description', __( 'Order will be added to your monthly invoice.', TC_BF_TEXTDOMAIN ) );
 		$this->enabled     = $this->get_option( 'enabled', 'yes' );
 
 		// Save settings
@@ -219,23 +200,23 @@ class Woo_OfflineGateway_Handler extends \WC_Payment_Gateway {
 	public function init_form_fields() : void {
 		$this->form_fields = [
 			'enabled' => [
-				'title'   => __( 'Enable/Disable', 'tc-booking-flow' ),
+				'title'   => __( 'Enable/Disable', TC_BF_TEXTDOMAIN ),
 				'type'    => 'checkbox',
-				'label'   => __( 'Enable Offline / Partner Invoice Gateway', 'tc-booking-flow' ),
+				'label'   => __( 'Enable Offline / Partner Invoice Gateway', TC_BF_TEXTDOMAIN ),
 				'default' => 'yes',
 			],
 			'title' => [
-				'title'       => __( 'Title', 'tc-booking-flow' ),
+				'title'       => __( 'Title', TC_BF_TEXTDOMAIN ),
 				'type'        => 'text',
-				'description' => __( 'Payment method title shown at checkout.', 'tc-booking-flow' ),
-				'default'     => __( 'Partner Invoice', 'tc-booking-flow' ),
+				'description' => __( 'Payment method title shown at checkout.', TC_BF_TEXTDOMAIN ),
+				'default'     => __( 'Partner Invoice', TC_BF_TEXTDOMAIN ),
 				'desc_tip'    => true,
 			],
 			'description' => [
-				'title'       => __( 'Description', 'tc-booking-flow' ),
+				'title'       => __( 'Description', TC_BF_TEXTDOMAIN ),
 				'type'        => 'textarea',
-				'description' => __( 'Payment method description shown at checkout.', 'tc-booking-flow' ),
-				'default'     => __( 'Order will be added to your monthly invoice.', 'tc-booking-flow' ),
+				'description' => __( 'Payment method description shown at checkout.', TC_BF_TEXTDOMAIN ),
+				'default'     => __( 'Order will be added to your monthly invoice.', TC_BF_TEXTDOMAIN ),
 				'desc_tip'    => true,
 			],
 		];
@@ -268,11 +249,11 @@ class Woo_OfflineGateway_Handler extends \WC_Payment_Gateway {
 		if ( ! $order ) {
 			return [
 				'result'  => 'failure',
-				'message' => __( 'Order not found.', 'tc-booking-flow' ),
+				'message' => __( 'Order not found.', TC_BF_TEXTDOMAIN ),
 			];
 		}
 
-		// Store settlement metadata
+		// Store settlement metadata (canonical keys)
 		$user_id      = get_current_user_id();
 		$channel      = Woo_OfflineGateway::determine_settlement_channel();
 		$partner_code = Woo_OfflineGateway::get_current_user_partner_code();
@@ -285,9 +266,22 @@ class Woo_OfflineGateway_Handler extends \WC_Payment_Gateway {
 			$order->update_meta_data( Woo_OfflineGateway::META_SETTLEMENT_PARTNER_CODE, $partner_code );
 		}
 
+		// ---------------------------------------------------------------
+		// Legacy _tc_* settlement meta mirrored for backward compatibility.
+		// Partner portal, reports, and older snippets may still read these.
+		// Planned removal after external readers are fully migrated (target: 1–2 releases).
+		// ---------------------------------------------------------------
+		$order->update_meta_data( Woo_OfflineGateway::LEGACY_META_CHANNEL, $channel );
+		$order->update_meta_data( Woo_OfflineGateway::LEGACY_META_USER_ID, $user_id );
+		if ( $partner_code !== '' ) {
+			$order->update_meta_data( Woo_OfflineGateway::LEGACY_META_PARTNER_CODE, $partner_code );
+		}
+		$order->update_meta_data( Woo_OfflineGateway::META_LEGACY_MIRRORED, '1' );
+
 		// Set order status to invoiced (NOT pending, NOT processing)
 		// Do NOT call payment_complete() - we don't want to pretend money was received
-		$order->set_status( 'wc-invoiced', __( 'Order placed via offline/partner invoice.', 'tc-booking-flow' ) );
+		// Note: WooCommerce expects status without 'wc-' prefix in set_status()
+		$order->set_status( 'invoiced', __( 'Order placed via offline/partner invoice.', TC_BF_TEXTDOMAIN ) );
 		$order->save();
 
 		// Confirm bookings immediately
