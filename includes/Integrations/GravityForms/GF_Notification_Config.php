@@ -42,9 +42,14 @@ final class GF_Notification_Config {
 		'end_date_stamp'          => 134,
 
 		// Pricing fields
-		'total'                   => 76,
-		'total_client'            => 168,
-		'discount_amount'         => 164,
+		'official_price'          => 173,    // S - sum before any discounts
+		'eb_pct'                  => 172,    // Early Booking Discount %
+		'eb_amount'               => 175,    // EB discount amount
+		'base_after_eb'           => 174,    // Price after EB discount
+		'partner_discount_amt'    => 176,    // Partner discount amount
+		'total_client'            => 168,    // Final client price
+		'total'                   => 76,     // Legacy total field (kept for compatibility)
+		'discount_amount'         => 164,    // Legacy discount field
 
 		// Partner fields
 		'partner_email'           => 153,
@@ -78,7 +83,7 @@ final class GF_Notification_Config {
 		'participant_confirmation' => [
 			'participant_email',
 			'participant_name_first',
-			'notify_checkbox_input',
+			'notify_checkbox',
 			'event_title',
 			'start_date',
 			'total',
@@ -292,24 +297,24 @@ final class GF_Notification_Config {
 	/**
 	 * Build conditional logic rule for checkbox field
 	 *
-	 * Uses the actual checkbox input ID and checks if not empty,
-	 * which is more robust than checking for specific value substrings.
+	 * Uses the main checkbox field ID with "is" operator for exact match.
+	 * Checkbox value should be simple (e.g., "1") for reliable matching.
 	 *
 	 * @param int $form_id GF form ID
 	 * @return array|null Conditional logic rule or null if field not found
 	 */
 	public static function build_checkbox_condition( int $form_id ): ?array {
 		$field_map = self::get_field_map( $form_id );
-		if ( ! $field_map || ! isset( $field_map['notify_checkbox_input'] ) ) {
+		if ( ! $field_map || ! isset( $field_map['notify_checkbox'] ) ) {
 			return null;
 		}
 
-		// Using "is not empty" check on the specific input ID
-		// This is more robust than checking for substring in value
+		// Use main checkbox field ID with "is" operator for exact match
+		// Checkbox value is "1" (simple value, label remains multilingual)
 		return [
-			'fieldId'  => (string) $field_map['notify_checkbox_input'],
-			'operator' => 'isnot',
-			'value'    => '',
+			'fieldId'  => (string) $field_map['notify_checkbox'],
+			'operator' => 'is',
+			'value'    => '1',
 		];
 	}
 

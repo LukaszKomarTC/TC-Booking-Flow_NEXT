@@ -61,12 +61,18 @@
         <td colspan="2" style="padding: 8px; font-weight: bold;">Pricing</td>
       </tr>
       <tr>
-        <td style="padding: 8px; width: 35%;"><strong>Total (official)</strong></td>
-        <td style="padding: 8px;">{Total:76}</td>
+        <td style="padding: 8px; width: 35%;"><strong>Official price</strong></td>
+        <td style="padding: 8px;">{S:173}</td>
       </tr>
+      [gravityforms action="conditional" merge_tag="{Descuento reserva anticipada:175}" condition="greater_than" value="0"]
+      <tr style="background-color: #e8eaf6;">
+        <td style="padding: 8px;"><strong>Early booking (-{Early Booking Discount %:172}%)</strong></td>
+        <td style="padding: 8px; color: #3d61aa; font-weight: bold;">-{Descuento reserva anticipada:175}</td>
+      </tr>
+      [/gravityforms]
       <tr>
         <td style="padding: 8px;"><strong>Total (client)</strong></td>
-        <td style="padding: 8px;">{Total client:168}</td>
+        <td style="padding: 8px; font-weight: bold;">{Total client:168}</td>
       </tr>
     </table>
   </div>
@@ -84,7 +90,7 @@
       </tr>
       <tr>
         <td style="padding: 8px;"><strong>Discount</strong></td>
-        <td style="padding: 8px;">{Partner Discount %:152}% ({Discount amount:164})</td>
+        <td style="padding: 8px;">{Partner Discount %:152}% ({Descuento partner:176})</td>
       </tr>
       <tr>
         <td style="padding: 8px;"><strong>Commission</strong></td>
