@@ -44,8 +44,8 @@ class Woo_Notifications {
 	 * WC___settled: Reserved for future invoice settlement tracking
 	 */
 	public static function gf_register_notification_events( array $events ) : array {
-		$events['WC___paid']    = __( 'WooCommerce order paid (includes invoiced)', 'tc-booking-flow' );
-		$events['WC___settled'] = __( 'Invoice settled (future use)', 'tc-booking-flow' );
+		$events['WC___paid']    = __( 'WooCommerce order paid (includes invoiced)', TC_BF_TEXTDOMAIN );
+		$events['WC___settled'] = __( 'Invoice settled (future use)', TC_BF_TEXTDOMAIN );
 		return $events;
 	}
 
@@ -69,9 +69,8 @@ class Woo_Notifications {
 		$order_id = (int) $order_id;
 		if ( $order_id <= 0 ) return;
 
-		// Dedupe: avoid duplicate sends
-		$sent_flag = (string) get_post_meta( $order_id, self::META_PAID_NOTIFS_SENT, true );
-		if ( $sent_flag === '1' ) return;
+		// Dedupe: avoid duplicate sends (truthy check for robustness)
+		if ( get_post_meta( $order_id, self::META_PAID_NOTIFS_SENT, true ) ) return;
 
 		if ( ! class_exists('GFAPI') ) return;
 

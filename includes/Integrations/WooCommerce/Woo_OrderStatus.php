@@ -44,7 +44,7 @@ class Woo_OrderStatus {
 	public static function register_order_statuses() : void {
 		// Invoiced status (paid-equivalent for partners/admins)
 		register_post_status( 'wc-invoiced', [
-			'label'                     => _x( 'Invoiced', 'Order status', 'tc-booking-flow' ),
+			'label'                     => _x( 'Invoiced', 'Order status', TC_BF_TEXTDOMAIN ),
 			'public'                    => true,
 			'show_in_admin_status_list' => true,
 			'show_in_admin_all_list'    => true,
@@ -53,13 +53,13 @@ class Woo_OrderStatus {
 			'label_count'               => _n_noop(
 				'Invoiced <span class="count">(%s)</span>',
 				'Invoiced <span class="count">(%s)</span>',
-				'tc-booking-flow'
+				TC_BF_TEXTDOMAIN
 			),
 		] );
 
 		// Settled status (stub for future invoice settlement tracking)
 		register_post_status( 'wc-settled', [
-			'label'                     => _x( 'Settled', 'Order status', 'tc-booking-flow' ),
+			'label'                     => _x( 'Settled', 'Order status', TC_BF_TEXTDOMAIN ),
 			'public'                    => true,
 			'show_in_admin_status_list' => true,
 			'show_in_admin_all_list'    => true,
@@ -68,7 +68,7 @@ class Woo_OrderStatus {
 			'label_count'               => _n_noop(
 				'Settled <span class="count">(%s)</span>',
 				'Settled <span class="count">(%s)</span>',
-				'tc-booking-flow'
+				TC_BF_TEXTDOMAIN
 			),
 		] );
 	}
@@ -85,15 +85,15 @@ class Woo_OrderStatus {
 		foreach ( $statuses as $key => $label ) {
 			$new_statuses[ $key ] = $label;
 			if ( $key === 'wc-on-hold' ) {
-				$new_statuses['wc-invoiced'] = _x( 'Invoiced', 'Order status', 'tc-booking-flow' );
-				$new_statuses['wc-settled']  = _x( 'Settled', 'Order status', 'tc-booking-flow' );
+				$new_statuses['wc-invoiced'] = _x( 'Invoiced', 'Order status', TC_BF_TEXTDOMAIN );
+				$new_statuses['wc-settled']  = _x( 'Settled', 'Order status', TC_BF_TEXTDOMAIN );
 			}
 		}
 
 		// Fallback if wc-on-hold wasn't found
 		if ( ! isset( $new_statuses['wc-invoiced'] ) ) {
-			$new_statuses['wc-invoiced'] = _x( 'Invoiced', 'Order status', 'tc-booking-flow' );
-			$new_statuses['wc-settled']  = _x( 'Settled', 'Order status', 'tc-booking-flow' );
+			$new_statuses['wc-invoiced'] = _x( 'Invoiced', 'Order status', TC_BF_TEXTDOMAIN );
+			$new_statuses['wc-settled']  = _x( 'Settled', 'Order status', TC_BF_TEXTDOMAIN );
 		}
 
 		return $new_statuses;
@@ -106,8 +106,8 @@ class Woo_OrderStatus {
 	 * @return array Modified bulk actions.
 	 */
 	public static function register_bulk_actions( array $actions ) : array {
-		$actions['mark_invoiced'] = __( 'Change status to invoiced', 'tc-booking-flow' );
-		$actions['mark_settled']  = __( 'Change status to settled', 'tc-booking-flow' );
+		$actions['mark_invoiced'] = __( 'Change status to invoiced', TC_BF_TEXTDOMAIN );
+		$actions['mark_settled']  = __( 'Change status to settled', TC_BF_TEXTDOMAIN );
 		return $actions;
 	}
 
@@ -138,7 +138,7 @@ class Woo_OrderStatus {
 				continue;
 			}
 
-			$order->update_status( $new_status, __( 'Order status changed via bulk action.', 'tc-booking-flow' ), true );
+			$order->update_status( $new_status, __( 'Order status changed via bulk action.', TC_BF_TEXTDOMAIN ), true );
 			$changed++;
 		}
 
@@ -160,8 +160,8 @@ class Woo_OrderStatus {
 		$status  = isset( $_REQUEST['tcbf_bulk_status_to'] ) ? sanitize_text_field( $_REQUEST['tcbf_bulk_status_to'] ) : '';
 
 		$status_labels = [
-			'wc-invoiced' => __( 'Invoiced', 'tc-booking-flow' ),
-			'wc-settled'  => __( 'Settled', 'tc-booking-flow' ),
+			'wc-invoiced' => __( 'Invoiced', TC_BF_TEXTDOMAIN ),
+			'wc-settled'  => __( 'Settled', TC_BF_TEXTDOMAIN ),
 		];
 
 		$label = isset( $status_labels[ $status ] ) ? $status_labels[ $status ] : $status;
@@ -174,7 +174,7 @@ class Woo_OrderStatus {
 					'%1$d order status changed to %2$s.',
 					'%1$d order statuses changed to %2$s.',
 					$changed,
-					'tc-booking-flow'
+					TC_BF_TEXTDOMAIN
 				),
 				$changed,
 				'<strong>' . esc_html( $label ) . '</strong>'
