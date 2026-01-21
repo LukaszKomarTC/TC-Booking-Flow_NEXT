@@ -292,8 +292,8 @@ final class GF_Notification_Config {
 	/**
 	 * Build conditional logic rule for checkbox field
 	 *
-	 * Uses the main checkbox field ID with "contains" operator,
-	 * matching the legacy GF notification pattern.
+	 * Uses the main checkbox field ID with "is" operator for exact match.
+	 * Checkbox value should be simple (e.g., "1") for reliable matching.
 	 *
 	 * @param int $form_id GF form ID
 	 * @return array|null Conditional logic rule or null if field not found
@@ -304,12 +304,12 @@ final class GF_Notification_Config {
 			return null;
 		}
 
-		// Use main checkbox field ID with "contains" operator
-		// This matches the legacy notification pattern: field 118 contains "confirm"
+		// Use main checkbox field ID with "is" operator for exact match
+		// Checkbox value is "1" (simple value, label remains multilingual)
 		return [
 			'fieldId'  => (string) $field_map['notify_checkbox'],
-			'operator' => 'contains',
-			'value'    => 'confirm',
+			'operator' => 'is',
+			'value'    => '1',
 		];
 	}
 
