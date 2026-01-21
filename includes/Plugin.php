@@ -1104,13 +1104,13 @@ final class Plugin {
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge__text {\n";
 			echo "  white-space: nowrap;\n";
-			echo "  padding-right: 0;\n";
+			echo "  padding-right: 0 !important;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge .woocommerce-Price-amount {\n";
-			echo "  padding-right: 4px;\n";
+			echo "  padding-right: 4px !important;\n";
 			echo "}\n";
 			echo ".tcbf-cart-eb-badge .woocommerce-Price-currencySymbol {\n";
-			echo "  padding-right: 0;\n";
+			echo "  padding-right: 0 !important;\n";
 			echo "}\n";
 
 			echo "\n/* Inline Pack Badge (in product title) */\n";
