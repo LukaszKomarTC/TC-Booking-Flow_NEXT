@@ -1102,15 +1102,15 @@ final class Plugin {
 			echo "  line-height: 1.3;\n";
 			echo "  align-self: flex-start;\n";
 			echo "}\n";
-			echo ".tcbf-cart-eb-badge__icon {\n";
-			echo "  font-size: 1.2em;\n";
-			echo "  line-height: 1;\n";
-			echo "  display: inline-block;\n";
-			echo "  width: 1em;\n";
-			echo "  text-align: center;\n";
-			echo "}\n";
 			echo ".tcbf-cart-eb-badge__text {\n";
 			echo "  white-space: nowrap;\n";
+			echo "  padding-right: 0;\n";
+			echo "}\n";
+			echo ".tcbf-cart-eb-badge .woocommerce-Price-amount {\n";
+			echo "  padding-right: 4px;\n";
+			echo "}\n";
+			echo ".tcbf-cart-eb-badge .woocommerce-Price-currencySymbol {\n";
+			echo "  padding-right: 0;\n";
 			echo "}\n";
 
 			echo "\n/* Inline Pack Badge (in product title) */\n";
@@ -1371,10 +1371,6 @@ final class Plugin {
 			echo "    padding: 3px 6px;\n";
 			echo "    font-size: 9px;\n";
 			echo "    gap: 4px;\n";
-			echo "  }\n";
-			echo "  .tcbf-cart-eb-badge__icon {\n";
-			echo "    font-size: 1.2em;\n";
-			echo "    width: 1em;\n";
 			echo "  }\n";
 			echo "  .tcbf-pack-participant-badge {\n";
 			echo "    font-size: 11px;\n";
@@ -2004,7 +2000,6 @@ final class Plugin {
 		// Output the badge - wrapped in container for positioning
 		echo '<div class="tcbf-cart-item-footer">';
 		echo '<div class="tcbf-cart-eb-badge">';
-		echo '<span class="tcbf-cart-eb-badge__icon">⏰</span>';
 		echo '<span class="tcbf-cart-eb-badge__text">';
 
 		if ( $pct > 0 ) {
