@@ -21,6 +21,9 @@ require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_Notifications_L
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderMeta.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_Notifications.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_StatusPolicy.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OrderStatus.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_OfflineGateway.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Pack_Grouping.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Template_Loader.php';
 
@@ -193,6 +196,16 @@ final class Plugin {
 			\TC_BF\Integrations\WooCommerce\Template_Loader::init();
 		}
 
+		// ---- Order Status: register custom order statuses (invoiced, settled)
+		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Woo_OrderStatus') ) {
+			\TC_BF\Integrations\WooCommerce\Woo_OrderStatus::init();
+		}
+
+		// ---- Offline Gateway: partner/admin invoice gateway (requires WooCommerce)
+		if ( class_exists('\\TC_BF\\Integrations\\WooCommerce\\Woo_OfflineGateway') ) {
+			\TC_BF\Integrations\WooCommerce\Woo_OfflineGateway::init();
+		}
+
 		// ---- Cart display: render participant and pack badges after item name (priority 10 = shows first)
 		add_action('woocommerce_after_cart_item_name', [ $this, 'woo_render_pack_badges' ], 10, 2);
 
@@ -249,14 +262,17 @@ final class Plugin {
 		add_action('woocommerce_order_status_cancelled', [ $this, 'entry_state_mark_cancelled' ], 10, 2);
 		add_action('woocommerce_order_status_refunded', [ $this, 'entry_state_mark_refunded' ], 10, 2);
 
-		// ---- GF notifications: custom event + fire on successful payment (parity with legacy snippets)
+		// ---- GF notifications: custom event + fire on paid-equivalent statuses
+		// Paid-equivalent: processing, completed, invoiced (see Woo_StatusPolicy)
 		add_filter('gform_notification_events', [ $this, 'gf_register_notification_events' ], 10, 1);
 		add_action('woocommerce_payment_complete', [ $this, 'woo_fire_gf_paid_notifications' ], 20, 1);
-		// Fallbacks for gateways / edge flows where payment_complete isn't triggered as expected
+		// All paid-equivalent statuses fire WC___paid event
 		add_action('woocommerce_order_status_processing', [ $this, 'woo_fire_gf_paid_notifications' ], 20, 2);
 		add_action('woocommerce_order_status_completed',  [ $this, 'woo_fire_gf_paid_notifications' ], 20, 2);
+		add_action('woocommerce_order_status_invoiced',   [ $this, 'woo_fire_gf_paid_notifications' ], 20, 2);
 
-		add_action('woocommerce_order_status_invoiced',   [ $this, 'woo_fire_gf_settled_notifications' ], 20, 2);
+		// Settled status fires WC___settled event (future use for invoice settlement)
+		add_action('woocommerce_order_status_settled',    [ $this, 'woo_fire_gf_settled_notifications' ], 20, 2);
 		// ---- Partner coupon: auto-apply partner coupon for logged-in partners (legacy parity)
 		// Run late on wp_loaded so WC()->cart is available.
 		add_action('wp_loaded', [ $this, 'maybe_auto_apply_partner_coupon' ], 30);
@@ -2135,8 +2151,8 @@ final class Plugin {
 			return;
 		}
 
-		// Only mark as paid if order is actually paid (includes custom 'invoiced' status)
-		if ( ! $order->is_paid() && ! in_array( $order->get_status(), [ 'processing', 'completed', 'invoiced' ], true ) ) {
+		// Only mark as paid if order is in a paid-equivalent status (see Woo_StatusPolicy)
+		if ( ! $order->is_paid() && ! Integrations\WooCommerce\Woo_StatusPolicy::order_is_paid_equivalent( $order ) ) {
 			return;
 		}
 
