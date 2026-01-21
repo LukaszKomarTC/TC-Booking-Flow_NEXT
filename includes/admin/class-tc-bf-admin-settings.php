@@ -1,6 +1,8 @@
 <?php
 namespace TC_BF\Admin;
 
+use TC_BF\Integrations\GravityForms\GF_Notification_Templates;
+
 if ( ! defined('ABSPATH') ) exit;
 
 final class Settings {
@@ -252,6 +254,11 @@ final class Settings {
 			</form>
 
 			<hr/>
+			<h2><?php echo esc_html__('Tools', 'tc-booking-flow-next'); ?></h2>
+
+			<?php self::render_notification_tools(); ?>
+
+			<hr/>
 			<h2><?php echo esc_html__('Diagnostics', 'tc-booking-flow-next'); ?></h2>
 
 			<?php
@@ -360,5 +367,141 @@ final class Settings {
 
 	public static function clear_logs() : void {
 		delete_option(self::OPT_LOGS);
+	}
+
+	/**
+	 * Render notification sync tools section
+	 */
+	private static function render_notification_tools(): void {
+		// Handle sync action
+		if ( isset( $_POST['tcbf_sync_notifications'] ) && check_admin_referer( 'tcbf_sync_notifications' ) ) {
+			$dry_run = isset( $_POST['tcbf_dry_run'] );
+			$result = GF_Notification_Templates::sync_all( $dry_run );
+
+			if ( $result['success'] ) {
+				$msg = $dry_run
+					? __( 'Dry run complete. No changes made.', 'tc-booking-flow-next' )
+					: __( 'Notifications synced successfully.', 'tc-booking-flow-next' );
+				echo '<div class="notice notice-success"><p>' . esc_html( $msg ) . '</p></div>';
+			} else {
+				echo '<div class="notice notice-error"><p>' . esc_html__( 'Sync completed with errors:', 'tc-booking-flow-next' ) . '</p>';
+				echo '<ul>';
+				foreach ( $result['errors'] as $error ) {
+					echo '<li>' . esc_html( $error ) . '</li>';
+				}
+				echo '</ul></div>';
+			}
+
+			// Show details
+			echo '<div class="tcbf-sync-details" style="background: #f9f9f9; border: 1px solid #ddd; padding: 15px; margin: 15px 0; max-width: 800px;">';
+			echo '<h4 style="margin-top: 0;">' . esc_html__( 'Sync Details', 'tc-booking-flow-next' ) . '</h4>';
+
+			foreach ( $result['forms'] as $form_id => $form_result ) {
+				echo '<p><strong>' . esc_html__( 'Form', 'tc-booking-flow-next' ) . ' ' . esc_html( (string) $form_id ) . ':</strong></p>';
+				echo '<ul style="margin-left: 20px;">';
+
+				if ( ! empty( $form_result['notifications'] ) ) {
+					foreach ( $form_result['notifications'] as $id => $notif_result ) {
+						$action = $notif_result['action'] ?? 'unknown';
+						$icon = match( $action ) {
+							'add'    => '+',
+							'update' => '~',
+							'skip'   => '-',
+							'error'  => '!',
+							default  => '?',
+						};
+						echo '<li><code>' . esc_html( $icon ) . '</code> ' . esc_html( $id ) . ': ' . esc_html( $notif_result['message'] ?? '' ) . '</li>';
+					}
+				}
+
+				echo '</ul>';
+			}
+
+			echo '</div>';
+		}
+
+		// Get current status
+		$status = GF_Notification_Templates::get_status();
+		?>
+
+		<h3><?php echo esc_html__( 'GF Notification Sync', 'tc-booking-flow-next' ); ?></h3>
+		<p class="description">
+			<?php echo esc_html__( 'Sync TCBF notification templates to configured Gravity Forms. This will add or update notifications with tcbf_* IDs only.', 'tc-booking-flow-next' ); ?>
+		</p>
+
+		<?php if ( isset( $status['error'] ) ) : ?>
+			<div class="notice notice-warning inline">
+				<p><?php echo esc_html( $status['error'] ); ?></p>
+			</div>
+		<?php else : ?>
+
+			<table class="widefat striped" style="max-width: 800px; margin: 15px 0;">
+				<thead>
+					<tr>
+						<th><?php echo esc_html__( 'Form', 'tc-booking-flow-next' ); ?></th>
+						<th><?php echo esc_html__( 'TCBF Notifications', 'tc-booking-flow-next' ); ?></th>
+						<th><?php echo esc_html__( 'Status', 'tc-booking-flow-next' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $status['forms'] as $form_id => $form_status ) : ?>
+						<tr>
+							<td>
+								<strong>#<?php echo esc_html( (string) $form_id ); ?></strong>
+								<?php if ( $form_status['exists'] ) : ?>
+									<br><small><?php echo esc_html( $form_status['title'] ); ?></small>
+								<?php endif; ?>
+							</td>
+							<td>
+								<?php if ( ! $form_status['exists'] ) : ?>
+									<em><?php echo esc_html__( 'Form not found', 'tc-booking-flow-next' ); ?></em>
+								<?php elseif ( empty( $form_status['notifications'] ) ) : ?>
+									<em><?php echo esc_html__( 'None installed', 'tc-booking-flow-next' ); ?></em>
+								<?php else : ?>
+									<ul style="margin: 0; padding-left: 15px;">
+										<?php foreach ( $form_status['notifications'] as $id => $notif ) : ?>
+											<li>
+												<?php echo esc_html( $notif['name'] ); ?>
+												<small style="color: <?php echo $notif['isActive'] ? 'green' : 'gray'; ?>;">
+													(<?php echo $notif['isActive'] ? 'active' : 'inactive'; ?>)
+												</small>
+											</li>
+										<?php endforeach; ?>
+									</ul>
+								<?php endif; ?>
+							</td>
+							<td>
+								<?php if ( ! $form_status['exists'] ) : ?>
+									<span style="color: red;">&#10007;</span>
+								<?php elseif ( empty( $form_status['missing'] ) ) : ?>
+									<span style="color: green;">&#10003; <?php echo esc_html__( 'Up to date', 'tc-booking-flow-next' ); ?></span>
+								<?php else : ?>
+									<span style="color: orange;">&#9888; <?php echo esc_html( count( $form_status['missing'] ) ); ?> <?php echo esc_html__( 'missing', 'tc-booking-flow-next' ); ?></span>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+
+			<form method="post" style="margin: 15px 0;">
+				<?php wp_nonce_field( 'tcbf_sync_notifications' ); ?>
+				<p>
+					<label>
+						<input type="checkbox" name="tcbf_dry_run" value="1" />
+						<?php echo esc_html__( 'Dry run (validate only, no changes)', 'tc-booking-flow-next' ); ?>
+					</label>
+				</p>
+				<?php submit_button( esc_html__( 'Sync Notifications', 'tc-booking-flow-next' ), 'secondary', 'tcbf_sync_notifications', false ); ?>
+			</form>
+
+			<p class="description">
+				<strong><?php echo esc_html__( 'CLI:', 'tc-booking-flow-next' ); ?></strong>
+				<code>wp tcbf notifications sync</code> |
+				<code>wp tcbf notifications status</code> |
+				<code>wp tcbf notifications validate &lt;form_id&gt;</code>
+			</p>
+
+		<?php endif;
 	}
 }
