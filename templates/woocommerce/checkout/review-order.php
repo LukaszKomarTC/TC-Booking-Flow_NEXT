@@ -72,16 +72,16 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 					$is_parent = \TC_BF\Integrations\WooCommerce\Woo_OrderMeta::is_cart_item_parent( $cart_item );
 					$row_class = $is_parent ? 'tcbf-checkout-row--parent' : 'tcbf-checkout-row--child';
 
-					// Get event info for linking
+					// Get event info (no linking at checkout stage)
 					$event_id = isset( $cart_item['_event_id'] ) ? (int) $cart_item['_event_id'] : 0;
-					$event_url = $event_id > 0 ? get_permalink( $event_id ) : '';
-					$product_name = apply_filters( 'woocommerce_cart_item_name', $_product->get_name(), $cart_item, $cart_item_key );
+					// Use raw product name - no filters that add links
+					$product_name = $_product->get_name();
 					?>
 					<tr class="<?php echo esc_attr( apply_filters( 'woocommerce_cart_item_class', 'cart_item', $cart_item, $cart_item_key ) ); ?> <?php echo esc_attr( $row_class ); ?>">
 						<td class="product-name">
 							<?php
 							// No links at checkout stage - clean presentation
-							echo wp_kses_post( $product_name );
+							echo esc_html( $product_name );
 							echo '&nbsp;<strong class="product-quantity">&times;&nbsp;' . esc_html( $cart_item['quantity'] ) . '</strong>';
 
 							do_action( 'woocommerce_checkout_cart_item_product_name', $cart_item, $cart_item_key );
