@@ -153,6 +153,11 @@ final class Plugin {
 			\TC_BF\Integrations\GravityForms\GF_Notifications_Ledger::init();
 		}
 
+		// GF Field Population: populate derived/masked fields at submission
+		if ( class_exists('\\TC_BF\\Integrations\\GravityForms\\GF_Field_Population') ) {
+			\TC_BF\Integrations\GravityForms\GF_Field_Population::init();
+		}
+
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_action('wp_head',                      [ $this, 'output_form_field_css' ], 100); // CSS for enhanced fields
 		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
