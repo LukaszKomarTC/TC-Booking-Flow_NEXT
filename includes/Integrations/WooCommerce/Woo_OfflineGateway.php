@@ -45,6 +45,16 @@ class Woo_OfflineGateway {
 	const META_SETTLEMENT_TIMESTAMP = '_tcbf_settlement_timestamp';
 
 	/**
+	 * Legacy meta keys (for backward compatibility shim).
+	 *
+	 * @deprecated Planned removal after external readers are fully migrated (target: 1–2 releases).
+	 */
+	const LEGACY_META_CHANNEL = '_tc_settlement_channel';
+	const LEGACY_META_USER_ID = '_tc_settlement_user_id';
+	const LEGACY_META_PARTNER_CODE = '_tc_partner_code';
+	const META_LEGACY_MIRRORED = '_tcbf_settlement_legacy_mirrored';
+
+	/**
 	 * Initialize gateway registration.
 	 */
 	public static function init() : void {
@@ -243,7 +253,7 @@ class Woo_OfflineGateway_Handler extends \WC_Payment_Gateway {
 			];
 		}
 
-		// Store settlement metadata
+		// Store settlement metadata (canonical keys)
 		$user_id      = get_current_user_id();
 		$channel      = Woo_OfflineGateway::determine_settlement_channel();
 		$partner_code = Woo_OfflineGateway::get_current_user_partner_code();
@@ -255,6 +265,18 @@ class Woo_OfflineGateway_Handler extends \WC_Payment_Gateway {
 		if ( $partner_code !== '' ) {
 			$order->update_meta_data( Woo_OfflineGateway::META_SETTLEMENT_PARTNER_CODE, $partner_code );
 		}
+
+		// ---------------------------------------------------------------
+		// Legacy _tc_* settlement meta mirrored for backward compatibility.
+		// Partner portal, reports, and older snippets may still read these.
+		// Planned removal after external readers are fully migrated (target: 1–2 releases).
+		// ---------------------------------------------------------------
+		$order->update_meta_data( Woo_OfflineGateway::LEGACY_META_CHANNEL, $channel );
+		$order->update_meta_data( Woo_OfflineGateway::LEGACY_META_USER_ID, $user_id );
+		if ( $partner_code !== '' ) {
+			$order->update_meta_data( Woo_OfflineGateway::LEGACY_META_PARTNER_CODE, $partner_code );
+		}
+		$order->update_meta_data( Woo_OfflineGateway::META_LEGACY_MIRRORED, '1' );
 
 		// Set order status to invoiced (NOT pending, NOT processing)
 		// Do NOT call payment_complete() - we don't want to pretend money was received
