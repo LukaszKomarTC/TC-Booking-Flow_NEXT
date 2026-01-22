@@ -35,11 +35,42 @@ final class GF_BookingPartnerSelect {
 		add_filter( 'gform_admin_pre_render',      [ __CLASS__, 'populate_partner_choices' ], 15, 1 );
 		add_filter( 'gform_pre_submission_filter', [ __CLASS__, 'populate_partner_choices' ], 15, 1 );
 
+		// Populate user_role hidden field for conditional logic
+		add_filter( 'gform_field_value_user_role', [ __CLASS__, 'populate_user_role' ] );
+
 		// Output partner JS in footer
 		add_action( 'wp_footer', [ __CLASS__, 'output_partner_js' ], 100 );
 
 		// Output CSS for ledger summary in head
 		add_action( 'wp_head', [ __CLASS__, 'output_ledger_css' ], 100 );
+	}
+
+	/**
+	 * Populate user_role field for conditional logic
+	 *
+	 * Returns comma-separated list of current user's roles for use
+	 * in GF conditional logic (e.g., show partner select only to admin/hotel).
+	 *
+	 * @param mixed $value Default value
+	 * @return string User roles as comma-separated string
+	 */
+	public static function populate_user_role( $value ) : string {
+		if ( ! is_user_logged_in() ) {
+			return 'guest';
+		}
+
+		$user = wp_get_current_user();
+		if ( ! $user || ! $user->exists() ) {
+			return 'guest';
+		}
+
+		$roles = (array) $user->roles;
+		if ( empty( $roles ) ) {
+			return 'subscriber';
+		}
+
+		// Return comma-separated roles for flexible conditional logic
+		return implode( ',', $roles );
 	}
 
 	/**
