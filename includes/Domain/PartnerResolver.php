@@ -1,6 +1,8 @@
 <?php
 namespace TC_BF\Domain;
 
+use TC_BF\Admin\Settings;
+
 if ( ! defined('ABSPATH') ) exit;
 
 /**
@@ -31,11 +33,15 @@ final class PartnerResolver {
 			'admin_override' => 63,
 			'coupon_code'    => 154,
 		],
-		// Form 45 - Booking Products (TCBF-13)
-		45 => [
-			'admin_override' => 24,
-			'coupon_code'    => 10,
-		],
+	];
+
+	/**
+	 * Default field mapping for booking product forms
+	 * Used when the form ID matches the configured booking form ID
+	 */
+	const BOOKING_FORM_FIELD_MAP = [
+		'admin_override' => 24,
+		'coupon_code'    => 10,
 	];
 
 	// Legacy constants for backward compatibility
@@ -52,6 +58,12 @@ final class PartnerResolver {
 		// Return form-specific mapping if defined
 		if ( isset( self::FORM_FIELD_MAPS[ $form_id ] ) ) {
 			return self::FORM_FIELD_MAPS[ $form_id ];
+		}
+
+		// Check if this is the configured booking product form
+		$booking_form_id = Settings::get_booking_form_id();
+		if ( $form_id === $booking_form_id ) {
+			return self::BOOKING_FORM_FIELD_MAP;
 		}
 
 		// Default to Form 44 mapping for backward compatibility
