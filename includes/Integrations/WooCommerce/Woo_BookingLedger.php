@@ -4,6 +4,7 @@ namespace TC_BF\Integrations\WooCommerce;
 use TC_BF\Admin\Settings;
 use TC_BF\Domain\BookingLedger;
 use TC_BF\Domain\PartnerResolver;
+use TC_BF\Integrations\GravityForms\GF_SemanticFields;
 use TC_BF\Support\Logger;
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -149,21 +150,22 @@ class Woo_BookingLedger {
 
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		// Get field map for this form
-		$field_map = PartnerResolver::get_field_map( $form_id );
-
-		// Check for admin override
-		$admin_field = $field_map['admin_override'];
-		$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
-		if ( $override_code !== '' && current_user_can( 'administrator' ) ) {
-			return PartnerResolver::build_partner_context_from_code( $override_code );
+		// Check for admin override (only read if field exists)
+		$admin_field = GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE );
+		if ( $admin_field > 0 ) {
+			$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
+			if ( $override_code !== '' && current_user_can( 'administrator' ) ) {
+				return PartnerResolver::build_partner_context_from_code( $override_code );
+			}
 		}
 
-		// Check for coupon code
-		$coupon_field = $field_map['coupon_code'];
-		$coupon_code = trim( (string) ( $lead[ (string) $coupon_field ] ?? '' ) );
-		if ( $coupon_code !== '' ) {
-			return PartnerResolver::build_partner_context_from_code( $coupon_code );
+		// Check for coupon code (only read if field exists)
+		$coupon_field = GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_COUPON_CODE );
+		if ( $coupon_field > 0 ) {
+			$coupon_code = trim( (string) ( $lead[ (string) $coupon_field ] ?? '' ) );
+			if ( $coupon_code !== '' ) {
+				return PartnerResolver::build_partner_context_from_code( $coupon_code );
+			}
 		}
 
 		// Fall back to standard resolution
@@ -243,9 +245,10 @@ class Woo_BookingLedger {
 		// Show partner discount if applicable
 		$partner_amount = $cart_item[ self::BK_LEDGER_PARTNER_AMT ] ?? 0;
 		if ( $partner_amount > 0 ) {
-			// Get partner code from lead
-			$lead = $cart_item['_gravity_form_lead'] ?? [];
-			$code = $lead['26'] ?? ''; // partner_coupon_code field
+			// Get partner code from lead using semantic field
+			$lead    = $cart_item['_gravity_form_lead'] ?? [];
+			$form_id = (int) ( $lead['form_id'] ?? 0 );
+			$code    = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE );
 
 			$item_data[] = [
 				'key'     => __( 'Partner Discount', 'tc-booking-flow-next' ),
@@ -283,16 +286,23 @@ class Woo_BookingLedger {
 		$item->add_meta_data( '_tcbf_ledger_total', $values[ self::BK_LEDGER_TOTAL ] ?? 0 );
 		$item->add_meta_data( '_tcbf_ledger_commission', $values[ self::BK_LEDGER_COMMISSION ] ?? 0 );
 
-		// Store partner attribution
-		$lead = $values['_gravity_form_lead'] ?? [];
-		if ( ! empty( $lead['25'] ) ) { // partner_user_id
-			$item->add_meta_data( '_tcbf_partner_user_id', $lead['25'] );
+		// Store partner attribution using semantic fields
+		$lead    = $values['_gravity_form_lead'] ?? [];
+		$form_id = (int) ( $lead['form_id'] ?? 0 );
+
+		$partner_user_id = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_PARTNER_USER_ID );
+		if ( ! empty( $partner_user_id ) ) {
+			$item->add_meta_data( '_tcbf_partner_user_id', $partner_user_id );
 		}
-		if ( ! empty( $lead['26'] ) ) { // partner_coupon_code
-			$item->add_meta_data( '_tcbf_partner_code', $lead['26'] );
+
+		$partner_code = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE );
+		if ( ! empty( $partner_code ) ) {
+			$item->add_meta_data( '_tcbf_partner_code', $partner_code );
 		}
-		if ( ! empty( $lead['29'] ) ) { // partner_email
-			$item->add_meta_data( '_tcbf_partner_email', $lead['29'] );
+
+		$partner_email = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_PARTNER_EMAIL );
+		if ( ! empty( $partner_email ) ) {
+			$item->add_meta_data( '_tcbf_partner_email', $partner_email );
 		}
 
 		Logger::log( 'woo.booking_ledger.persist_to_order', [
