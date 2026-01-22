@@ -642,17 +642,23 @@ class Woo_OrderMeta {
 
 		?>
 		<style>
-		/* Discount row in totals - green styling (class-based, no :has() dependency) */
+		/* Discount row in totals - green styling (matches cart/checkout coupon row) */
 		.tcbf-discount-value {
 			color: var(--tcbf-discount-green, #15803d);
 			font-weight: 600;
 		}
 		.tcbf-discount-row th,
 		.tcbf-discount-row td {
-			background-color: var(--tcbf-discount-green-bg, #f0fdf4);
+			background: var(--tcbf-discount-green-gradient, linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%));
+			padding: 12px !important;
 		}
 		.tcbf-discount-row th {
 			color: var(--tcbf-discount-green, #15803d);
+			font-weight: 600;
+		}
+		.tcbf-discount-row td {
+			color: var(--tcbf-discount-green, #15803d);
+			font-weight: 700;
 		}
 
 		/* Explainer block (EB + Commission) */
@@ -675,13 +681,11 @@ class Woo_OrderMeta {
 		.tcbf-explainer-item {
 			flex: 1;
 			padding: 12px 16px;
-			background: #f9fafb;
-			border: 1px solid var(--tcbf-divider, rgba(0, 0, 0, 0.12));
+			border-radius: 4px;
 		}
 		.tcbf-explainer-label {
 			font-weight: 600;
 			font-size: 13px;
-			color: #374151;
 			margin-bottom: 4px;
 		}
 		.tcbf-explainer-row {
@@ -691,26 +695,31 @@ class Woo_OrderMeta {
 		}
 		.tcbf-explainer-sub {
 			font-size: 12px;
-			color: #6b7280;
+			opacity: 0.85;
 		}
 		.tcbf-explainer-amount {
 			font-weight: 700;
 			font-size: 15px;
-			color: #111827;
 		}
-		/* EB specific - purple accent (matches EB badge) */
+		/* EB specific - gradient badge style (matches cart/checkout EB badges) */
 		.tcbf-explainer-eb {
-			border-left: 3px solid var(--tcbf-eb-purple, #7c3aed);
+			background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
+			color: #ffffff;
 		}
+		.tcbf-explainer-eb .tcbf-explainer-label,
+		.tcbf-explainer-eb .tcbf-explainer-sub,
 		.tcbf-explainer-eb .tcbf-explainer-amount {
-			color: var(--tcbf-eb-purple, #7c3aed);
+			color: #ffffff;
 		}
-		/* Commission specific - indigo accent */
+		/* Commission specific - indigo gradient badge style */
 		.tcbf-explainer-commission {
-			border-left: 3px solid var(--tcbf-commission-indigo, #4f46e5);
+			background: linear-gradient(45deg, #4338ca 0%, #6366f1 100%);
+			color: #ffffff;
 		}
+		.tcbf-explainer-commission .tcbf-explainer-label,
+		.tcbf-explainer-commission .tcbf-explainer-sub,
 		.tcbf-explainer-commission .tcbf-explainer-amount {
-			color: var(--tcbf-commission-indigo, #4f46e5);
+			color: #ffffff;
 		}
 		/* Responsive */
 		@media (max-width: 600px) {
@@ -868,29 +877,29 @@ class Woo_OrderMeta {
 			// Two-column layout
 			echo '<tr>';
 
-			// EB cell
+			// EB cell (gradient badge style - matches cart/checkout EB badges)
 			$eb_sub = $eb_pct > 0
 				? sprintf( __( '%s%% applied', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
 				: __( 'Applied to booking', TC_BF_TEXTDOMAIN );
-			echo '<td width="48%" style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #7c3aed; vertical-align: top;">';
-			echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<td width="48%" style="padding: 12px 16px; background-color: #5e52a6; background-image: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%); border-radius: 4px; vertical-align: top;">';
+			echo '<div style="font-weight: 600; font-size: 13px; color: #ffffff; margin-bottom: 4px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
 			echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
-			echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $eb_sub ) . '</td>';
-			echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #7c3aed;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+			echo '<td style="font-size: 12px; color: rgba(255,255,255,0.85);">' . esc_html( $eb_sub ) . '</td>';
+			echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #ffffff;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
 			echo '</tr></table>';
 			echo '</td>';
 
 			echo '<td width="4%"></td>';
 
-			// Commission cell
+			// Commission cell (indigo gradient badge style)
 			$comm_sub = $commission_rate > 0
 				? sprintf( __( '%s%% of base', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
 				: __( 'Based on order total', TC_BF_TEXTDOMAIN );
-			echo '<td width="48%" style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #4f46e5; vertical-align: top;">';
-			echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
+			echo '<td width="48%" style="padding: 12px 16px; background-color: #5552de; background-image: linear-gradient(45deg, #4338ca 0%, #6366f1 100%); border-radius: 4px; vertical-align: top;">';
+			echo '<div style="font-weight: 600; font-size: 13px; color: #ffffff; margin-bottom: 4px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
 			echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
-			echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $comm_sub ) . '</td>';
-			echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #4f46e5;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+			echo '<td style="font-size: 12px; color: rgba(255,255,255,0.85);">' . esc_html( $comm_sub ) . '</td>';
+			echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #ffffff;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
 			echo '</tr></table>';
 			echo '</td>';
 
@@ -903,11 +912,11 @@ class Woo_OrderMeta {
 				$eb_sub = $eb_pct > 0
 					? sprintf( __( '%s%% applied', TC_BF_TEXTDOMAIN ), number_format_i18n( $eb_pct, 0 ) )
 					: __( 'Applied to booking', TC_BF_TEXTDOMAIN );
-				echo '<div style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #7c3aed;">';
-				echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
+				echo '<div style="padding: 12px 16px; background-color: #5e52a6; background-image: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%); border-radius: 4px;">';
+				echo '<div style="font-weight: 600; font-size: 13px; color: #ffffff; margin-bottom: 4px;">' . esc_html__( 'Early booking discount', TC_BF_TEXTDOMAIN ) . '</div>';
 				echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
-				echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $eb_sub ) . '</td>';
-				echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #7c3aed;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+				echo '<td style="font-size: 12px; color: rgba(255,255,255,0.85);">' . esc_html( $eb_sub ) . '</td>';
+				echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #ffffff;">-' . wp_kses_post( strip_tags( wc_price( $eb_amount, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
 				echo '</tr></table>';
 				echo '</div>';
 			}
@@ -916,11 +925,11 @@ class Woo_OrderMeta {
 				$comm_sub = $commission_rate > 0
 					? sprintf( __( '%s%% of base', TC_BF_TEXTDOMAIN ), number_format_i18n( $commission_rate, 0 ) )
 					: __( 'Based on order total', TC_BF_TEXTDOMAIN );
-				echo '<div style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #4f46e5;">';
-				echo '<div style="font-weight: 600; font-size: 13px; color: #374151; margin-bottom: 4px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
+				echo '<div style="padding: 12px 16px; background-color: #5552de; background-image: linear-gradient(45deg, #4338ca 0%, #6366f1 100%); border-radius: 4px;">';
+				echo '<div style="font-weight: 600; font-size: 13px; color: #ffffff; margin-bottom: 4px;">' . esc_html__( 'Partner commission', TC_BF_TEXTDOMAIN ) . '</div>';
 				echo '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>';
-				echo '<td style="font-size: 12px; color: #6b7280;">' . esc_html( $comm_sub ) . '</td>';
-				echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #4f46e5;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
+				echo '<td style="font-size: 12px; color: rgba(255,255,255,0.85);">' . esc_html( $comm_sub ) . '</td>';
+				echo '<td style="text-align: right; font-weight: 700; font-size: 15px; color: #ffffff;">' . wp_kses_post( strip_tags( wc_price( $commission, [ 'currency' => $currency ] ), '<span>' ) ) . '</td>';
 				echo '</tr></table>';
 				echo '</div>';
 			}

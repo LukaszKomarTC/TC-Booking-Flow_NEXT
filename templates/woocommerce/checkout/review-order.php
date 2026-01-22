@@ -86,13 +86,13 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 
 							do_action( 'woocommerce_checkout_cart_item_product_name', $cart_item, $cart_item_key );
 
-							echo wc_get_formatted_cart_item_data( $cart_item );
-
-							// Add "Part of tour pack" badge for child items
+							// Add "Part of tour pack" badge for child items (before variations, like Cart)
 							if ( ! $is_parent ) {
 								$badge_text = \TC_BF\Integrations\WooCommerce\Woo::translate( '[:es]Parte del pack de la salida[:en]Part of the tour pack[:]' );
 								echo '<div class="tcbf-pack-badge-inline"><span class="tcbf-pack-badge-inline__text">' . esc_html( $badge_text ) . '</span></div>';
 							}
+
+							echo wc_get_formatted_cart_item_data( $cart_item );
 							?>
 						</td>
 						<td class="product-total">
