@@ -48,6 +48,7 @@ require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_BookingLedger.p
 // TCBF-14: GF Semantic Field Mapping (inputName-based field resolution)
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_FieldMap.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_SemanticFields.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_FormValidator.php';
 
 add_action('plugins_loaded', function () {
 	// Load translations using absolute path (more reliable across different folder names)
@@ -66,9 +67,11 @@ add_action('plugins_loaded', function () {
 
 	// TCBF-11: Initialize consolidated event meta box
 	// TCBF-13: Initialize product category EB settings
+	// TCBF-14: Initialize form validator for admin notices
 	if ( is_admin() ) {
 		\TC_BF\Admin\Admin_Event_Meta::init();
 		\TC_BF\Admin\Admin_Product_Category_EB::init();
+		\TC_BF\Integrations\GravityForms\GF_FormValidator::init();
 	}
 });
 
