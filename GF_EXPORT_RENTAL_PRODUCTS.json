@@ -1788,7 +1788,7 @@
           "actionType": "show",
           "logicType": "any",
           "rules": [
-            { "fieldId": "5", "operator": "contains", "value": "administrator" }
+            { "fieldId": "1", "operator": "contains", "value": "administrator" }
           ]
         }
       },
