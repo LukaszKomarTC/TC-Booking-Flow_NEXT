@@ -7,21 +7,78 @@ if ( ! defined('ABSPATH') ) exit;
  * Partner Resolution Logic
  *
  * Priority:
- * 1) Admin override field 63 (admin only)
+ * 1) Admin override field (admin only) - form-specific field ID
  * 2) Logged-in partner user meta (discount__code)  [Way 2]
  * 3) Coupon already applied in WC session/cart      [Way 1]
- * 4) Posted manual coupon field 154                [fallback]
+ * 4) Posted manual coupon field (form-specific)    [fallback]
+ *
+ * Supports multiple forms with different field mappings:
+ * - Form 44 (Events): fields 63 (admin override), 154 (coupon code)
+ * - Form 45 (Booking Products): field 24 (admin override), 10 (coupon snapshot)
  */
 final class PartnerResolver {
 
-	// GF field IDs
-	const GF_PARTNER_CODE_FIELD = 63;  // Admin override partner code field
-	const GF_FIELD_COUPON_CODE  = 154; // Manual/hidden coupon code input field
+	/**
+	 * Form-specific field mappings
+	 *
+	 * Each form can have different field IDs for:
+	 * - admin_override: Field where admin can manually enter partner code
+	 * - coupon_code: Field containing the coupon/partner code
+	 */
+	const FORM_FIELD_MAPS = [
+		// Form 44 - Events (legacy)
+		44 => [
+			'admin_override' => 63,
+			'coupon_code'    => 154,
+		],
+		// Form 45 - Booking Products (TCBF-13)
+		45 => [
+			'admin_override' => 24,
+			'coupon_code'    => 10,
+		],
+	];
+
+	// Legacy constants for backward compatibility
+	const GF_PARTNER_CODE_FIELD = 63;  // Admin override partner code field (Form 44)
+	const GF_FIELD_COUPON_CODE  = 154; // Manual/hidden coupon code input field (Form 44)
+
+	/**
+	 * Get field IDs for a specific form
+	 *
+	 * @param int $form_id GF form ID
+	 * @return array Field mapping with 'admin_override' and 'coupon_code' keys
+	 */
+	public static function get_field_map( int $form_id ) : array {
+		// Return form-specific mapping if defined
+		if ( isset( self::FORM_FIELD_MAPS[ $form_id ] ) ) {
+			return self::FORM_FIELD_MAPS[ $form_id ];
+		}
+
+		// Default to Form 44 mapping for backward compatibility
+		return self::FORM_FIELD_MAPS[44];
+	}
 
 	public static function resolve_partner_context( int $form_id ) : array {
 
+		$field_map = self::get_field_map( $form_id );
+
 		// 1) Admin override wins (only if current user is admin).
-		$override_code = isset($_POST['input_' . self::GF_PARTNER_CODE_FIELD]) ? trim((string) $_POST['input_' . self::GF_PARTNER_CODE_FIELD]) : '';
+		// Check form-specific field first, then fall back to legacy field
+		$override_code = '';
+
+		// Try form-specific admin override field
+		$admin_field = $field_map['admin_override'];
+		if ( isset( $_POST[ 'input_' . $admin_field ] ) ) {
+			$override_code = trim( (string) $_POST[ 'input_' . $admin_field ] );
+		}
+
+		// Legacy fallback for Form 44 field
+		if ( $override_code === '' && $admin_field !== self::GF_PARTNER_CODE_FIELD ) {
+			if ( isset( $_POST[ 'input_' . self::GF_PARTNER_CODE_FIELD ] ) ) {
+				$override_code = trim( (string) $_POST[ 'input_' . self::GF_PARTNER_CODE_FIELD ] );
+			}
+		}
+
 		$override_code = self::normalize_partner_code( $override_code );
 
 		if ( $override_code !== '' && current_user_can('administrator') ) {
@@ -46,7 +103,21 @@ final class PartnerResolver {
 		}
 
 		// 4) Manual/posted coupon field (if already present).
-		$posted_code = isset($_POST['input_' . self::GF_FIELD_COUPON_CODE]) ? trim((string) $_POST['input_' . self::GF_FIELD_COUPON_CODE]) : '';
+		// Check form-specific coupon field first, then fall back to legacy field
+		$posted_code = '';
+
+		$coupon_field = $field_map['coupon_code'];
+		if ( isset( $_POST[ 'input_' . $coupon_field ] ) ) {
+			$posted_code = trim( (string) $_POST[ 'input_' . $coupon_field ] );
+		}
+
+		// Legacy fallback for Form 44 field
+		if ( $posted_code === '' && $coupon_field !== self::GF_FIELD_COUPON_CODE ) {
+			if ( isset( $_POST[ 'input_' . self::GF_FIELD_COUPON_CODE ] ) ) {
+				$posted_code = trim( (string) $_POST[ 'input_' . self::GF_FIELD_COUPON_CODE ] );
+			}
+		}
+
 		$posted_code = self::normalize_partner_code( $posted_code );
 
 		if ( $posted_code !== '' ) {
