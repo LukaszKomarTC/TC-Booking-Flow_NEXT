@@ -7,13 +7,14 @@ use TC_BF\Domain\PartnerResolver;
 if ( ! defined('ABSPATH') ) exit;
 
 /**
- * GF_BookingPartnerSelect - Populate partner select dropdown for booking forms
+ * GF_BookingPartnerSelect - Populate partner override select for booking forms
  *
- * Populates the partner_select field (CSS class: partner_select) with:
+ * Populates the partner_override_code field (CSS class: partner_override_code) with:
  * - Users with role 'hotel' (same as event form)
  * - Users with discount__code meta
  *
  * Also injects JS to populate hidden partner fields when selection changes.
+ * Business key remains 'partner_override_code' regardless of UI type (text vs select).
  *
  * @since TCBF-14
  */
@@ -60,13 +61,13 @@ final class GF_BookingPartnerSelect {
 		// Build partner choices
 		$choices = self::build_partner_choices();
 
-		// Find and populate partner_select field
+		// Find and populate partner_override_code field (select type)
 		foreach ( $form['fields'] as &$field ) {
 			$css_class = (string) ( $field->cssClass ?? '' );
 			$input_name = (string) ( $field->inputName ?? '' );
 
-			// Match by CSS class or inputName
-			if ( strpos( $css_class, 'partner_select' ) !== false || $input_name === 'partner_select' ) {
+			// Match by CSS class or inputName - business key is partner_override_code
+			if ( strpos( $css_class, 'partner_override_code' ) !== false || $input_name === 'partner_override_code' ) {
 				$field->choices = $choices;
 			}
 		}
@@ -227,7 +228,7 @@ final class GF_BookingPartnerSelect {
 		$json = wp_json_encode( $partners );
 
 		// Resolve field IDs using semantic keys
-		$field_select       = GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_PARTNER_SELECT );
+		$field_override     = GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE );
 		$field_coupon_code  = GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE );
 		$field_discount_pct = GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_PARTNER_DISCOUNT_PCT );
 		$field_commission   = GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_PARTNER_COMMISSION_PCT );
@@ -239,7 +240,7 @@ final class GF_BookingPartnerSelect {
 			. "(function(){\n"
 			. "  var fid = {$form_id};\n"
 			. "  var initialCode = '" . esc_js( $initial_code ) . "';\n"
-			. "  var FIELD_SELECT = {$field_select};\n"
+			. "  var FIELD_OVERRIDE = {$field_override};\n"
 			. "  var FIELD_COUPON = {$field_coupon_code};\n"
 			. "  var FIELD_DISCOUNT = {$field_discount_pct};\n"
 			. "  var FIELD_COMMISSION = {$field_commission};\n"
@@ -266,7 +267,7 @@ final class GF_BookingPartnerSelect {
 			. "  }\n"
 			. "  function applyPartner(){\n"
 			. "    var map = (window.tcBfBookingPartnerMap && window.tcBfBookingPartnerMap[fid]) ? window.tcBfBookingPartnerMap[fid] : {};\n"
-			. "    var sel = qs('#input_'+fid+'_'+FIELD_SELECT);\n"
+			. "    var sel = qs('#input_'+fid+'_'+FIELD_OVERRIDE);\n"
 			. "    var code = sel ? (sel.value||'').toString().trim() : '';\n"
 			. "    if(!code && initialCode) code = initialCode;\n"
 			. "    var data = (code && map && map[code]) ? map[code] : null;\n"
@@ -285,7 +286,7 @@ final class GF_BookingPartnerSelect {
 			. "    }\n"
 			. "  }\n"
 			. "  function bindOnce(){\n"
-			. "    var sel = qs('#input_'+fid+'_'+FIELD_SELECT);\n"
+			. "    var sel = qs('#input_'+fid+'_'+FIELD_OVERRIDE);\n"
 			. "    if(sel && !sel.__tcBfBound){\n"
 			. "      sel.__tcBfBound = true;\n"
 			. "      sel.addEventListener('change', applyPartner);\n"

@@ -1780,8 +1780,8 @@
         "id": 24,
         "formId": 45,
         "label": "Partner / Booking source",
-        "adminLabel": "partner_select",
-        "inputName": "partner_select",
+        "adminLabel": "partner_override_code",
+        "inputName": "partner_override_code",
         "isRequired": false,
         "size": "medium",
         "visibility": "visible",
@@ -1792,7 +1792,7 @@
             "isSelected": true
           }
         ],
-        "cssClass": "partner_select",
+        "cssClass": "partner_override_code",
         "enableChoiceValue": true,
         "conditionalLogic": {
           "enabled": true,
