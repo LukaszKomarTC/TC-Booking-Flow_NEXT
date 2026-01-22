@@ -39,6 +39,12 @@ require_once TC_BF_PATH . 'includes/class-tc-bf-partner-portal.php';
 require_once TC_BF_PATH . 'includes/Domain/EventMeta.php';
 require_once TC_BF_PATH . 'includes/Admin/Admin_Event_Meta.php';
 
+// TCBF-13: Product EB Configuration (category-based EB rules for booking products)
+require_once TC_BF_PATH . 'includes/Domain/ProductEBConfig.php';
+require_once TC_BF_PATH . 'includes/Domain/BookingLedger.php';
+require_once TC_BF_PATH . 'includes/Admin/Admin_Product_Category_EB.php';
+require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_BookingLedger.php';
+
 add_action('plugins_loaded', function () {
 	// Load translations using absolute path (more reliable across different folder names)
 	$locale = determine_locale();
@@ -48,9 +54,14 @@ add_action('plugins_loaded', function () {
 	\TC_BF\Sc_Event_Extras::init();
 	\TC_BF\Partner_Portal::init();
 
+	// TCBF-13: Initialize booking product ledger integration
+	\TC_BF\Integrations\WooCommerce\Woo_BookingLedger::init();
+
 	// TCBF-11: Initialize consolidated event meta box
+	// TCBF-13: Initialize product category EB settings
 	if ( is_admin() ) {
 		\TC_BF\Admin\Admin_Event_Meta::init();
+		\TC_BF\Admin\Admin_Product_Category_EB::init();
 	}
 });
 
