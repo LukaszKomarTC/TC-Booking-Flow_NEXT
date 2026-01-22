@@ -57,7 +57,7 @@ final class GF_Notification_Config {
 		'partner_discount_pct'    => 152,
 		'partner_commission_pct'  => 161,
 		'partner_commission_amt'  => 165,
-		'discount_code'           => 154,
+		'coupon_code'             => 154,
 
 		// User fields
 		'user_id'                 => 167,
@@ -92,7 +92,7 @@ final class GF_Notification_Config {
 			'partner_email',
 			'partner_id',
 			'user_id',
-			'discount_code',
+			'coupon_code',
 			'event_title',
 			'start_date',
 		],
@@ -323,7 +323,7 @@ final class GF_Notification_Config {
 	 *
 	 * Partner notification should fire when:
 	 * - User ID != Partner ID (not self-booking)
-	 * - Discount code is not empty (partner attribution exists)
+	 * - Coupon code is not empty (partner attribution exists)
 	 *
 	 * @param int $form_id GF form ID
 	 * @return array|null Conditional logic rules or null if fields not found
@@ -336,21 +336,21 @@ final class GF_Notification_Config {
 
 		$user_id_field = $field_map['user_id'] ?? null;
 		$partner_id_field = $field_map['partner_id'] ?? null;
-		$discount_code_field = $field_map['discount_code'] ?? null;
+		$coupon_code_field = $field_map['coupon_code'] ?? null;
 
-		if ( ! $user_id_field || ! $partner_id_field || ! $discount_code_field ) {
+		if ( ! $user_id_field || ! $partner_id_field || ! $coupon_code_field ) {
 			return null;
 		}
 
 		return [
 			[
-				'fieldId'  => (string) $discount_code_field,
+				'fieldId'  => (string) $coupon_code_field,
 				'operator' => 'isnot',
 				'value'    => '',
 			],
 			// Note: GF conditional logic cannot compare two fields directly
 			// The "user != partner" check must be done via merge tag in partner email field
-			// or via gform_notification filter. For now, we rely on discount_code presence.
+			// or via gform_notification filter. For now, we rely on coupon_code presence.
 		];
 	}
 

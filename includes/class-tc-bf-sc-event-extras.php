@@ -289,7 +289,7 @@ final class Sc_Event_Extras {
             'title'    => get_the_title($event_id),
         ]);
 
-        // --- Hotel user list for "inscription_for" field (unchanged logic) ---
+        // --- Hotel user list for partner override select (cssClass: inscription_for) ---
         $hotel_users = get_users([
             'role'    => 'hotel',
             'orderby' => 'user_nicename',
