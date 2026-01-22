@@ -31,8 +31,13 @@ final class PartnerResolver {
 			'admin_override' => 63,
 			'coupon_code'    => 154,
 		],
-		// Form 45 - Booking Products (TCBF-13)
+		// Form 45 - Booking Products (TCBF-13 new design)
 		45 => [
+			'admin_override' => 24,
+			'coupon_code'    => 10,
+		],
+		// Form 55 - Booking Products (current staging)
+		55 => [
 			'admin_override' => 24,
 			'coupon_code'    => 10,
 		],

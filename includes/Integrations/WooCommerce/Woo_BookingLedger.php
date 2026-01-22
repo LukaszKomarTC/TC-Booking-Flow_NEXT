@@ -33,9 +33,10 @@ class Woo_BookingLedger {
 	const BK_LEDGER_PROCESSED   = '_tcbf_ledger_processed';
 
 	/**
-	 * Form ID for booking products
+	 * Supported booking form IDs
+	 * Form 45 = new design, Form 55 = current staging
 	 */
-	const BOOKING_FORM_ID = 45;
+	const BOOKING_FORM_IDS = [ 45, 55 ];
 
 	/**
 	 * Initialize hooks
@@ -75,8 +76,8 @@ class Woo_BookingLedger {
 		$lead    = $cart_item_data['_gravity_form_lead'];
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		// Skip if not our booking form
-		if ( $form_id !== self::BOOKING_FORM_ID ) {
+		// Skip if not a supported booking form
+		if ( ! in_array( $form_id, self::BOOKING_FORM_IDS, true ) ) {
 			return $cart_item_data;
 		}
 
@@ -140,20 +141,27 @@ class Woo_BookingLedger {
 	 */
 	private static function resolve_partner_from_lead( array $lead ) : array {
 
-		// Check for admin override in field 24
-		$override_code = trim( (string) ( $lead['24'] ?? '' ) );
+		$form_id = (int) ( $lead['form_id'] ?? 0 );
+
+		// Get field map for this form
+		$field_map = PartnerResolver::get_field_map( $form_id );
+
+		// Check for admin override
+		$admin_field = $field_map['admin_override'];
+		$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
 		if ( $override_code !== '' && current_user_can( 'administrator' ) ) {
 			return PartnerResolver::build_partner_context_from_code( $override_code );
 		}
 
-		// Check for coupon code in field 10 (snapshot from WC)
-		$coupon_code = trim( (string) ( $lead['10'] ?? '' ) );
+		// Check for coupon code
+		$coupon_field = $field_map['coupon_code'];
+		$coupon_code = trim( (string) ( $lead[ (string) $coupon_field ] ?? '' ) );
 		if ( $coupon_code !== '' ) {
 			return PartnerResolver::build_partner_context_from_code( $coupon_code );
 		}
 
 		// Fall back to standard resolution
-		return PartnerResolver::resolve_partner_context( self::BOOKING_FORM_ID );
+		return PartnerResolver::resolve_partner_context( $form_id );
 	}
 
 	/**
@@ -308,7 +316,7 @@ class Woo_BookingLedger {
 		$lead    = $cart_item['_gravity_form_lead'];
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		if ( $form_id !== self::BOOKING_FORM_ID ) {
+		if ( ! in_array( $form_id, self::BOOKING_FORM_IDS, true ) ) {
 			return null;
 		}
 

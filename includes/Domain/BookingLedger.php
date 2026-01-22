@@ -274,8 +274,8 @@ class BookingLedger {
 	 */
 	public static function populate_lead_with_ledger( array &$lead, array $ledger, int $form_id ) : void {
 
-		// Form 45 field IDs for ledger data
-		if ( $form_id === 45 ) {
+		// Form 45 and 55 share the same field structure for ledger data
+		if ( in_array( $form_id, [ 45, 55 ], true ) ) {
 			$lead['15'] = (string) round( $ledger['base_price'], 2 );           // ledger_base_price
 			$lead['16'] = (string) round( $ledger['eb_discount_pct'], 1 );      // ledger_eb_percent
 			$lead['17'] = (string) round( $ledger['eb_discount_amount'], 2 );   // ledger_eb_discount
