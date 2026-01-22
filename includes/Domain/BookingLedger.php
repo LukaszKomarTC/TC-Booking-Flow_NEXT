@@ -2,6 +2,7 @@
 namespace TC_BF\Domain;
 
 use TC_BF\Admin\Settings;
+use TC_BF\Integrations\GravityForms\GF_SemanticFields;
 
 if ( ! defined('ABSPATH') ) exit;
 
@@ -218,14 +219,12 @@ class BookingLedger {
 		$lead = $cart_item['_gravity_form_lead'] ?? [];
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		// Try to get partner override code from GF lead (admin override field)
+		// Try to get partner override code from GF lead using semantic field resolution
+		$admin_field_id = GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE );
 		$override_code = '';
-		$booking_form_id = Settings::get_booking_form_id();
-		if ( $form_id === $booking_form_id ) {
-			// Use PartnerResolver field map to get the correct field
-			$field_map = PartnerResolver::get_field_map( $form_id );
-			$admin_field = $field_map['admin_override'];
-			$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
+
+		if ( $admin_field_id !== null && $admin_field_id > 0 ) {
+			$override_code = trim( (string) ( $lead[ (string) $admin_field_id ] ?? '' ) );
 		}
 
 		// If admin override provided, use PartnerResolver with that code
@@ -272,7 +271,7 @@ class BookingLedger {
 	 * Populate GF entry fields with ledger data
 	 *
 	 * Updates the _gravity_form_lead array with calculated ledger values
-	 * for storage in cart item meta.
+	 * for storage in cart item meta. Uses GF_SemanticFields for field ID resolution.
 	 *
 	 * @param array $lead   GF lead data (by reference)
 	 * @param array $ledger Calculated ledger result
@@ -280,26 +279,30 @@ class BookingLedger {
 	 */
 	public static function populate_lead_with_ledger( array &$lead, array $ledger, int $form_id ) : void {
 
-		// Booking product form uses specific field structure for ledger data
-		$booking_form_id = Settings::get_booking_form_id();
-		if ( $form_id === $booking_form_id ) {
-			$lead['15'] = (string) round( $ledger['base_price'], 2 );           // ledger_base_price
-			$lead['16'] = (string) round( $ledger['eb_discount_pct'], 1 );      // ledger_eb_percent
-			$lead['17'] = (string) round( $ledger['eb_discount_amount'], 2 );   // ledger_eb_discount
-			$lead['18'] = (string) round( $ledger['partner_discount_amount'], 2 ); // ledger_partner_discount
-			$lead['19'] = (string) round( $ledger['total_discount'], 2 );       // ledger_total_discount
-			$lead['20'] = (string) round( $ledger['total_client'], 2 );         // ledger_total_client
-			$lead['21'] = (string) round( $ledger['partner_commission'], 2 );   // ledger_partner_commission
-
-			// Partner attribution fields
-			$partner = $ledger['partner'] ?? [];
-			if ( ! empty( $partner['active'] ) ) {
-				$lead['25'] = (string) ( $partner['partner_user_id'] ?? '' );   // partner_user_id
-				$lead['26'] = (string) ( $partner['code'] ?? '' );              // partner_coupon_code
-				$lead['27'] = (string) ( $partner['discount_pct'] ?? '' );      // partner_discount_pct
-				$lead['28'] = (string) ( $partner['commission_pct'] ?? '' );    // partner_commission_pct
-				$lead['29'] = (string) ( $partner['partner_email'] ?? '' );     // partner_email
+		// Helper to set lead value using semantic key
+		$set_field = function( string $key, string $value ) use ( &$lead, $form_id ) {
+			$field_id = GF_SemanticFields::field_id( $form_id, $key );
+			if ( $field_id !== null && $field_id > 0 ) {
+				$lead[ (string) $field_id ] = $value;
 			}
+		};
+
+		// Ledger fields
+		$set_field( GF_SemanticFields::KEY_LEDGER_BASE, (string) round( $ledger['base_price'], 2 ) );
+		$set_field( GF_SemanticFields::KEY_LEDGER_EB_PCT, (string) round( $ledger['eb_discount_pct'], 1 ) );
+		$set_field( GF_SemanticFields::KEY_LEDGER_EB_AMOUNT, (string) round( $ledger['eb_discount_amount'], 2 ) );
+		$set_field( GF_SemanticFields::KEY_LEDGER_PARTNER_AMOUNT, (string) round( $ledger['partner_discount_amount'], 2 ) );
+		$set_field( GF_SemanticFields::KEY_LEDGER_TOTAL, (string) round( $ledger['total_client'], 2 ) );
+		$set_field( GF_SemanticFields::KEY_LEDGER_COMMISSION, (string) round( $ledger['partner_commission'], 2 ) );
+
+		// Partner attribution fields
+		$partner = $ledger['partner'] ?? [];
+		if ( ! empty( $partner['active'] ) ) {
+			$set_field( GF_SemanticFields::KEY_PARTNER_USER_ID, (string) ( $partner['partner_user_id'] ?? '' ) );
+			$set_field( GF_SemanticFields::KEY_COUPON_CODE, (string) ( $partner['code'] ?? '' ) );
+			$set_field( GF_SemanticFields::KEY_PARTNER_DISCOUNT_PCT, (string) ( $partner['discount_pct'] ?? '' ) );
+			$set_field( GF_SemanticFields::KEY_PARTNER_COMMISSION_PCT, (string) ( $partner['commission_pct'] ?? '' ) );
+			$set_field( GF_SemanticFields::KEY_PARTNER_EMAIL, (string) ( $partner['partner_email'] ?? '' ) );
 		}
 	}
 

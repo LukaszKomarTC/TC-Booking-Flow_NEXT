@@ -45,6 +45,10 @@ require_once TC_BF_PATH . 'includes/Domain/BookingLedger.php';
 require_once TC_BF_PATH . 'includes/Admin/Admin_Product_Category_EB.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_BookingLedger.php';
 
+// TCBF-14: GF Semantic Field Mapping (inputName-based field resolution)
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_FieldMap.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_SemanticFields.php';
+
 add_action('plugins_loaded', function () {
 	// Load translations using absolute path (more reliable across different folder names)
 	$locale = determine_locale();
@@ -56,6 +60,9 @@ add_action('plugins_loaded', function () {
 
 	// TCBF-13: Initialize booking product ledger integration
 	\TC_BF\Integrations\WooCommerce\Woo_BookingLedger::init();
+
+	// TCBF-14: Register GF_FieldMap cache invalidation hooks
+	\TC_BF\Integrations\GravityForms\GF_FieldMap::register_cache_invalidation_hooks();
 
 	// TCBF-11: Initialize consolidated event meta box
 	// TCBF-13: Initialize product category EB settings

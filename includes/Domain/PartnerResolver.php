@@ -1,7 +1,7 @@
 <?php
 namespace TC_BF\Domain;
 
-use TC_BF\Admin\Settings;
+use TC_BF\Integrations\GravityForms\GF_SemanticFields;
 
 if ( ! defined('ABSPATH') ) exit;
 
@@ -9,89 +9,52 @@ if ( ! defined('ABSPATH') ) exit;
  * Partner Resolution Logic
  *
  * Priority:
- * 1) Admin override field (admin only) - form-specific field ID
+ * 1) Admin override field (admin only) - resolved via GF_SemanticFields
  * 2) Logged-in partner user meta (discount__code)  [Way 2]
  * 3) Coupon already applied in WC session/cart      [Way 1]
- * 4) Posted manual coupon field (form-specific)    [fallback]
+ * 4) Posted manual coupon field (resolved via GF_SemanticFields)  [fallback]
  *
- * Supports multiple forms with different field mappings:
- * - Form 44 (Events): fields 63 (admin override), 154 (coupon code)
- * - Form 45 (Booking Products): field 24 (admin override), 10 (coupon snapshot)
+ * Field IDs are resolved dynamically via GF_SemanticFields which uses:
+ * - inputName lookup (preferred)
+ * - Legacy fallbacks (logged, temporary)
+ *
+ * @see GF_SemanticFields for semantic key definitions
  */
 final class PartnerResolver {
 
 	/**
-	 * Form-specific field mappings
+	 * Get field ID for a semantic key on a form
 	 *
-	 * Each form can have different field IDs for:
-	 * - admin_override: Field where admin can manually enter partner code
-	 * - coupon_code: Field containing the coupon/partner code
+	 * This is the single entry point for field ID resolution.
+	 * Uses GF_SemanticFields internally.
+	 *
+	 * @param int    $form_id GF form ID
+	 * @param string $key     Semantic key (use GF_SemanticFields::KEY_* constants)
+	 * @return int Field ID or 0 if not found
 	 */
-	const FORM_FIELD_MAPS = [
-		// Form 44 - Events (legacy)
-		44 => [
-			'admin_override' => 63,
-			'coupon_code'    => 154,
-		],
-	];
+	public static function get_field_id( int $form_id, string $key ) : int {
+		return GF_SemanticFields::require_field_id( $form_id, $key );
+	}
 
 	/**
-	 * Default field mapping for booking product forms
-	 * Used when the form ID matches the configured booking form ID
-	 */
-	const BOOKING_FORM_FIELD_MAP = [
-		'admin_override' => 24,
-		'coupon_code'    => 10,
-	];
-
-	// Legacy constants for backward compatibility
-	const GF_PARTNER_CODE_FIELD = 63;  // Admin override partner code field (Form 44)
-	const GF_FIELD_COUPON_CODE  = 154; // Manual/hidden coupon code input field (Form 44)
-
-	/**
-	 * Get field IDs for a specific form
+	 * Get field map for backward compatibility
 	 *
+	 * @deprecated Use GF_SemanticFields::field_id() directly
 	 * @param int $form_id GF form ID
 	 * @return array Field mapping with 'admin_override' and 'coupon_code' keys
 	 */
 	public static function get_field_map( int $form_id ) : array {
-		// Return form-specific mapping if defined
-		if ( isset( self::FORM_FIELD_MAPS[ $form_id ] ) ) {
-			return self::FORM_FIELD_MAPS[ $form_id ];
-		}
-
-		// Check if this is the configured booking product form
-		$booking_form_id = Settings::get_booking_form_id();
-		if ( $form_id === $booking_form_id ) {
-			return self::BOOKING_FORM_FIELD_MAP;
-		}
-
-		// Default to Form 44 mapping for backward compatibility
-		return self::FORM_FIELD_MAPS[44];
+		return [
+			'admin_override' => GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE ),
+			'coupon_code'    => GF_SemanticFields::require_field_id( $form_id, GF_SemanticFields::KEY_COUPON_CODE ),
+		];
 	}
 
 	public static function resolve_partner_context( int $form_id ) : array {
 
-		$field_map = self::get_field_map( $form_id );
-
 		// 1) Admin override wins (only if current user is admin).
-		// Check form-specific field first, then fall back to legacy field
-		$override_code = '';
-
-		// Try form-specific admin override field
-		$admin_field = $field_map['admin_override'];
-		if ( isset( $_POST[ 'input_' . $admin_field ] ) ) {
-			$override_code = trim( (string) $_POST[ 'input_' . $admin_field ] );
-		}
-
-		// Legacy fallback for Form 44 field
-		if ( $override_code === '' && $admin_field !== self::GF_PARTNER_CODE_FIELD ) {
-			if ( isset( $_POST[ 'input_' . self::GF_PARTNER_CODE_FIELD ] ) ) {
-				$override_code = trim( (string) $_POST[ 'input_' . self::GF_PARTNER_CODE_FIELD ] );
-			}
-		}
-
-		$override_code = self::normalize_partner_code( $override_code );
+		$override_code = GF_SemanticFields::post_value( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE );
+		$override_code = self::normalize_partner_code( (string) $override_code );
 
 		if ( $override_code !== '' && current_user_can('administrator') ) {
 			return self::build_partner_context_from_code( $override_code );
@@ -115,22 +78,8 @@ final class PartnerResolver {
 		}
 
 		// 4) Manual/posted coupon field (if already present).
-		// Check form-specific coupon field first, then fall back to legacy field
-		$posted_code = '';
-
-		$coupon_field = $field_map['coupon_code'];
-		if ( isset( $_POST[ 'input_' . $coupon_field ] ) ) {
-			$posted_code = trim( (string) $_POST[ 'input_' . $coupon_field ] );
-		}
-
-		// Legacy fallback for Form 44 field
-		if ( $posted_code === '' && $coupon_field !== self::GF_FIELD_COUPON_CODE ) {
-			if ( isset( $_POST[ 'input_' . self::GF_FIELD_COUPON_CODE ] ) ) {
-				$posted_code = trim( (string) $_POST[ 'input_' . self::GF_FIELD_COUPON_CODE ] );
-			}
-		}
-
-		$posted_code = self::normalize_partner_code( $posted_code );
+		$posted_code = GF_SemanticFields::post_value( $form_id, GF_SemanticFields::KEY_COUPON_CODE );
+		$posted_code = self::normalize_partner_code( (string) $posted_code );
 
 		if ( $posted_code !== '' ) {
 			return self::build_partner_context_from_code( $posted_code );
