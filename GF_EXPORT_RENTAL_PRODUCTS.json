@@ -1104,7 +1104,7 @@
         "errorMessage": "",
         "visibility": "visible",
         "inputs": null,
-        "content": "<div class=\"tcbf-ledger-summary\"><strong>Pricing Summary</strong><br>Base: {Ledger base:15}<br>EB: -{Ledger EB discount:17}<br>Partner: -{Ledger partner discount:18}<br><strong>Total: {Ledger total client:20}</strong></div>",
+        "content": "<div id=\"tcbf-booking-ledger-summary\" class=\"tcbf-ledger-summary\"><!-- Populated by JS --></div>",
         "conditionalLogic": {
           "enabled": true,
           "actionType": "show",
