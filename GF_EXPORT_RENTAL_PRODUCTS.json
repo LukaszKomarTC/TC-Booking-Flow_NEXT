@@ -1776,19 +1776,31 @@
         "displayOnly": ""
       },
       {
-        "type": "text",
+        "type": "select",
         "id": 24,
-        "label": "Partner override code",
-        "adminLabel": "partner_override_code",
-        "inputName": "partner_override_code",
+        "formId": 45,
+        "label": "Partner / Booking source",
+        "adminLabel": "partner_select",
+        "inputName": "partner_select",
         "isRequired": false,
+        "size": "medium",
         "visibility": "visible",
+        "choices": [
+          {
+            "text": "Direct booking (no partner)",
+            "value": "",
+            "isSelected": true
+          }
+        ],
+        "cssClass": "partner_select",
+        "enableChoiceValue": true,
         "conditionalLogic": {
           "enabled": true,
           "actionType": "show",
           "logicType": "any",
           "rules": [
-            { "fieldId": "1", "operator": "contains", "value": "administrator" }
+            { "fieldId": "1", "operator": "contains", "value": "administrator" },
+            { "fieldId": "1", "operator": "contains", "value": "hotel" }
           ]
         }
       },
@@ -1848,7 +1860,7 @@
     "version": "2.9.5",
     "id": 0,
     "markupVersion": 2,
-    "nextFieldId": 24,
+    "nextFieldId": 30,
     "useCurrentUserAsAuthor": true,
     "postContentTemplateEnabled": false,
     "postTitleTemplateEnabled": false,

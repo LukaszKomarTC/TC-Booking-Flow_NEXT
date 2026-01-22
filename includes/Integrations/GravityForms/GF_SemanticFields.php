@@ -28,7 +28,8 @@ final class GF_SemanticFields {
 	// =========================================================================
 
 	// Partner attribution fields
-	const KEY_PARTNER_OVERRIDE_CODE = 'partner_override_code';  // Admin-only partner code override
+	const KEY_PARTNER_SELECT        = 'partner_select';         // Admin/hotel partner dropdown (value = coupon code)
+	const KEY_PARTNER_OVERRIDE_CODE = 'partner_override_code';  // Admin-only partner code override (legacy text input)
 	const KEY_COUPON_CODE           = 'coupon_code';            // User-submitted coupon code (input)
 	const KEY_PARTNER_COUPON_CODE   = 'partner_coupon_code';    // Resolved partner coupon code (output)
 	const KEY_PARTNER_USER_ID       = 'partner_user_id';        // Partner WP user ID
@@ -81,7 +82,8 @@ final class GF_SemanticFields {
 		// Form 55 - Booking Products (current staging)
 		// Also serves as default for configured booking form ID
 		55 => [
-			self::KEY_PARTNER_OVERRIDE_CODE  => 24,
+			self::KEY_PARTNER_SELECT         => 24,  // Select dropdown for admin/hotel
+			self::KEY_PARTNER_OVERRIDE_CODE  => 24,  // Alias to partner_select for backwards compat
 			self::KEY_COUPON_CODE            => 10,
 			self::KEY_PARTNER_USER_ID        => 25,
 			self::KEY_PARTNER_COUPON_CODE    => 26,
@@ -104,7 +106,8 @@ final class GF_SemanticFields {
 	 * Default fallback for booking product forms (when form ID is configured in admin)
 	 */
 	private const BOOKING_FORM_FALLBACKS = [
-		self::KEY_PARTNER_OVERRIDE_CODE  => 24,
+		self::KEY_PARTNER_SELECT         => 24,  // Select dropdown for admin/hotel
+		self::KEY_PARTNER_OVERRIDE_CODE  => 24,  // Alias to partner_select for backwards compat
 		self::KEY_COUPON_CODE            => 10,
 		self::KEY_PARTNER_USER_ID        => 25,
 		self::KEY_PARTNER_COUPON_CODE    => 26,
@@ -389,6 +392,7 @@ final class GF_SemanticFields {
 
 		// All known keys
 		$all_keys = [
+			self::KEY_PARTNER_SELECT,
 			self::KEY_PARTNER_OVERRIDE_CODE,
 			self::KEY_COUPON_CODE,
 			self::KEY_PARTNER_COUPON_CODE,

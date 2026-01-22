@@ -49,6 +49,7 @@ require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_BookingLedger.p
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_FieldMap.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_SemanticFields.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_FormValidator.php';
+require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_BookingPartnerSelect.php';
 
 add_action('plugins_loaded', function () {
 	// Load translations using absolute path (more reliable across different folder names)
@@ -64,6 +65,9 @@ add_action('plugins_loaded', function () {
 
 	// TCBF-14: Register GF_FieldMap cache invalidation hooks
 	\TC_BF\Integrations\GravityForms\GF_FieldMap::register_cache_invalidation_hooks();
+
+	// TCBF-14: Initialize booking partner select (for booking product form)
+	\TC_BF\Integrations\GravityForms\GF_BookingPartnerSelect::init();
 
 	// TCBF-11: Initialize consolidated event meta box
 	// TCBF-13: Initialize product category EB settings
