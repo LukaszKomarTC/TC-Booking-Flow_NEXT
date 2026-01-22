@@ -1,6 +1,7 @@
 <?php
 namespace TC_BF\Integrations\WooCommerce;
 
+use TC_BF\Admin\Settings;
 use TC_BF\Domain\BookingLedger;
 use TC_BF\Domain\PartnerResolver;
 use TC_BF\Support\Logger;
@@ -33,10 +34,15 @@ class Woo_BookingLedger {
 	const BK_LEDGER_PROCESSED   = '_tcbf_ledger_processed';
 
 	/**
-	 * Supported booking form IDs
-	 * Form 45 = new design, Form 55 = current staging
+	 * Get the configured booking form ID
+	 *
+	 * Uses admin setting for flexibility (default 55).
+	 *
+	 * @return int Form ID
 	 */
-	const BOOKING_FORM_IDS = [ 45, 55 ];
+	private static function get_booking_form_id() : int {
+		return Settings::get_booking_form_id();
+	}
 
 	/**
 	 * Initialize hooks
@@ -76,8 +82,8 @@ class Woo_BookingLedger {
 		$lead    = $cart_item_data['_gravity_form_lead'];
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		// Skip if not a supported booking form
-		if ( ! in_array( $form_id, self::BOOKING_FORM_IDS, true ) ) {
+		// Skip if not the configured booking form
+		if ( $form_id !== self::get_booking_form_id() ) {
 			return $cart_item_data;
 		}
 
@@ -316,7 +322,7 @@ class Woo_BookingLedger {
 		$lead    = $cart_item['_gravity_form_lead'];
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		if ( ! in_array( $form_id, self::BOOKING_FORM_IDS, true ) ) {
+		if ( $form_id !== self::get_booking_form_id() ) {
 			return null;
 		}
 

@@ -17,6 +17,9 @@ final class Settings {
 	// TCBF-12: Partner program toggle default (enabled by default)
 	const OPT_PARTNERS_ENABLED_DEFAULT = 'tcbf_partners_enabled_default';
 
+	// TCBF-13: Booking product form ID (for GF Product Add-ons integration)
+	const OPT_BOOKING_FORM_ID = 'tcbf_booking_form_id';
+
 	// TCBF Participants List settings
 	const OPT_PARTICIPANTS_PRIVACY_MODE   = 'tcbf_participants_privacy_mode';
 	const OPT_PARTICIPANTS_EVENT_UID_FIELD = 'tcbf_participants_event_uid_field_id';
@@ -139,11 +142,21 @@ final class Settings {
 
 						<tr>
 							<th scope="row">
-								<label for="<?php echo esc_attr(self::OPT_FORM_ID); ?>"><?php echo esc_html__('Gravity Form ID', 'tc-booking-flow-next'); ?></label>
+								<label for="<?php echo esc_attr(self::OPT_FORM_ID); ?>"><?php echo esc_html__('Event Form ID', 'tc-booking-flow-next'); ?></label>
 							</th>
 							<td>
 								<input type="number" class="small-text" name="<?php echo esc_attr(self::OPT_FORM_ID); ?>" id="<?php echo esc_attr(self::OPT_FORM_ID); ?>" value="<?php echo esc_attr( (string) get_option(self::OPT_FORM_ID, 44) ); ?>" min="1" step="1" />
-								<p class="description"><?php echo esc_html__('The Gravity Form used for TC Booking Flow.', 'tc-booking-flow-next'); ?></p>
+								<p class="description"><?php echo esc_html__('The Gravity Form used for event registrations (Form 44).', 'tc-booking-flow-next'); ?></p>
+							</td>
+						</tr>
+
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr(self::OPT_BOOKING_FORM_ID); ?>"><?php echo esc_html__('Booking Product Form ID', 'tc-booking-flow-next'); ?></label>
+							</th>
+							<td>
+								<input type="number" class="small-text" name="<?php echo esc_attr(self::OPT_BOOKING_FORM_ID); ?>" id="<?php echo esc_attr(self::OPT_BOOKING_FORM_ID); ?>" value="<?php echo esc_attr( (string) get_option(self::OPT_BOOKING_FORM_ID, 55) ); ?>" min="1" step="1" />
+								<p class="description"><?php echo esc_html__('The Gravity Form used for booking products with GF Product Add-ons (rentals).', 'tc-booking-flow-next'); ?></p>
 							</td>
 						</tr>
 
@@ -349,11 +362,28 @@ final class Settings {
 			'sanitize_callback' => function($v){ return max(1, absint($v)); },
 			'default'           => 145,
 		]);
+
+		// TCBF-13: Booking product form ID
+		register_setting('tc_bf_settings', self::OPT_BOOKING_FORM_ID, [
+			'type'              => 'integer',
+			'sanitize_callback' => function($v){ return absint($v); },
+			'default'           => 55,
+		]);
 	}
 
 	public static function get_form_id() : int {
 		$v = (int) get_option(self::OPT_FORM_ID, 44);
 		return $v > 0 ? $v : 44;
+	}
+
+	/**
+	 * Get the configured booking product form ID
+	 *
+	 * @return int Form ID (default 55)
+	 */
+	public static function get_booking_form_id() : int {
+		$v = (int) get_option(self::OPT_BOOKING_FORM_ID, 55);
+		return $v > 0 ? $v : 55;
 	}
 
 	public static function is_debug() : bool {

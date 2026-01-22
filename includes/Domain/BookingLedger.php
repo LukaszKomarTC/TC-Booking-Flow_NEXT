@@ -1,6 +1,8 @@
 <?php
 namespace TC_BF\Domain;
 
+use TC_BF\Admin\Settings;
+
 if ( ! defined('ABSPATH') ) exit;
 
 /**
@@ -216,10 +218,14 @@ class BookingLedger {
 		$lead = $cart_item['_gravity_form_lead'] ?? [];
 		$form_id = (int) ( $lead['form_id'] ?? 0 );
 
-		// Try to get partner override code from GF lead (field 24 for Form 45)
+		// Try to get partner override code from GF lead (admin override field)
 		$override_code = '';
-		if ( $form_id === 45 ) {
-			$override_code = trim( (string) ( $lead['24'] ?? '' ) );
+		$booking_form_id = Settings::get_booking_form_id();
+		if ( $form_id === $booking_form_id ) {
+			// Use PartnerResolver field map to get the correct field
+			$field_map = PartnerResolver::get_field_map( $form_id );
+			$admin_field = $field_map['admin_override'];
+			$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
 		}
 
 		// If admin override provided, use PartnerResolver with that code
@@ -274,8 +280,9 @@ class BookingLedger {
 	 */
 	public static function populate_lead_with_ledger( array &$lead, array $ledger, int $form_id ) : void {
 
-		// Form 45 and 55 share the same field structure for ledger data
-		if ( in_array( $form_id, [ 45, 55 ], true ) ) {
+		// Booking product form uses specific field structure for ledger data
+		$booking_form_id = Settings::get_booking_form_id();
+		if ( $form_id === $booking_form_id ) {
 			$lead['15'] = (string) round( $ledger['base_price'], 2 );           // ledger_base_price
 			$lead['16'] = (string) round( $ledger['eb_discount_pct'], 1 );      // ledger_eb_percent
 			$lead['17'] = (string) round( $ledger['eb_discount_amount'], 2 );   // ledger_eb_discount
