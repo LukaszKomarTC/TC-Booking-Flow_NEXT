@@ -267,6 +267,14 @@ final class Settings {
 			</form>
 
 			<hr/>
+			<h2><?php echo esc_html__('Form Health', 'tc-booking-flow-next'); ?></h2>
+			<?php
+			if ( class_exists( '\\TC_BF\\Integrations\\GravityForms\\GF_FormValidator' ) ) {
+				\TC_BF\Integrations\GravityForms\GF_FormValidator::render_health_section();
+			}
+			?>
+
+			<hr/>
 			<h2><?php echo esc_html__('Tools', 'tc-booking-flow-next'); ?></h2>
 
 			<?php self::render_notification_tools(); ?>
