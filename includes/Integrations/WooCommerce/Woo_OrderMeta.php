@@ -642,14 +642,17 @@ class Woo_OrderMeta {
 
 		?>
 		<style>
-		/* Discount row in totals - green styling */
+		/* Discount row in totals - green styling (class-based, no :has() dependency) */
 		.tcbf-discount-value {
-			color: #15803d;
+			color: var(--tcbf-discount-green, #15803d);
 			font-weight: 600;
 		}
-		.woocommerce-table--order-details tr th:has(+ td .tcbf-discount-value),
-		.woocommerce-table--order-details tr td:has(.tcbf-discount-value) {
-			background-color: #f0fdf4;
+		.tcbf-discount-row th,
+		.tcbf-discount-row td {
+			background-color: var(--tcbf-discount-green-bg, #f0fdf4);
+		}
+		.tcbf-discount-row th {
+			color: var(--tcbf-discount-green, #15803d);
 		}
 
 		/* Explainer block (EB + Commission) */
@@ -657,7 +660,7 @@ class Woo_OrderMeta {
 			margin-top: 20px;
 		}
 		.tcbf-explainer-divider {
-			border-top: 1px solid #e5e7eb;
+			border-top: 1px solid var(--tcbf-divider, rgba(0, 0, 0, 0.12));
 			margin-bottom: 16px;
 		}
 		.tcbf-explainer-content {
@@ -673,7 +676,7 @@ class Woo_OrderMeta {
 			flex: 1;
 			padding: 12px 16px;
 			background: #f9fafb;
-			border: 1px solid #e5e7eb;
+			border: 1px solid var(--tcbf-divider, rgba(0, 0, 0, 0.12));
 		}
 		.tcbf-explainer-label {
 			font-weight: 600;
@@ -695,19 +698,19 @@ class Woo_OrderMeta {
 			font-size: 15px;
 			color: #111827;
 		}
-		/* EB specific - subtle purple accent */
+		/* EB specific - purple accent (matches EB badge) */
 		.tcbf-explainer-eb {
-			border-left: 3px solid #7c3aed;
+			border-left: 3px solid var(--tcbf-eb-purple, #7c3aed);
 		}
 		.tcbf-explainer-eb .tcbf-explainer-amount {
-			color: #7c3aed;
+			color: var(--tcbf-eb-purple, #7c3aed);
 		}
-		/* Commission specific - subtle indigo accent */
+		/* Commission specific - indigo accent */
 		.tcbf-explainer-commission {
-			border-left: 3px solid #4f46e5;
+			border-left: 3px solid var(--tcbf-commission-indigo, #4f46e5);
 		}
 		.tcbf-explainer-commission .tcbf-explainer-amount {
-			color: #4f46e5;
+			color: var(--tcbf-commission-indigo, #4f46e5);
 		}
 		/* Responsive */
 		@media (max-width: 600px) {
@@ -2488,11 +2491,11 @@ class Woo_OrderMeta {
 			font-size: 14px;
 		}
 
-		/* Pack footer (totals) */
+		/* Pack footer (totals) - uses design tokens */
 		.tcbf-pack-footer {
 			padding: 12px 16px;
 			background: rgba(0, 0, 0, 0.02);
-			border-top: 1px solid rgba(0, 0, 0, 0.06);
+			border-top: 1px solid var(--tcbf-divider-light, rgba(0, 0, 0, 0.06));
 		}
 		.tcbf-pack-footer-line {
 			display: flex;
@@ -2509,10 +2512,10 @@ class Woo_OrderMeta {
 			color: #374151;
 		}
 		.tcbf-pack-footer-discount {
-			color: #059669;
+			color: var(--tcbf-eb-purple, #7c3aed);
 		}
 		.tcbf-pack-footer-total {
-			border-top: 1px solid rgba(0, 0, 0, 0.08);
+			border-top: 1px solid var(--tcbf-divider, rgba(0, 0, 0, 0.12));
 			margin-top: 6px;
 			padding-top: 8px;
 		}

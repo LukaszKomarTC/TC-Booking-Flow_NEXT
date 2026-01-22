@@ -1035,6 +1035,26 @@ final class Plugin {
 
 		echo "\n<!-- TC Booking Flow: Enhanced Field CSS -->\n";
 		echo "<style id=\"tc-bf-enhanced-fields\">\n";
+
+		// === Shared CSS Tokens (Phase 1 uniformity) ===
+		echo "/* ===== TCBF Design Tokens ===== */\n";
+		echo ":root {\n";
+		echo "  /* Theme accent (inherited or fallback) */\n";
+		echo "  --tcbf-accent: var(--shopkeeper-accent, var(--theme-accent, var(--theme-primary-color, #434c00)));\n";
+		echo "  /* Discount (partner coupon) - green */\n";
+		echo "  --tcbf-discount-green: #15803d;\n";
+		echo "  --tcbf-discount-green-bg: #f0fdf4;\n";
+		echo "  --tcbf-discount-green-gradient: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);\n";
+		echo "  /* Early Booking - purple */\n";
+		echo "  --tcbf-eb-purple: #7c3aed;\n";
+		echo "  --tcbf-eb-purple-light: #ede9fe;\n";
+		echo "  /* Commission - indigo */\n";
+		echo "  --tcbf-commission-indigo: #4f46e5;\n";
+		echo "  /* Dividers */\n";
+		echo "  --tcbf-divider: rgba(0, 0, 0, 0.12);\n";
+		echo "  --tcbf-divider-light: rgba(0, 0, 0, 0.06);\n";
+		echo "}\n\n";
+
 		echo "/* Enhanced Field 179 - EB Discount (form ID: {$form_id}) */\n";
 		echo "#field_{$form_id}_179 .gfield_label { display: none !important; }\n";
 		echo ".tcbf-eb-enhanced {\n";
@@ -1236,7 +1256,7 @@ final class Plugin {
 			echo "  color: #374151;\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-discount {\n";
-			echo "  color: #059669;\n";
+			echo "  color: var(--tcbf-eb-purple, #7c3aed);\n";
 			echo "}\n";
 			echo ".tcbf-pack-footer-total {\n";
 			echo "  border-top: 1px solid rgba(0, 0, 0, 0.08);\n";
@@ -1305,22 +1325,22 @@ final class Plugin {
 			echo "  /* Target partner coupons specifically */\n";
 			echo "}\n";
 
-			echo "/* Style partner coupon rows in cart totals */\n";
+			echo "/* Style partner coupon rows in cart totals (uses design tokens) */\n";
 			echo ".cart_totals tr.cart-discount,\n";
 			echo ".woocommerce-checkout-review-order tr.cart-discount {\n";
-			echo "  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);\n";
+			echo "  background: var(--tcbf-discount-green-gradient, linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%));\n";
 			echo "}\n";
 
 			echo ".cart_totals tr.cart-discount th,\n";
 			echo ".woocommerce-checkout-review-order tr.cart-discount th {\n";
-			echo "  color: #14532d !important;\n";
+			echo "  color: var(--tcbf-discount-green, #15803d) !important;\n";
 			echo "  font-weight: 600;\n";
 			echo "  padding: 12px !important;\n";
 			echo "}\n";
 
 			echo ".cart_totals tr.cart-discount td,\n";
 			echo ".woocommerce-checkout-review-order tr.cart-discount td {\n";
-			echo "  color: #14532d !important;\n";
+			echo "  color: var(--tcbf-discount-green, #15803d) !important;\n";
 			echo "  font-weight: 700;\n";
 			echo "  padding: 12px !important;\n";
 			echo "}\n";

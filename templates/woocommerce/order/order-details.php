@@ -113,8 +113,10 @@ $is_tcbf_booking_order = class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_
 			<tfoot>
 				<?php
 				foreach ( $order->get_order_item_totals() as $key => $total ) {
+					// Add class for discount row styling (removes :has() CSS dependency)
+					$row_class = ( $key === 'discount' ) ? 'tcbf-discount-row' : '';
 					?>
-					<tr>
+					<tr class="<?php echo esc_attr( $row_class ); ?>">
 						<th scope="row"><?php echo esc_html( $total['label'] ); ?></th>
 						<td><?php echo wp_kses_post( $total['value'] ); ?></td>
 					</tr>
@@ -195,8 +197,10 @@ $is_tcbf_booking_order = class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_
 			<tfoot>
 				<?php
 				foreach ( $order->get_order_item_totals() as $key => $total ) {
+					// Add class for discount row styling (removes :has() CSS dependency)
+					$row_class = ( $key === 'discount' ) ? 'tcbf-discount-row' : '';
 					?>
-					<tr>
+					<tr class="<?php echo esc_attr( $row_class ); ?>">
 						<th scope="row"><?php echo esc_html( $total['label'] ); ?></th>
 						<td><?php echo wp_kses_post( $total['value'] ); ?></td>
 					</tr>
