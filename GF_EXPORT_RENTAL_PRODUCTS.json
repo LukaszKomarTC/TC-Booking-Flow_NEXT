@@ -1774,6 +1774,63 @@
         "errors": [],
         "fields": "",
         "displayOnly": ""
+      },
+      {
+        "type": "text",
+        "id": 24,
+        "label": "Partner override code",
+        "adminLabel": "partner_override_code",
+        "inputName": "partner_override_code",
+        "isRequired": false,
+        "visibility": "visible",
+        "conditionalLogic": {
+          "enabled": true,
+          "actionType": "show",
+          "logicType": "any",
+          "rules": [
+            { "fieldId": "5", "operator": "contains", "value": "administrator" }
+          ]
+        }
+      },
+      {
+        "type": "hidden",
+        "id": 25,
+        "label": "partner_user_id",
+        "adminLabel": "partner_user_id",
+        "inputName": "partner_user_id",
+        "visibility": "hidden"
+      },
+      {
+        "type": "hidden",
+        "id": 26,
+        "label": "partner_coupon_code",
+        "adminLabel": "partner_coupon_code",
+        "inputName": "partner_coupon_code",
+        "visibility": "hidden"
+      },
+      {
+        "type": "hidden",
+        "id": 27,
+        "label": "partner_discount_pct",
+        "adminLabel": "partner_discount_pct",
+        "inputName": "partner_discount_pct",
+        "visibility": "hidden"
+      },
+      {
+        "type": "hidden",
+        "id": 28,
+        "label": "partner_commission_pct",
+        "adminLabel": "partner_commission_pct",
+        "inputName": "partner_commission_pct",
+        "visibility": "hidden"
+      },
+      {
+        "type": "hidden",
+        "id": 29,
+        "label": "partner_email",
+        "adminLabel": "partner_email",
+        "inputName": "partner_email",
+        "visibility": "hidden"
       }
     ],
     "button": {
