@@ -389,6 +389,10 @@ do_action( 'woocommerce_before_cart' ); ?>
 	border: none !important;
 	background: transparent !important;
 }
+/* First parent row of first pack - add top padding (subsequent packs get spacing from separator) */
+.woocommerce-cart-form__contents tbody > tr.tcbf-cart-row--parent:first-child td {
+	padding-top: 9px !important;
+}
 .tcbf-cart-row--parent {
 	border-left: 3px solid var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) !important;
 }
