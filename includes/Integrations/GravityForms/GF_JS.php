@@ -775,9 +775,22 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     if(!isBookingForm) return;
 
     var basePrice = getWcBookingsCost();
-    if(basePrice <= 0) return;
-
     var startDate = getBookingStartDate();
+
+    // If no valid price or date, clear ledger fields to prevent stale display
+    if(basePrice <= 0 || !startDate){
+      setValIfChanged(F.ledger_base, '0', true);
+      setValIfChanged(F.ledger_eb_pct, '0', true);
+      setValIfChanged(F.ledger_eb_amount, '0', true);
+      setValIfChanged(F.ledger_partner_amt, '0', true);
+      setValIfChanged(F.ledger_total, '0', true);
+      setValIfChanged(F.eb_discount_pct, '0', true);
+      // Trigger GF recalc to hide display fields
+      if(typeof window.gformCalculateTotalPrice === 'function'){
+        try{ window.gformCalculateTotalPrice(fid); }catch(e){}
+      }
+      return;
+    }
     var daysBefore = calculateDaysBefore(startDate);
 
     // Calculate EB discount
@@ -817,17 +830,20 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     }
 
     // Populate ledger fields
+    // CRITICAL: Use dot decimals for money fields (not comma) so PHP can read them correctly.
+    // fmtPct() converts to comma which breaks (float)"12,34" = 12.0 in PHP.
+    // We use toFixed(2) which produces dot decimals like "12.34".
     var changed = false;
-    changed = setValIfChanged(F.ledger_base, fmtPct(basePrice), true) || changed;
-    changed = setValIfChanged(F.ledger_eb_pct, fmtPct(ebPct), true) || changed;
-    changed = setValIfChanged(F.ledger_eb_amount, fmtPct(ebAmount), true) || changed;
-    changed = setValIfChanged(F.ledger_partner_amt, fmtPct(partnerAmount), true) || changed;
-    changed = setValIfChanged(F.ledger_total, fmtPct(total), true) || changed;
+    changed = setValIfChanged(F.ledger_base, basePrice.toFixed(2), true) || changed;
+    changed = setValIfChanged(F.ledger_eb_pct, fmtPct(ebPct), true) || changed;  // % can use comma
+    changed = setValIfChanged(F.ledger_eb_amount, ebAmount.toFixed(2), true) || changed;
+    changed = setValIfChanged(F.ledger_partner_amt, partnerAmount.toFixed(2), true) || changed;
+    changed = setValIfChanged(F.ledger_total, total.toFixed(2), true) || changed;
 
-    // Also update the EB% field if we have a calculated value
-    if(ebPct > 0){
-      setValIfChanged(F.eb_discount_pct, fmtPct(ebPct), true);
-    }
+    // CRITICAL: Always update the EB% field - set to 0 when no EB applies.
+    // This ensures Field 32 hides when EB doesn't apply (e.g., date outside EB window).
+    // Previously only set when ebPct > 0, causing "stuck on" display.
+    setValIfChanged(F.eb_discount_pct, fmtPct(ebPct), true);
 
     // Trigger GF recalculation if values changed
     if(changed && typeof window.gformCalculateTotalPrice === 'function'){
@@ -850,8 +866,18 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     ledgerCalcTimer = setTimeout(calculateLedger, 100);
   }
 
+  // Guard to prevent multiple MutationObserver instances
+  var __tcBfBookingsWatcherBound = false;
+
   function watchWcBookings(){
     if(!isBookingForm) return;
+
+    // CRITICAL: Guard against multiple observer attachments
+    // bindOnce() is called on gform_post_render and gform_post_conditional_logic,
+    // which can fire multiple times. Without this guard, we'd create multiple
+    // observers that spam recalculations.
+    if(__tcBfBookingsWatcherBound) return;
+    __tcBfBookingsWatcherBound = true;
 
     // Watch for WC Bookings cost changes using MutationObserver
     var costContainer = document.querySelector('.wc-bookings-booking-cost');
