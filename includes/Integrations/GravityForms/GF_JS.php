@@ -73,32 +73,32 @@ final class GF_JS {
 	 * Resolve all needed field IDs via GF_SemanticFields
 	 *
 	 * @param int $form_id GF form ID
-	 * @return array Field IDs keyed by semantic name
+	 * @return array Field IDs keyed by semantic name (0 if not found)
 	 */
 	private static function resolve_field_ids( int $form_id ) : array {
 		return [
 			// Partner fields
-			'partner_override'     => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE ),
-			'coupon_code'          => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_COUPON_CODE ),
-			'partner_discount_pct' => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_DISCOUNT_PCT ),
-			'partner_commission'   => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_COMMISSION_PCT ),
-			'partner_email'        => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_EMAIL ),
-			'partner_user_id'      => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_USER_ID ),
-			'partners_enabled'     => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNERS_ENABLED ),
+			'partner_override'     => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE ) ?? 0,
+			'coupon_code'          => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_COUPON_CODE ) ?? 0,
+			'partner_discount_pct' => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_DISCOUNT_PCT ) ?? 0,
+			'partner_commission'   => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_COMMISSION_PCT ) ?? 0,
+			'partner_email'        => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_EMAIL ) ?? 0,
+			'partner_user_id'      => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_USER_ID ) ?? 0,
+			'partners_enabled'     => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNERS_ENABLED ) ?? 0,
 
 			// Early booking fields
-			'eb_discount_pct'      => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_EB_DISCOUNT_PCT ),
+			'eb_discount_pct'      => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_EB_DISCOUNT_PCT ) ?? 0,
 
 			// Display fields (product-type for visual presentation)
-			'display_eb'           => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_DISPLAY_EB_DISCOUNT ),
-			'display_partner'      => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_DISPLAY_PARTNER_DISCOUNT ),
+			'display_eb'           => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_DISPLAY_EB_DISCOUNT ) ?? 0,
+			'display_partner'      => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_DISPLAY_PARTNER_DISCOUNT ) ?? 0,
 
 			// Ledger fields (booking forms)
-			'ledger_base'          => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_BASE ),
-			'ledger_eb_pct'        => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_EB_PCT ),
-			'ledger_eb_amount'     => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_EB_AMOUNT ),
-			'ledger_partner_amt'   => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_PARTNER_AMOUNT ),
-			'ledger_total'         => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_TOTAL ),
+			'ledger_base'          => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_BASE ) ?? 0,
+			'ledger_eb_pct'        => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_EB_PCT ) ?? 0,
+			'ledger_eb_amount'     => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_EB_AMOUNT ) ?? 0,
+			'ledger_partner_amt'   => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_PARTNER_AMOUNT ) ?? 0,
+			'ledger_total'         => GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_LEDGER_TOTAL ) ?? 0,
 		];
 	}
 
@@ -542,8 +542,15 @@ JS;
 	public static function output_partner_css() : void {
 		if ( is_admin() ) return;
 
-		// Only output on product pages or when forms are likely used
-		if ( ! is_singular( 'product' ) && ! is_singular( 'sc_event' ) && ! is_cart() && ! is_checkout() ) {
+		// Output CSS whenever GF forms might be rendered
+		// Broader check to ensure CSS is available for booking forms in various contexts
+		$should_output = is_singular( 'product' )
+			|| is_singular( 'sc_event' )
+			|| is_cart()
+			|| is_checkout()
+			|| ! empty( self::$partner_js_payload );  // Form was processed
+
+		if ( ! $should_output ) {
 			return;
 		}
 
