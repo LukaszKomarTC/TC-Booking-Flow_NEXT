@@ -290,23 +290,27 @@ final class Sc_Event_Extras {
         ]);
 
         // --- Hotel user list for partner override select (cssClass: inscription_for) ---
-        $hotel_users = get_users([
-            'role'    => 'hotel',
-            'orderby' => 'user_nicename',
-            'order'   => 'ASC',
-        ]);
+        // Only administrators can see and use the partner override dropdown.
+        // Partners should NOT see this field - they automatically get their own discount.
         $hotel_users_array = [];
-        $current_user = wp_get_current_user();
-        $hotel_users_array[] = [
-            'text'  => $current_user->display_name . ' (' . __( '[:es]Reserva directa[:en]Direct booking[:]', 'tc-booking-flow' ) . ')',
-            'value' => '',
-        ];
-        foreach ( $hotel_users as $user ) {
-            $discount_code = (string) get_user_meta($user->ID, 'discount__code', true);
+        if ( current_user_can( 'administrator' ) ) {
+            $hotel_users = get_users([
+                'role'    => 'hotel',
+                'orderby' => 'user_nicename',
+                'order'   => 'ASC',
+            ]);
+            $current_user = wp_get_current_user();
             $hotel_users_array[] = [
-                'text'  => $user->display_name . ' (' . $discount_code . ')',
-                'value' => $discount_code,
+                'text'  => $current_user->display_name . ' (' . __( '[:es]Reserva directa[:en]Direct booking[:]', 'tc-booking-flow' ) . ')',
+                'value' => '',
             ];
+            foreach ( $hotel_users as $user ) {
+                $discount_code = (string) get_user_meta($user->ID, 'discount__code', true);
+                $hotel_users_array[] = [
+                    'text'  => $user->display_name . ' (' . $discount_code . ')',
+                    'value' => $discount_code,
+                ];
+            }
         }
 
         $cat_array = get_the_terms($event_id, 'sc_event_category');
