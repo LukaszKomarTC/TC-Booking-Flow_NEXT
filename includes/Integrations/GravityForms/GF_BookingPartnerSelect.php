@@ -40,11 +40,11 @@ final class GF_BookingPartnerSelect {
 	/**
 	 * Populate user_role field for conditional logic
 	 *
-	 * Returns comma-separated list of current user's roles for use
-	 * in GF conditional logic (e.g., show partner select only to admin/hotel).
+	 * Returns the primary role for use in GF conditional logic.
+	 * Partner override field should only show for administrators.
 	 *
 	 * @param mixed $value Default value
-	 * @return string User roles as comma-separated string
+	 * @return string User's primary role for conditional logic
 	 */
 	public static function populate_user_role( $value ) : string {
 		if ( ! is_user_logged_in() ) {
@@ -56,17 +56,26 @@ final class GF_BookingPartnerSelect {
 			return 'guest';
 		}
 
+		// Administrator check - highest priority for conditional logic
+		// This allows GF forms to show partner override field ONLY to admins
+		if ( current_user_can( 'administrator' ) ) {
+			return 'administrator';
+		}
+
 		$roles = (array) $user->roles;
 		if ( empty( $roles ) ) {
 			return 'subscriber';
 		}
 
-		// Return comma-separated roles for flexible conditional logic
-		return implode( ',', $roles );
+		// Return first role for non-admin users
+		return $roles[0];
 	}
 
 	/**
 	 * Populate partner select choices for booking form
+	 *
+	 * Only administrators can see the partner override dropdown.
+	 * This is a defense-in-depth measure alongside GF conditional logic.
 	 *
 	 * @param array $form GF form array
 	 * @return array Modified form
@@ -84,7 +93,13 @@ final class GF_BookingPartnerSelect {
 			return $form;
 		}
 
-		// Build partner choices
+		// Only administrators can use the partner override dropdown
+		// Partners should NOT see this field - they automatically get their own discount
+		if ( ! current_user_can( 'administrator' ) ) {
+			return $form;
+		}
+
+		// Build partner choices for admin
 		$choices = self::build_partner_choices();
 
 		// Find and populate partner_override_code field (select type)

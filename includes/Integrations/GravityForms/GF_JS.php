@@ -21,12 +21,6 @@ final class GF_JS {
 	private static array $partner_js_payload = [];
 
 	/**
-	 * Track all forms seen this request (for debugging)
-	 * @var array<int, bool>
-	 */
-	private static array $all_forms_seen = [];
-
-	/**
 	 * GF: Populate partner fields + inject JS for admin override dropdown.
 	 *
 	 * Works for both Event forms and Booking forms using semantic field resolution.
@@ -34,27 +28,12 @@ final class GF_JS {
 	public static function partner_prepare_form( $form ) {
 		$form_id = (int) (is_array($form) && isset($form['id']) ? $form['id'] : 0);
 
-		// Track all forms that pass through gform_pre_render
-		if ( $form_id > 0 ) {
-			self::$all_forms_seen[ $form_id ] = true;
-		}
-
 		// Check if this is an Event form OR Booking form
 		$event_form_id = (int) Settings::get_form_id();
 		$booking_form_id = (int) Settings::get_booking_form_id();
 
 		$is_event_form = ( $form_id === $event_form_id );
 		$is_booking_form = ( $form_id === $booking_form_id );
-
-		// Debug logging for form detection
-		self::debug_log( sprintf(
-			'partner_prepare_form: form_id=%d event_form=%d booking_form=%d is_event=%s is_booking=%s',
-			$form_id,
-			$event_form_id,
-			$booking_form_id,
-			$is_event_form ? 'yes' : 'no',
-			$is_booking_form ? 'yes' : 'no'
-		) );
 
 		if ( ! $is_event_form && ! $is_booking_form ) {
 			return $form;
@@ -76,16 +55,6 @@ final class GF_JS {
 		// Resolve field IDs using semantic keys
 		$field_ids = self::resolve_field_ids( $form_id );
 
-		// Debug: log resolved field IDs
-		self::debug_log( sprintf(
-			'form_id=%d resolved_field_ids: partner_override=%d coupon_code=%d partner_discount=%d partners_enabled=%d',
-			$form_id,
-			$field_ids['partner_override'] ?? 0,
-			$field_ids['coupon_code'] ?? 0,
-			$field_ids['partner_discount_pct'] ?? 0,
-			$field_ids['partners_enabled'] ?? 0
-		) );
-
 		// Cache payload for footer output.
 		self::$partner_js_payload[ $form_id ] = [
 			'partners'     => $partners,
@@ -94,15 +63,177 @@ final class GF_JS {
 			'field_ids'    => $field_ids,
 		];
 
-		self::debug_log( sprintf(
-			'form_id=%d JS payload cached. partners_count=%d initial_code=%s',
-			$form_id,
-			count( $partners ),
-			$initial_code ?: '(empty)'
-		) );
-
 		// Also register an init script so this works even when GF renders via AJAX.
 		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n, $field_ids );
+
+		// Inject partner banner HTML field if it doesn't exist in the form
+		$form = self::maybe_inject_partner_banner( $form, $form_id );
+
+		// Inject EB banner for both event and booking forms
+		$form = self::maybe_inject_eb_banner( $form, $form_id );
+
+		// For booking forms, inject ledger summary container
+		$booking_form_id = (int) Settings::get_booking_form_id();
+		if ( $form_id === $booking_form_id ) {
+			$form = self::maybe_inject_ledger_summary( $form, $form_id );
+		}
+
+		return $form;
+	}
+
+	/**
+	 * Inject EB banner HTML field if it doesn't exist in the form.
+	 *
+	 * Creates a container for the Early Booking discount banner that JS will populate.
+	 *
+	 * @param array $form    GF form array
+	 * @param int   $form_id Form ID
+	 * @return array Modified form
+	 */
+	private static function maybe_inject_eb_banner( array $form, int $form_id ) : array {
+		// Check if form already has an EB banner field
+		$has_eb_banner = false;
+		foreach ( $form['fields'] as $field ) {
+			$css_class = (string) ( $field->cssClass ?? '' );
+			if ( strpos( $css_class, 'tcbf-eb-banner-field' ) !== false ) {
+				$has_eb_banner = true;
+				break;
+			}
+		}
+
+		if ( $has_eb_banner ) {
+			return $form;
+		}
+
+		// Create HTML field with EB banner structure
+		$eb_banner_html = sprintf(
+			'<div class="tcbf-eb-banner" id="tcbf-eb-banner-%d" data-form-id="%d" style="display:none;">' .
+			'<div class="tcbf-eb-banner__icon">⏰</div>' .
+			'<div class="tcbf-eb-banner__content">' .
+			'<span class="tcbf-eb-banner__title"></span>' .
+			'<span class="tcbf-eb-banner__discount"></span>' .
+			'</div></div>',
+			$form_id,
+			$form_id
+		);
+
+		// Create an HTML field object
+		if ( class_exists( 'GF_Field_HTML' ) ) {
+			$eb_field = new \GF_Field_HTML();
+			$eb_field->id = 9997; // High ID to avoid conflicts
+			$eb_field->formId = $form_id;
+			$eb_field->type = 'html';
+			$eb_field->label = 'EB Banner';
+			$eb_field->content = $eb_banner_html;
+			$eb_field->cssClass = 'tcbf-eb-banner-field';
+
+			// Add to beginning of form fields (will appear at top)
+			array_unshift( $form['fields'], $eb_field );
+		}
+
+		return $form;
+	}
+
+	/**
+	 * Inject partner banner HTML field if it doesn't exist in the form.
+	 *
+	 * This ensures booking forms have the same visual elements as event forms
+	 * without requiring manual GF form configuration.
+	 *
+	 * @param array $form    GF form array
+	 * @param int   $form_id Form ID
+	 * @return array Modified form
+	 */
+	private static function maybe_inject_partner_banner( array $form, int $form_id ) : array {
+		// Check if form already has a partner banner field
+		$has_banner = false;
+		foreach ( $form['fields'] as $field ) {
+			$css_class = (string) ( $field->cssClass ?? '' );
+			if ( strpos( $css_class, 'tcbf-partner-banner-field' ) !== false ) {
+				$has_banner = true;
+				break;
+			}
+		}
+
+		if ( $has_banner ) {
+			return $form;
+		}
+
+		// Create HTML field with partner banner structure
+		$banner_html = sprintf(
+			'<div class="tcbf-partner-banner" id="tcbf-partner-banner-%d" data-form-id="%d" style="display:none;">' .
+			'<div class="tcbf-partner-banner__icon">✓</div>' .
+			'<div class="tcbf-partner-banner__content">' .
+			'<div class="tcbf-partner-banner__title"></div>' .
+			'<div class="tcbf-partner-banner__details">' .
+			'<span class="tcbf-partner-name"></span>' .
+			'<span class="tcbf-partner-discount"></span>' .
+			'</div></div></div>',
+			$form_id,
+			$form_id
+		);
+
+		// Create an HTML field object
+		if ( class_exists( 'GF_Field_HTML' ) ) {
+			$banner_field = new \GF_Field_HTML();
+			$banner_field->id = 9999; // High ID to avoid conflicts
+			$banner_field->formId = $form_id;
+			$banner_field->type = 'html';
+			$banner_field->label = 'Partner Banner';
+			$banner_field->content = $banner_html;
+			$banner_field->cssClass = 'tcbf-partner-banner-field';
+
+			// Add to beginning of form fields (will appear near top)
+			array_unshift( $form['fields'], $banner_field );
+		}
+
+		return $form;
+	}
+
+	/**
+	 * Inject ledger summary container for booking forms.
+	 *
+	 * This provides a place for the JS to render EB/Partner discount summary
+	 * similar to the event form's visual presentation.
+	 *
+	 * @param array $form    GF form array
+	 * @param int   $form_id Form ID
+	 * @return array Modified form
+	 */
+	private static function maybe_inject_ledger_summary( array $form, int $form_id ) : array {
+		// Check if form already has a ledger summary field
+		$has_ledger = false;
+		foreach ( $form['fields'] as $field ) {
+			$css_class = (string) ( $field->cssClass ?? '' );
+			if ( strpos( $css_class, 'tcbf-booking-ledger-summary-field' ) !== false ) {
+				$has_ledger = true;
+				break;
+			}
+		}
+
+		if ( $has_ledger ) {
+			return $form;
+		}
+
+		// Create HTML container for ledger summary
+		$ledger_html = sprintf(
+			'<div id="tcbf-booking-ledger-summary" class="tcbf-ledger-summary" data-form-id="%d" style="display:none;"></div>',
+			$form_id
+		);
+
+		// Create an HTML field object
+		if ( class_exists( 'GF_Field_HTML' ) ) {
+			$ledger_field = new \GF_Field_HTML();
+			$ledger_field->id = 9998; // High ID to avoid conflicts
+			$ledger_field->formId = $form_id;
+			$ledger_field->type = 'html';
+			$ledger_field->label = 'Booking Ledger Summary';
+			$ledger_field->content = $ledger_html;
+			$ledger_field->cssClass = 'tcbf-booking-ledger-summary-field';
+
+			// Add near the end of form fields (before submit)
+			$form['fields'][] = $ledger_field;
+		}
 
 		return $form;
 	}
@@ -186,6 +317,8 @@ final class GF_JS {
 		$title = '[:en]Partner Discount Applied[:es]Descuento Partner Aplicado[:]';
 		$discount_label = '[:en]discount[:es]descuento[:]';
 		$eb_label = '[:en]EARLY BOOKING[:es]RESERVA ANTICIPADA[:]';
+		$eb_active = '[:en]Early Booking Active[:es]Reserva Anticipada Activa[:]';
+		$eb_save = '[:en]Save[:es]Ahorra[:]';
 		$base_label = '[:en]Base price[:es]Precio base[:]';
 		$total_label = '[:en]Total[:es]Total[:]';
 
@@ -194,12 +327,16 @@ final class GF_JS {
 			$title = tc_sc_event_tr( $title );
 			$discount_label = tc_sc_event_tr( $discount_label );
 			$eb_label = tc_sc_event_tr( $eb_label );
+			$eb_active = tc_sc_event_tr( $eb_active );
+			$eb_save = tc_sc_event_tr( $eb_save );
 			$base_label = tc_sc_event_tr( $base_label );
 			$total_label = tc_sc_event_tr( $total_label );
 		} elseif ( function_exists( 'qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage' ) ) {
 			$title = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $title );
 			$discount_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $discount_label );
 			$eb_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $eb_label );
+			$eb_active = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $eb_active );
+			$eb_save = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $eb_save );
 			$base_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $base_label );
 			$total_label = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $total_label );
 		}
@@ -208,6 +345,8 @@ final class GF_JS {
 			'title'          => $title,
 			'discount_label' => $discount_label,
 			'eb_label'       => $eb_label,
+			'eb_active'      => $eb_active,
+			'eb_save'        => $eb_save,
 			'base_label'     => $base_label,
 			'total_label'    => $total_label,
 		];
@@ -241,6 +380,8 @@ final class GF_JS {
 		$banner_title   = esc_js( $i18n['title'] ?? 'Partner Discount Applied' );
 		$discount_label = esc_js( $i18n['discount_label'] ?? 'discount' );
 		$eb_label       = esc_js( $i18n['eb_label'] ?? 'EARLY BOOKING' );
+		$eb_active      = esc_js( $i18n['eb_active'] ?? 'Early Booking Active' );
+		$eb_save        = esc_js( $i18n['eb_save'] ?? 'Save' );
 		$base_label     = esc_js( $i18n['base_label'] ?? 'Base price' );
 		$total_label    = esc_js( $i18n['total_label'] ?? 'Total' );
 
@@ -257,6 +398,8 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     bannerTitle: '{$banner_title}',
     discount: '{$discount_label}',
     eb: '{$eb_label}',
+    ebActive: '{$eb_active}',
+    ebSave: '{$eb_save}',
     base: '{$base_label}',
     total: '{$total_label}'
   };
@@ -317,6 +460,22 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
       try{ el.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}
     }
     return true;
+  }
+
+  // ===== EB Banner (top notification) =====
+  function updateEBBanner(){
+    var banner = qs('#tcbf-eb-banner-'+fid);
+    if(!banner) return;
+    var ebPct = parseLocaleFloat(getVal(F.eb_discount_pct) || getVal(F.ledger_eb_pct));
+    if(ebPct > 0){
+      var titleEl = qs('.tcbf-eb-banner__title', banner);
+      var discEl = qs('.tcbf-eb-banner__discount', banner);
+      if(titleEl) titleEl.textContent = i18n.ebActive;
+      if(discEl) discEl.textContent = '— ' + i18n.ebSave + ' ' + fmtPct(ebPct) + '%';
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
   }
 
   // ===== Partner Banner =====
@@ -466,7 +625,7 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
         changed = setValIfChanged(F.partner_user_id,'',false) || changed;
         updatePartnerBanner(null, '');
         enhancePartnerDisplay(null, '');
-        setTimeout(enhanceEBDisplay, 50);
+        setTimeout(function(){ updateEBBanner(); enhanceEBDisplay(); }, 50);
         updateLedgerSummary(null, '');
         return;
       }
@@ -520,6 +679,7 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
       }
 
       setTimeout(function(){
+        updateEBBanner();
         enhanceEBDisplay();
         updateLedgerSummary(data, code);
       }, 50);
@@ -553,16 +713,7 @@ JS;
 	}
 
 	public static function output_partner_js() : void {
-		self::debug_log( sprintf(
-			'output_partner_js called. payload_count=%d is_admin=%s',
-			count( self::$partner_js_payload ),
-			is_admin() ? 'yes' : 'no'
-		) );
-
-		if ( empty( self::$partner_js_payload ) ) {
-			self::debug_log( 'output_partner_js: payload empty, skipping' );
-			return;
-		}
+		if ( empty( self::$partner_js_payload ) ) return;
 		if ( is_admin() ) return;
 
 		foreach ( self::$partner_js_payload as $form_id => $payload ) {
@@ -586,26 +737,6 @@ JS;
 	/**
 	 * Output CSS for enhanced product displays and ledger summary.
 	 */
-	/**
-	 * Debug logging helper - only logs when TC_BF debug mode is enabled.
-	 *
-	 * @param string $message Log message
-	 */
-	private static function debug_log( string $message ) : void {
-		try {
-			if ( class_exists( '\\TC_BF\\Admin\\Settings' ) && method_exists( '\\TC_BF\\Admin\\Settings', 'is_debug' ) ) {
-				if ( ! \TC_BF\Admin\Settings::is_debug() ) {
-					return;
-				}
-			}
-			if ( class_exists( '\\TC_BF\\Admin\\Settings' ) && method_exists( '\\TC_BF\\Admin\\Settings', 'append_log' ) ) {
-				\TC_BF\Admin\Settings::append_log( '[GF_JS] ' . $message );
-			}
-		} catch ( \Throwable $e ) {
-			// Silent fail
-		}
-	}
-
 	public static function output_partner_css() : void {
 		if ( is_admin() ) return;
 
@@ -640,6 +771,23 @@ JS;
 .tcbf-partner-banner__title { font-size: 16px; font-weight: 700; color: #14532d; margin-bottom: 4px; }
 .tcbf-partner-banner__details { font-size: 14px; color: #166534; display: flex; gap: 8px; }
 .tcbf-partner-name { font-weight: 600; }
+
+/* EB Banner (top notification) */
+.tcbf-eb-banner {
+  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
+  color: #fff;
+  padding: 12px 20px;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.tcbf-eb-banner__icon { font-size: 24px; }
+.tcbf-eb-banner__content { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tcbf-eb-banner__title { font-size: 15px; }
+.tcbf-eb-banner__discount { font-size: 15px; opacity: 0.9; }
 ";
 
 		// Enhanced EB Display
@@ -732,45 +880,5 @@ JS;
 .tcbf-ledger-total .tcbf-ledger-value { font-size: 20px; font-weight: 700; color: #1e293b; }
 ";
 		echo "</style>\n";
-	}
-
-	/**
-	 * Output diagnostic HTML comment for debugging form detection.
-	 *
-	 * Called at wp_footer to show which forms were processed.
-	 * Only outputs when debug mode is enabled.
-	 */
-	public static function output_debug_info() : void {
-		if ( is_admin() ) return;
-
-		// Only output when debug mode is enabled
-		try {
-			if ( ! class_exists( '\\TC_BF\\Admin\\Settings' ) || ! \TC_BF\Admin\Settings::is_debug() ) {
-				return;
-			}
-		} catch ( \Throwable $e ) {
-			return;
-		}
-
-		$event_form_id   = (int) Settings::get_form_id();
-		$booking_form_id = (int) Settings::get_booking_form_id();
-		$processed_forms = array_keys( self::$partner_js_payload );
-		$all_forms_seen  = array_keys( self::$all_forms_seen );
-
-		echo "\n<!-- TC Booking Flow Debug Info -->\n";
-		echo "<!-- Event form ID (configured): {$event_form_id} -->\n";
-		echo "<!-- Booking form ID (configured): {$booking_form_id} -->\n";
-		echo "<!-- All forms seen via gform_pre_render: " . ( empty( $all_forms_seen ) ? 'none' : implode( ', ', $all_forms_seen ) ) . " -->\n";
-		echo "<!-- Forms processed (JS injected): " . ( empty( $processed_forms ) ? 'none' : implode( ', ', $processed_forms ) ) . " -->\n";
-
-		// Diagnostic help
-		if ( empty( $all_forms_seen ) ) {
-			echo "<!-- No GF forms rendered on this page via gform_pre_render hook -->\n";
-		} elseif ( empty( $processed_forms ) ) {
-			echo "<!-- GF forms were rendered but none matched configured event/booking form IDs -->\n";
-			echo "<!-- Check if your booking form ID in TC Flow Settings matches the actual form ID -->\n";
-		}
-
-		echo "<!-- /TC Booking Flow Debug Info -->\n";
 	}
 }
