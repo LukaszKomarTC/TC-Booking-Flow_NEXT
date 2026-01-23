@@ -65,8 +65,12 @@ class ProductPartnerConfig {
 	/**
 	 * Check if partners are enabled for a WooCommerce product
 	 *
-	 * Checks the product's categories. If ANY category has partners explicitly
-	 * disabled, partners are disabled for the product. Otherwise enabled.
+	 * Checks the product's categories with the following priority:
+	 * 1. If ANY category has partners explicitly disabled → false
+	 * 2. Else if ANY category has partners explicitly enabled → true
+	 * 3. Else → global default
+	 *
+	 * This allows explicit category enable to override global disabled.
 	 *
 	 * @param int $product_id The WooCommerce product ID
 	 * @return bool True if partners enabled, false if disabled
@@ -83,20 +87,36 @@ class ProductPartnerConfig {
 			return self::get_global_default();
 		}
 
-		// Check each category - if ANY has partners explicitly disabled, return false
+		$has_explicit_enable = false;
+
+		// First pass: check for explicit disable (highest priority)
+		// Second pass: check for explicit enable
 		foreach ( $terms as $term_id ) {
 			$meta_value = get_term_meta( (int) $term_id, self::TERM_META_PARTNERS_ENABLED, true );
 
 			// Only check if explicitly set (not empty)
 			if ( $meta_value !== '' ) {
 				$val = strtolower( trim( (string) $meta_value ) );
+
+				// Explicit disable takes highest priority - return immediately
 				if ( in_array( $val, [ '0', 'no', 'false', 'off' ], true ) ) {
 					return false;
+				}
+
+				// Track if any category explicitly enables
+				if ( in_array( $val, [ '1', 'yes', 'true', 'on' ], true ) ) {
+					$has_explicit_enable = true;
 				}
 			}
 		}
 
-		// No category explicitly disabled partners, use global default
+		// If any category explicitly enabled (and none disabled), return true
+		// This allows explicit enable to override global disabled
+		if ( $has_explicit_enable ) {
+			return true;
+		}
+
+		// No explicit settings on any category, use global default
 		return self::get_global_default();
 	}
 
