@@ -126,6 +126,9 @@ final class Plugin {
 		// ---- GF: dynamic EB% population (field 172)
 		add_filter('gform_field_value_early_booking_discount_pct', [ $this, 'gf_populate_eb_pct' ]);
 
+		// ---- GF: partners enabled flag for booking products (field 30)
+		add_filter('gform_field_value_partners_enabled', [ $this, 'gf_populate_partners_enabled' ]);
+
 		// ---- GF: server-side validation (tamper-proof + self-heal)
 		add_filter('gform_validation', [ $this, 'gf_validation' ], 10, 1);
 
@@ -471,6 +474,34 @@ final class Plugin {
 		$pct = (float) ($calc['pct'] ?? 0.0);
 		if ( $pct <= 0 ) return $value;
 		return $this->pct_to_gf_str($pct);
+	}
+
+	/**
+	 * GF field value population for partners_enabled (field 30 in booking form).
+	 *
+	 * For booking products (WooCommerce product pages), checks the product's
+	 * category settings to determine if the partner system is enabled.
+	 * For event forms, this filter is handled by class-tc-bf-sc-event-extras.php.
+	 *
+	 * @param mixed $value Current field value
+	 * @return string '1' if partners enabled, '0' if disabled
+	 */
+	public function gf_populate_partners_enabled( $value ) {
+		// For WooCommerce product pages (booking products)
+		if ( function_exists( 'is_product' ) && is_product() ) {
+			$product_id = (int) get_queried_object_id();
+			if ( $product_id > 0 && class_exists( '\\TC_BF\\Domain\\ProductPartnerConfig' ) ) {
+				$enabled = \TC_BF\Domain\ProductPartnerConfig::product_partners_enabled( $product_id );
+				return $enabled ? '1' : '0';
+			}
+		}
+
+		// For event pages, the filter in class-tc-bf-sc-event-extras.php takes precedence.
+		// If we reach here from an event context without that filter, default to enabled.
+		// This maintains backward compatibility.
+
+		// Return the existing value or default to '1' (enabled)
+		return $value !== '' ? $value : '1';
 	}
 
 	private function gf_entry_mark_cart_added( int $entry_id ) : void {
