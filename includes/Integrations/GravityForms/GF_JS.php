@@ -92,6 +92,11 @@ final class GF_JS {
 		$form = self::maybe_inject_partner_banner( $form, $form_id );
 
 		// Inject EB banner for both event and booking forms
+		// For booking forms, inject EB teaser (shows EB rules before date selection)
+		if ( $is_booking_form && ! empty( $eb_rules['steps'] ) ) {
+			$form = self::maybe_inject_eb_teaser( $form, $form_id, $eb_rules );
+		}
+
 		$form = self::maybe_inject_eb_banner( $form, $form_id );
 
 		// For booking forms, inject ledger summary container
@@ -151,6 +156,127 @@ final class GF_JS {
 
 			// Add to beginning of form fields (will appear at top)
 			array_unshift( $form['fields'], $eb_field );
+		}
+
+		return $form;
+	}
+
+	/**
+	 * Inject EB teaser HTML field for booking forms.
+	 *
+	 * Shows the EB rules BEFORE date selection to inform customers about
+	 * available early booking discounts. Displays each EB step with the
+	 * deadline date and discount percentage.
+	 *
+	 * @param array $form    GF form array
+	 * @param int   $form_id Form ID
+	 * @param array $eb_rules EB rules configuration
+	 * @return array Modified form
+	 */
+	private static function maybe_inject_eb_teaser( array $form, int $form_id, array $eb_rules ) : array {
+		// Check if form already has an EB teaser field
+		$has_eb_teaser = false;
+		foreach ( $form['fields'] as $field ) {
+			$css_class = (string) ( $field->cssClass ?? '' );
+			if ( strpos( $css_class, 'tcbf-eb-teaser-field' ) !== false ) {
+				$has_eb_teaser = true;
+				break;
+			}
+		}
+
+		if ( $has_eb_teaser ) {
+			return $form;
+		}
+
+		// Build teaser content from EB rules
+		$steps = $eb_rules['steps'] ?? [];
+		if ( empty( $steps ) ) {
+			return $form;
+		}
+
+		// Sort steps by min_days_before descending (highest first)
+		usort( $steps, function( $a, $b ) {
+			return ( (int) ( $b['min_days_before'] ?? 0 ) ) <=> ( (int) ( $a['min_days_before'] ?? 0 ) );
+		});
+
+		// Get i18n strings
+		$teaser_title = '[:en]Early Booking Discounts[:es]Descuentos por Reserva Anticipada[:]';
+		$book_before = '[:en]Book[:es]Reserva[:]';
+		$days_before = '[:en]days before[:es]días antes[:]';
+		$save_text = '[:en]Save[:es]Ahorra[:]';
+
+		if ( function_exists( 'qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage' ) ) {
+			$teaser_title = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $teaser_title );
+			$book_before = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $book_before );
+			$days_before = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $days_before );
+			$save_text = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage( $save_text );
+		} elseif ( function_exists( 'tc_sc_event_tr' ) ) {
+			$teaser_title = tc_sc_event_tr( $teaser_title );
+			$book_before = tc_sc_event_tr( $book_before );
+			$days_before = tc_sc_event_tr( $days_before );
+			$save_text = tc_sc_event_tr( $save_text );
+		}
+
+		// Build rows HTML
+		$rows_html = '';
+		foreach ( $steps as $step ) {
+			$min_days = (int) ( $step['min_days_before'] ?? 0 );
+			$type = $step['type'] ?? 'percent';
+			$value = (float) ( $step['value'] ?? 0 );
+
+			if ( $value <= 0 ) continue;
+
+			// Format the discount text
+			if ( $type === 'percent' ) {
+				$discount_text = number_format( $value, 0 ) . '%';
+			} else {
+				$discount_text = number_format( $value, 2 ) . ' €';
+			}
+
+			$rows_html .= sprintf(
+				'<div class="tcbf-eb-teaser__row">' .
+				'<span class="tcbf-eb-teaser__days">%s <strong>%d+</strong> %s</span>' .
+				'<span class="tcbf-eb-teaser__arrow">→</span>' .
+				'<span class="tcbf-eb-teaser__discount">%s <strong>%s</strong></span>' .
+				'</div>',
+				esc_html( $book_before ),
+				$min_days,
+				esc_html( $days_before ),
+				esc_html( $save_text ),
+				esc_html( $discount_text )
+			);
+		}
+
+		if ( empty( $rows_html ) ) {
+			return $form;
+		}
+
+		// Create teaser HTML
+		$teaser_html = sprintf(
+			'<div class="tcbf-eb-teaser" id="tcbf-eb-teaser-%d" data-form-id="%d">' .
+			'<div class="tcbf-eb-teaser__icon">⏰</div>' .
+			'<div class="tcbf-eb-teaser__content">' .
+			'<div class="tcbf-eb-teaser__title">%s</div>' .
+			'<div class="tcbf-eb-teaser__rules">%s</div>' .
+			'</div></div>',
+			$form_id,
+			$form_id,
+			esc_html( $teaser_title ),
+			$rows_html
+		);
+
+		// Create an HTML field object
+		if ( class_exists( 'GF_Field_HTML' ) ) {
+			$teaser_field = new \GF_Field_HTML();
+			$teaser_field->id = 9996; // High ID to avoid conflicts
+			$teaser_field->formId = $form_id;
+			$teaser_field->type = 'html';
+			$teaser_field->label = 'EB Teaser';
+			$teaser_field->content = $teaser_html;
+			$teaser_field->cssClass = 'tcbf-eb-teaser-field';
+
+			// Add to very beginning of form fields (before EB banner)
+			array_unshift( $form['fields'], $teaser_field );
 		}
 
 		return $form;
@@ -1121,6 +1247,27 @@ JS;
 .tcbf-eb-banner__content { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tcbf-eb-banner__title { font-size: 15px; }
 .tcbf-eb-banner__discount { font-size: 15px; opacity: 0.9; }
+
+/* EB Teaser (shows EB rules before date selection) */
+.tcbf-eb-teaser {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
+  border-left: 4px solid #3d61aa;
+  padding: 16px 20px;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border-radius: 8px;
+}
+.tcbf-eb-teaser__icon { font-size: 28px; flex-shrink: 0; }
+.tcbf-eb-teaser__content { flex: 1; }
+.tcbf-eb-teaser__title { font-size: 16px; font-weight: 700; color: #1e3a5f; margin-bottom: 10px; }
+.tcbf-eb-teaser__rules { display: flex; flex-direction: column; gap: 6px; }
+.tcbf-eb-teaser__row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #334155; }
+.tcbf-eb-teaser__days { }
+.tcbf-eb-teaser__arrow { color: #3d61aa; font-weight: bold; }
+.tcbf-eb-teaser__discount { color: #166534; font-weight: 500; }
+.tcbf-eb-teaser__discount strong { color: #15803d; }
 ";
 
 		// Enhanced EB Display
@@ -1160,12 +1307,9 @@ JS;
 ";
 
 		// Ledger Summary
+		// Ledger summary - plain styling, no decoration
 		echo ".tcbf-ledger-summary {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 16px;
-  margin: 16px 0;
+  /* No decorative styling - plain and simple */
 }
 .tcbf-ledger-row {
   display: flex;
