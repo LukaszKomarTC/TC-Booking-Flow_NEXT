@@ -1876,19 +1876,46 @@
         "layoutGridColumnSpan": 12
       },
       {
+        "is_payment": false,
         "type": "product",
         "id": 32,
         "formId": 55,
         "label": "Early booking discount",
         "adminLabel": "display_eb_discount",
-        "inputName": "display_eb_discount",
         "isRequired": false,
+        "size": "large",
+        "errorMessage": "",
         "visibility": "visible",
-        "productField": "",
-        "basePrice": "$0.00",
-        "disableQuantity": true,
+        "inputs": [
+          {
+            "id": "32.1",
+            "label": "Name",
+            "name": ""
+          },
+          {
+            "id": "32.2",
+            "label": "Price",
+            "name": ""
+          },
+          {
+            "id": "32.3",
+            "label": "Quantity",
+            "name": ""
+          }
+        ],
+        "inputType": "calculation",
+        "enablePrice": null,
+        "description": "",
+        "allowsPrepopulate": false,
+        "labelPlacement": "",
+        "descriptionPlacement": "",
+        "subLabelPlacement": "",
+        "placeholder": "",
         "cssClass": "tcbf-display-eb-discount",
-        "layoutGridColumnSpan": 12,
+        "inputName": "display_eb_discount",
+        "noDuplicates": false,
+        "defaultValue": "",
+        "choices": null,
         "conditionalLogic": {
           "enabled": true,
           "actionType": "show",
@@ -1896,48 +1923,84 @@
           "rules": [
             {
               "fieldId": "31",
-              "operator": "isnot",
-              "value": ""
-            },
-            {
-              "fieldId": "31",
-              "operator": "isnot",
+              "operator": ">",
               "value": "0"
             }
           ]
-        }
+        },
+        "productField": "",
+        "layoutGridColumnSpan": 6,
+        "disableQuantity": true,
+        "basePrice": "$0.00",
+        "calculationFormula": "-{Field:17:value}",
+        "calculationRounding": "",
+        "enableCalculation": true
       },
       {
+        "is_payment": false,
         "type": "product",
         "id": 33,
         "formId": 55,
         "label": "Partner discount",
         "adminLabel": "display_partner_discount",
-        "inputName": "display_partner_discount",
         "isRequired": false,
+        "size": "large",
+        "errorMessage": "",
         "visibility": "visible",
-        "productField": "",
-        "basePrice": "$0.00",
-        "disableQuantity": true,
+        "inputs": [
+          {
+            "id": "33.1",
+            "label": "Name",
+            "name": ""
+          },
+          {
+            "id": "33.2",
+            "label": "Price",
+            "name": ""
+          },
+          {
+            "id": "33.3",
+            "label": "Quantity",
+            "name": ""
+          }
+        ],
+        "inputType": "calculation",
+        "enablePrice": null,
+        "description": "",
+        "allowsPrepopulate": false,
+        "labelPlacement": "",
+        "descriptionPlacement": "",
+        "subLabelPlacement": "",
+        "placeholder": "",
         "cssClass": "tcbf-display-partner-discount",
+        "inputName": "display_partner_discount",
+        "noDuplicates": false,
+        "defaultValue": "",
+        "choices": null,
         "conditionalLogic": {
           "enabled": true,
           "actionType": "show",
           "logicType": "all",
           "rules": [
             {
-              "fieldId": "30",
-              "operator": "isnot",
-              "value": "0"
-            },
-            {
               "fieldId": "26",
               "operator": "isnot",
               "value": ""
+            },
+            {
+              "fieldId": "18",
+              "operator": ">",
+              "value": "0"
             }
           ]
         },
-        "layoutGridColumnSpan": 12
+        "productField": "",
+        "layoutGridColumnSpan": 6,
+        "disableQuantity": true,
+        "basePrice": "$0.00",
+        "calculationFormula": "-{Field:18:value}",
+        "calculationRounding": "",
+        "enableCalculation": true
       },
       {
         "type": "html",
