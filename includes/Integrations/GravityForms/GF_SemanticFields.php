@@ -35,6 +35,14 @@ final class GF_SemanticFields {
 	const KEY_PARTNER_DISCOUNT_PCT  = 'partner_discount_pct';   // Partner discount percentage
 	const KEY_PARTNER_COMMISSION_PCT = 'partner_commission_pct'; // Partner commission percentage
 	const KEY_PARTNER_EMAIL         = 'partner_email';          // Partner email address
+	const KEY_PARTNERS_ENABLED      = 'partners_enabled';       // Partner program toggle (1=enabled, 0=disabled)
+
+	// Early booking fields
+	const KEY_EB_DISCOUNT_PCT       = 'early_booking_discount_pct'; // Early booking discount percentage
+
+	// Display fields (product-type fields for visual presentation)
+	const KEY_DISPLAY_EB_DISCOUNT      = 'display_eb_discount';      // EB discount display (product field)
+	const KEY_DISPLAY_PARTNER_DISCOUNT = 'display_partner_discount'; // Partner discount display (product field)
 
 	// Event fields (Form 44)
 	const KEY_EVENT_ID              = 'event_id';               // Event post ID
@@ -68,35 +76,44 @@ final class GF_SemanticFields {
 	private const LEGACY_FALLBACKS = [
 		// Form 44 - Events
 		44 => [
-			self::KEY_PARTNER_OVERRIDE_CODE  => 63,
-			self::KEY_COUPON_CODE            => 154,
-			self::KEY_PARTNER_USER_ID        => 166,
-			self::KEY_PARTNER_DISCOUNT_PCT   => 152,
-			self::KEY_PARTNER_COMMISSION_PCT => 161,
-			self::KEY_PARTNER_EMAIL          => 153,
-			self::KEY_EVENT_ID               => 20,
-			self::KEY_EVENT_UID              => 145,
+			self::KEY_PARTNER_OVERRIDE_CODE    => 63,
+			self::KEY_COUPON_CODE              => 154,
+			self::KEY_PARTNER_USER_ID          => 166,
+			self::KEY_PARTNER_DISCOUNT_PCT     => 152,
+			self::KEY_PARTNER_COMMISSION_PCT   => 161,
+			self::KEY_PARTNER_EMAIL            => 153,
+			self::KEY_EVENT_ID                 => 20,
+			self::KEY_EVENT_UID                => 145,
+			self::KEY_PARTNERS_ENABLED         => 181,
+			self::KEY_EB_DISCOUNT_PCT          => 172,
+			self::KEY_DISPLAY_EB_DISCOUNT      => 179,
+			self::KEY_DISPLAY_PARTNER_DISCOUNT => 180,
+			self::KEY_USER_ROLE                => 6,
 		],
 
 		// Form 55 - Booking Products (current staging)
 		// Also serves as default for configured booking form ID
 		55 => [
-			self::KEY_PARTNER_OVERRIDE_CODE  => 24,  // Admin/hotel partner select
-			self::KEY_COUPON_CODE            => 10,
-			self::KEY_PARTNER_USER_ID        => 25,
-			self::KEY_PARTNER_COUPON_CODE    => 26,
-			self::KEY_PARTNER_DISCOUNT_PCT   => 27,
-			self::KEY_PARTNER_COMMISSION_PCT => 28,
-			self::KEY_PARTNER_EMAIL          => 29,
-			self::KEY_USER_ROLE              => 1,
-			self::KEY_USER_EMAIL             => 12,
-			self::KEY_USER_NAME              => 11,
-			self::KEY_LEDGER_BASE            => 15,
-			self::KEY_LEDGER_EB_PCT          => 16,
-			self::KEY_LEDGER_EB_AMOUNT       => 17,
-			self::KEY_LEDGER_PARTNER_AMOUNT  => 18,
-			self::KEY_LEDGER_TOTAL           => 20,
-			self::KEY_LEDGER_COMMISSION      => 21,
+			self::KEY_PARTNER_OVERRIDE_CODE    => 24,  // Admin/hotel partner select
+			self::KEY_COUPON_CODE              => 10,
+			self::KEY_PARTNER_USER_ID          => 25,
+			self::KEY_PARTNER_COUPON_CODE      => 26,
+			self::KEY_PARTNER_DISCOUNT_PCT     => 27,
+			self::KEY_PARTNER_COMMISSION_PCT   => 28,
+			self::KEY_PARTNER_EMAIL            => 29,
+			self::KEY_USER_ROLE                => 1,
+			self::KEY_USER_EMAIL               => 12,
+			self::KEY_USER_NAME                => 11,
+			self::KEY_LEDGER_BASE              => 15,
+			self::KEY_LEDGER_EB_PCT            => 16,
+			self::KEY_LEDGER_EB_AMOUNT         => 17,
+			self::KEY_LEDGER_PARTNER_AMOUNT    => 18,
+			self::KEY_LEDGER_TOTAL             => 20,
+			self::KEY_LEDGER_COMMISSION        => 21,
+			self::KEY_PARTNERS_ENABLED         => 30,
+			self::KEY_EB_DISCOUNT_PCT          => 31,
+			self::KEY_DISPLAY_EB_DISCOUNT      => 32,
+			self::KEY_DISPLAY_PARTNER_DISCOUNT => 33,
 		],
 	];
 

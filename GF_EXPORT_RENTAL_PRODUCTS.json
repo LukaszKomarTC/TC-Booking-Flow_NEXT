@@ -1799,8 +1799,16 @@
           "actionType": "show",
           "logicType": "any",
           "rules": [
-            { "fieldId": "1", "operator": "contains", "value": "administrator" },
-            { "fieldId": "1", "operator": "contains", "value": "hotel" }
+            {
+              "fieldId": "1",
+              "operator": "contains",
+              "value": "administrator"
+            },
+            {
+              "fieldId": "1",
+              "operator": "contains",
+              "value": "hotel"
+            }
           ]
         }
       },
@@ -1843,6 +1851,120 @@
         "adminLabel": "partner_email",
         "inputName": "partner_email",
         "visibility": "hidden"
+      },
+      {
+        "type": "hidden",
+        "id": 30,
+        "formId": 55,
+        "label": "Partners Enabled",
+        "adminLabel": "partners_enabled",
+        "inputName": "partners_enabled",
+        "isRequired": false,
+        "visibility": "hidden",
+        "defaultValue": "1",
+        "allowsPrepopulate": true,
+        "cssClass": "",
+        "layoutGridColumnSpan": 12
+      },
+      {
+        "type": "hidden",
+        "id": 31,
+        "formId": 55,
+        "label": "Early Booking Discount %",
+        "adminLabel": "early_booking_discount_pct",
+        "inputName": "early_booking_discount_pct",
+        "isRequired": false,
+        "visibility": "hidden",
+        "defaultValue": "",
+        "allowsPrepopulate": true,
+        "cssClass": "",
+        "layoutGridColumnSpan": 12
+      },
+      {
+        "type": "product",
+        "id": 32,
+        "formId": 55,
+        "label": "Early booking discount",
+        "adminLabel": "display_eb_discount",
+        "inputName": "display_eb_discount",
+        "isRequired": false,
+        "visibility": "visible",
+        "productField": "",
+        "basePrice": "$0.00",
+        "disableQuantity": true,
+        "cssClass": "tcbf-display-eb-discount",
+        "layoutGridColumnSpan": 12,
+        "conditionalLogic": {
+          "enabled": true,
+          "actionType": "show",
+          "logicType": "all",
+          "rules": [
+            {
+              "fieldId": "31",
+              "operator": "isnot",
+              "value": ""
+            },
+            {
+              "fieldId": "31",
+              "operator": "isnot",
+              "value": "0"
+            }
+          ]
+        }
+      },
+      {
+        "type": "product",
+        "id": 33,
+        "formId": 55,
+        "label": "Partner discount",
+        "adminLabel": "display_partner_discount",
+        "inputName": "display_partner_discount",
+        "isRequired": false,
+        "visibility": "visible",
+        "productField": "",
+        "basePrice": "$0.00",
+        "disableQuantity": true,
+        "cssClass": "tcbf-display-partner-discount",
+        "conditionalLogic": {
+          "enabled": true,
+          "actionType": "show",
+          "logicType": "all",
+          "rules": [
+            {
+              "fieldId": "30",
+              "operator": "isnot",
+              "value": "0"
+            },
+            {
+              "fieldId": "26",
+              "operator": "isnot",
+              "value": ""
+            }
+          ]
+        },
+        "layoutGridColumnSpan": 12
+      },
+      {
+        "type": "html",
+        "id": 34,
+        "formId": 55,
+        "label": "Partner Banner",
+        "content": "<div class=\"tcbf-partner-banner\" id=\"tcbf-partner-banner-55\" data-form-id=\"55\" style=\"display:none;\"><div class=\"tcbf-partner-banner__icon\">✓</div><div class=\"tcbf-partner-banner__content\"><div class=\"tcbf-partner-banner__title\"></div><div class=\"tcbf-partner-banner__details\"><span class=\"tcbf-partner-name\"></span><span class=\"tcbf-partner-discount\"></span></div></div></div>",
+        "cssClass": "tcbf-partner-banner-field",
+        "conditionalLogic": {
+          "enabled": true,
+          "actionType": "show",
+          "logicType": "all",
+          "rules": [
+            {
+              "fieldId": "30",
+              "operator": "isnot",
+              "value": "0"
+            }
+          ]
+        },
+        "visibility": "visible",
+        "layoutGridColumnSpan": 12
       }
     ],
     "button": {
@@ -1860,7 +1982,7 @@
     "version": "2.9.5",
     "id": 0,
     "markupVersion": 2,
-    "nextFieldId": 30,
+    "nextFieldId": 35,
     "useCurrentUserAsAuthor": true,
     "postContentTemplateEnabled": false,
     "postTitleTemplateEnabled": false,
