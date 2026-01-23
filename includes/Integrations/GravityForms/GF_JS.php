@@ -830,12 +830,13 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     }
 
     // Populate ledger fields
-    // CRITICAL: Use dot decimals for money fields (not comma) so PHP can read them correctly.
+    // CRITICAL: Use dot decimals for ALL numeric hidden fields so PHP can read them correctly.
     // fmtPct() converts to comma which breaks (float)"12,34" = 12.0 in PHP.
-    // We use toFixed(2) which produces dot decimals like "12.34".
+    // We use toFixed(2) or String() which produce dot decimals.
+    // Reserve fmtPct() ONLY for UI display text, never for hidden input storage.
     var changed = false;
     changed = setValIfChanged(F.ledger_base, basePrice.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_eb_pct, fmtPct(ebPct), true) || changed;  // % can use comma
+    changed = setValIfChanged(F.ledger_eb_pct, String(ebPct), true) || changed;  // dot decimal for PHP
     changed = setValIfChanged(F.ledger_eb_amount, ebAmount.toFixed(2), true) || changed;
     changed = setValIfChanged(F.ledger_partner_amt, partnerAmount.toFixed(2), true) || changed;
     changed = setValIfChanged(F.ledger_total, total.toFixed(2), true) || changed;
@@ -843,7 +844,8 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     // CRITICAL: Always update the EB% field - set to 0 when no EB applies.
     // This ensures Field 32 hides when EB doesn't apply (e.g., date outside EB window).
     // Previously only set when ebPct > 0, causing "stuck on" display.
-    setValIfChanged(F.eb_discount_pct, fmtPct(ebPct), true);
+    // Use String() for dot decimal (e.g., "7.5" not "7,5").
+    setValIfChanged(F.eb_discount_pct, String(ebPct), true);
 
     // Trigger GF recalculation if values changed
     if(changed && typeof window.gformCalculateTotalPrice === 'function'){

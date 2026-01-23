@@ -45,6 +45,10 @@ require_once TC_BF_PATH . 'includes/Domain/BookingLedger.php';
 require_once TC_BF_PATH . 'includes/Admin/Admin_Product_Category_EB.php';
 require_once TC_BF_PATH . 'includes/Integrations/WooCommerce/Woo_BookingLedger.php';
 
+// TCBF-14: Product Partner Configuration (category-based partner enable/disable)
+require_once TC_BF_PATH . 'includes/Domain/ProductPartnerConfig.php';
+require_once TC_BF_PATH . 'includes/Admin/Admin_Product_Category_Partner.php';
+
 // TCBF-14: GF Semantic Field Mapping (inputName-based field resolution)
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_FieldMap.php';
 require_once TC_BF_PATH . 'includes/Integrations/GravityForms/GF_SemanticFields.php';
