@@ -11,6 +11,11 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Adds Partner program enable/disable toggle to WooCommerce product category edit screens.
  * Uses term meta to control whether the partner discount system is available per category.
  *
+ * Supports 3-state configuration:
+ * - Inherit (use global default)
+ * - Enabled (explicitly enable)
+ * - Disabled (explicitly disable)
+ *
  * @since TCBF-14
  */
 final class Admin_Product_Category_Partner {
@@ -33,18 +38,32 @@ final class Admin_Product_Category_Partner {
 	}
 
 	/**
+	 * Get the default label text
+	 *
+	 * @return string
+	 */
+	private static function get_default_label() : string {
+		$global = ProductPartnerConfig::get_global_default();
+		return $global
+			? __( 'Inherit (currently: Enabled)', 'tc-booking-flow-next' )
+			: __( 'Inherit (currently: Disabled)', 'tc-booking-flow-next' );
+	}
+
+	/**
 	 * Render fields for "Add New Category" form
 	 */
 	public static function render_add_fields() : void {
-		$default = ProductPartnerConfig::get_global_default();
 		?>
 		<div class="form-field">
-			<label for="tcbf_partners_enabled">
-				<input type="checkbox" name="tcbf_partners_enabled" id="tcbf_partners_enabled" value="1" <?php checked( $default ); ?> />
-				<?php esc_html_e( 'Enable Partner Program', 'tc-booking-flow-next' ); ?>
-			</label>
+			<label for="tcbf_partners_setting"><?php esc_html_e( 'Partner Program', 'tc-booking-flow-next' ); ?></label>
+			<input type="hidden" name="tcbf_partners_enabled_set" value="1" />
+			<select name="tcbf_partners_setting" id="tcbf_partners_setting" style="width: 100%;">
+				<option value="inherit" selected><?php echo esc_html( self::get_default_label() ); ?></option>
+				<option value="enabled"><?php esc_html_e( 'Enabled', 'tc-booking-flow-next' ); ?></option>
+				<option value="disabled"><?php esc_html_e( 'Disabled', 'tc-booking-flow-next' ); ?></option>
+			</select>
 			<p class="description">
-				<?php esc_html_e( 'Allow partner discounts for booking products in this category.', 'tc-booking-flow-next' ); ?>
+				<?php esc_html_e( 'Control whether partner discounts are available for booking products in this category.', 'tc-booking-flow-next' ); ?>
 			</p>
 		</div>
 		<?php
@@ -56,34 +75,30 @@ final class Admin_Product_Category_Partner {
 	 * @param \WP_Term $term Current term object
 	 */
 	public static function render_edit_fields( $term ) : void {
-		$enabled = ProductPartnerConfig::category_partners_enabled( $term->term_id );
 		$meta_value = get_term_meta( $term->term_id, ProductPartnerConfig::TERM_META_PARTNERS_ENABLED, true );
-		$is_inherited = $meta_value === '';
+
+		// Determine current state
+		if ( $meta_value === '' ) {
+			$current = 'inherit';
+		} elseif ( $meta_value === '1' ) {
+			$current = 'enabled';
+		} else {
+			$current = 'disabled';
+		}
 		?>
 		<tr class="form-field">
 			<th scope="row">
-				<label for="tcbf_partners_enabled"><?php esc_html_e( 'Partner Program', 'tc-booking-flow-next' ); ?></label>
+				<label for="tcbf_partners_setting"><?php esc_html_e( 'Partner Program', 'tc-booking-flow-next' ); ?></label>
 			</th>
 			<td>
-				<label>
-					<input type="hidden" name="tcbf_partners_enabled_set" value="1" />
-					<input type="checkbox" name="tcbf_partners_enabled" id="tcbf_partners_enabled" value="1" <?php checked( $enabled ); ?> />
-					<?php esc_html_e( 'Enable partner discounts for booking products in this category', 'tc-booking-flow-next' ); ?>
-				</label>
-				<?php if ( $is_inherited ) : ?>
-					<p class="description" style="color: #666;">
-						<?php
-						$global = ProductPartnerConfig::get_global_default();
-						printf(
-							/* translators: %s: enabled or disabled */
-							esc_html__( 'Currently using global default: %s', 'tc-booking-flow-next' ),
-							$global ? '<strong>' . esc_html__( 'Enabled', 'tc-booking-flow-next' ) . '</strong>' : '<strong>' . esc_html__( 'Disabled', 'tc-booking-flow-next' ) . '</strong>'
-						);
-						?>
-					</p>
-				<?php endif; ?>
+				<input type="hidden" name="tcbf_partners_enabled_set" value="1" />
+				<select name="tcbf_partners_setting" id="tcbf_partners_setting">
+					<option value="inherit" <?php selected( $current, 'inherit' ); ?>><?php echo esc_html( self::get_default_label() ); ?></option>
+					<option value="enabled" <?php selected( $current, 'enabled' ); ?>><?php esc_html_e( 'Enabled', 'tc-booking-flow-next' ); ?></option>
+					<option value="disabled" <?php selected( $current, 'disabled' ); ?>><?php esc_html_e( 'Disabled', 'tc-booking-flow-next' ); ?></option>
+				</select>
 				<p class="description">
-					<?php esc_html_e( 'When disabled, partner discounts will not be available for booking products in this category. The partner override dropdown and partner discount display will be hidden.', 'tc-booking-flow-next' ); ?>
+					<?php esc_html_e( 'Control whether partner discounts are available for booking products in this category. "Inherit" uses the global default setting.', 'tc-booking-flow-next' ); ?>
 				</p>
 			</td>
 		</tr>
@@ -110,9 +125,21 @@ final class Admin_Product_Category_Partner {
 			return;
 		}
 
-		$enabled = isset( $_POST['tcbf_partners_enabled'] ) && $_POST['tcbf_partners_enabled'] === '1';
+		$setting = isset( $_POST['tcbf_partners_setting'] ) ? sanitize_text_field( $_POST['tcbf_partners_setting'] ) : 'inherit';
 
-		ProductPartnerConfig::set_category_partners_enabled( $term_id, $enabled );
+		switch ( $setting ) {
+			case 'enabled':
+				ProductPartnerConfig::set_category_partners_enabled( $term_id, true );
+				break;
+			case 'disabled':
+				ProductPartnerConfig::set_category_partners_enabled( $term_id, false );
+				break;
+			case 'inherit':
+			default:
+				// Clear meta to revert to global default
+				ProductPartnerConfig::clear_category_partners_setting( $term_id );
+				break;
+		}
 	}
 
 	/**
@@ -139,22 +166,19 @@ final class Admin_Product_Category_Partner {
 			return $content;
 		}
 
-		$enabled = ProductPartnerConfig::category_partners_enabled( $term_id );
 		$meta_value = get_term_meta( $term_id, ProductPartnerConfig::TERM_META_PARTNERS_ENABLED, true );
 		$is_inherited = $meta_value === '';
+		$enabled = ProductPartnerConfig::category_partners_enabled( $term_id );
+
+		if ( $is_inherited ) {
+			$icon = $enabled ? '<span style="color: #00a32a;">&#10003;</span>' : '<span style="color: #d63638;">&#10007;</span>';
+			return $icon . ' <span style="color: #666;">' . esc_html__( '(default)', 'tc-booking-flow-next' ) . '</span>';
+		}
 
 		if ( $enabled ) {
-			$icon = '<span style="color: #00a32a;">&#10003;</span>';
-			$text = $is_inherited
-				? '<span style="color: #666;">' . esc_html__( '(default)', 'tc-booking-flow-next' ) . '</span>'
-				: '';
-			return $icon . ' ' . $text;
+			return '<span style="color: #00a32a;">&#10003;</span> ' . esc_html__( 'Enabled', 'tc-booking-flow-next' );
 		} else {
-			$icon = '<span style="color: #d63638;">&#10007;</span>';
-			$text = $is_inherited
-				? '<span style="color: #666;">' . esc_html__( '(default)', 'tc-booking-flow-next' ) . '</span>'
-				: esc_html__( 'Disabled', 'tc-booking-flow-next' );
-			return $icon . ' ' . $text;
+			return '<span style="color: #d63638;">&#10007;</span> ' . esc_html__( 'Disabled', 'tc-booking-flow-next' );
 		}
 	}
 }
