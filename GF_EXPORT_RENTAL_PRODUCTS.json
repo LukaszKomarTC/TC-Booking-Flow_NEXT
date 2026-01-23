@@ -1803,11 +1803,6 @@
               "fieldId": "1",
               "operator": "contains",
               "value": "administrator"
-            },
-            {
-              "fieldId": "1",
-              "operator": "contains",
-              "value": "hotel"
             }
           ]
         }
