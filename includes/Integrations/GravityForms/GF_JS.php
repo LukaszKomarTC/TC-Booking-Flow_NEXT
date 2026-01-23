@@ -55,8 +55,10 @@ final class GF_JS {
 		// Resolve field IDs using semantic keys
 		$field_ids = self::resolve_field_ids( $form_id );
 
-		// For booking forms on product pages, get EB rules for client-side calculation
+		// For booking forms on product pages, get EB rules for client-side fallback calculation
+		// Primary calculation is now via PHP AJAX endpoint for consistency
 		$eb_rules = [];
+		$product_id = 0;
 		if ( $is_booking_form && function_exists('is_product') && is_product() ) {
 			$product_id = (int) get_queried_object_id();
 			if ( $product_id > 0 && class_exists( '\\TC_BF\\Domain\\ProductEBConfig' ) ) {
@@ -79,10 +81,12 @@ final class GF_JS {
 			'field_ids'    => $field_ids,
 			'eb_rules'     => $eb_rules,
 			'is_booking'   => $is_booking_form,
+			'product_id'   => $product_id,
+			'ajax_url'     => admin_url( 'admin-ajax.php' ),
 		];
 
 		// Also register an init script so this works even when GF renders via AJAX.
-		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking_form );
+		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking_form, $product_id );
 
 		// Inject partner banner HTML field if it doesn't exist in the form
 		$form = self::maybe_inject_partner_banner( $form, $form_id );
@@ -370,11 +374,11 @@ final class GF_JS {
 		];
 	}
 
-	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids, array $eb_rules = [], bool $is_booking = false ) : void {
+	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids, array $eb_rules = [], bool $is_booking = false, int $product_id = 0 ) : void {
 		if ( $form_id <= 0 ) return;
 		if ( ! class_exists('\GFFormDisplay') ) return;
 
-		$script = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking );
+		$script = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking, $product_id );
 		if ( $script === '' ) return;
 
 		\GFFormDisplay::add_init_script(
@@ -390,11 +394,12 @@ final class GF_JS {
 	 *
 	 * Uses semantic field IDs passed from PHP - no hardcoded field numbers in JS.
 	 */
-	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids, array $eb_rules = [], bool $is_booking = false ) : string {
+	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids, array $eb_rules = [], bool $is_booking = false, int $product_id = 0 ) : string {
 		$json = wp_json_encode( $partners );
 		$field_ids_json = wp_json_encode( $field_ids );
 		$eb_rules_json = wp_json_encode( $eb_rules );
 		$is_booking_js = $is_booking ? 'true' : 'false';
+		$ajax_url = esc_js( admin_url( 'admin-ajax.php' ) );
 
 		// i18n strings (qTranslateX processed server-side)
 		$banner_title   = esc_js( $i18n['title'] ?? 'Partner Discount Applied' );
@@ -414,6 +419,8 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
   var F = {$field_ids_json};
   var ebRules = {$eb_rules_json};
   var isBookingForm = {$is_booking_js};
+  var productId = {$product_id};
+  var ajaxUrl = '{$ajax_url}';
 
   // i18n
   var i18n = {
@@ -761,95 +768,42 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
 
   function selectEBStep(daysBefore){
     if(!ebRules || !ebRules.enabled || !ebRules.steps || !ebRules.steps.length) return null;
-    // Steps are sorted by days descending - find first where daysBefore >= step.days
-    var steps = ebRules.steps.slice().sort(function(a,b){ return (b.days||0) - (a.days||0); });
+    // Steps are sorted by min_days_before descending - find first where daysBefore >= step.min_days_before
+    // PHP stores: min_days_before, type, value (not days, pct)
+    var steps = ebRules.steps.slice().sort(function(a,b){ return (b.min_days_before||0) - (a.min_days_before||0); });
     for(var i = 0; i < steps.length; i++){
-      if(daysBefore >= (steps[i].days || 0)){
+      if(daysBefore >= (steps[i].min_days_before || 0)){
         return steps[i];
       }
     }
     return null;
   }
 
-  function calculateLedger(){
-    if(!isBookingForm) return;
+  // Track pending AJAX to avoid multiple concurrent requests
+  var __ledgerAjaxPending = false;
 
-    var basePrice = getWcBookingsCost();
-    var startDate = getBookingStartDate();
+  /**
+   * Apply ledger values to GF fields and update UI
+   * Used by both AJAX success and client-side fallback
+   */
+  function applyLedgerValues(basePrice, ebPct, ebAmount, partnerPct, partnerAmount, total, partnerCode){
+    // Populate ledger fields (no change events on storage fields)
+    setValIfChanged(F.ledger_base, basePrice.toFixed(2), false);
+    setValIfChanged(F.ledger_eb_pct, String(ebPct), false);
+    setValIfChanged(F.ledger_eb_amount, ebAmount.toFixed(2), false);
+    setValIfChanged(F.ledger_partner_amt, partnerAmount.toFixed(2), false);
+    setValIfChanged(F.ledger_total, total.toFixed(2), false);
 
-    // If no valid price or date, clear ledger fields to prevent stale display
-    if(basePrice <= 0 || !startDate){
-      setValIfChanged(F.ledger_base, '0', true);
-      setValIfChanged(F.ledger_eb_pct, '0', true);
-      setValIfChanged(F.ledger_eb_amount, '0', true);
-      setValIfChanged(F.ledger_partner_amt, '0', true);
-      setValIfChanged(F.ledger_total, '0', true);
-      setValIfChanged(F.eb_discount_pct, '0', true);
-      // Trigger GF recalc to hide display fields
-      if(typeof window.gformCalculateTotalPrice === 'function'){
-        try{ window.gformCalculateTotalPrice(fid); }catch(e){}
-      }
-      return;
-    }
-    var daysBefore = calculateDaysBefore(startDate);
-
-    // Calculate EB discount
-    var ebPct = 0;
-    var ebAmount = 0;
-    var ebStep = selectEBStep(daysBefore);
-    if(ebStep){
-      ebPct = parseFloat(ebStep.pct) || 0;
-      ebAmount = basePrice * ebPct / 100;
-      // Apply global cap if configured
-      if(ebRules.global_cap && ebRules.global_cap.max_amount && ebAmount > ebRules.global_cap.max_amount){
-        ebAmount = ebRules.global_cap.max_amount;
-      }
-      ebAmount = Math.round(ebAmount * 100) / 100;
+    // Update EB% field for conditional logic
+    var ebPctChanged = setValIfChanged(F.eb_discount_pct, String(ebPct), true);
+    if(ebPctChanged && typeof window.gf_apply_rules === 'function'){
+      try{ window.gf_apply_rules(fid, [F.eb_discount_pct]); }catch(e){}
     }
 
-    var afterEb = basePrice - ebAmount;
-
-    // Calculate partner discount
-    var partnerPct = parseLocaleFloat(getVal(F.partner_discount_pct));
-    var partnerAmount = 0;
-    if(partnerPct > 0){
-      partnerAmount = afterEb * partnerPct / 100;
-      partnerAmount = Math.round(partnerAmount * 100) / 100;
-    }
-
-    // Calculate total
-    var total = basePrice - ebAmount - partnerAmount;
-    total = Math.round(total * 100) / 100;
-
-    // Calculate commission
-    var commissionPct = parseLocaleFloat(getVal(F.partner_commission));
-    var commission = 0;
-    if(commissionPct > 0){
-      commission = total * commissionPct / 100;
-      commission = Math.round(commission * 100) / 100;
-    }
-
-    // Populate ledger fields
-    // CRITICAL: Use dot decimals for ALL numeric hidden fields so PHP can read them correctly.
-    // fmtPct() converts to comma which breaks (float)"12,34" = 12.0 in PHP.
-    // We use toFixed(2) or String() which produce dot decimals.
-    // Reserve fmtPct() ONLY for UI display text, never for hidden input storage.
-    var changed = false;
-    changed = setValIfChanged(F.ledger_base, basePrice.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_eb_pct, String(ebPct), true) || changed;  // dot decimal for PHP
-    changed = setValIfChanged(F.ledger_eb_amount, ebAmount.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_partner_amt, partnerAmount.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_total, total.toFixed(2), true) || changed;
-
-    // CRITICAL: Always update the EB% field - set to 0 when no EB applies.
-    // This ensures Field 32 hides when EB doesn't apply (e.g., date outside EB window).
-    // Previously only set when ebPct > 0, causing "stuck on" display.
-    // Use String() for dot decimal (e.g., "7.5" not "7,5").
-    setValIfChanged(F.eb_discount_pct, String(ebPct), true);
-
-    // Trigger GF recalculation if values changed
-    if(changed && typeof window.gformCalculateTotalPrice === 'function'){
-      try{ window.gformCalculateTotalPrice(fid); }catch(e){}
+    // Update partner fields if returned from PHP
+    if(partnerCode){
+      setValIfChanged(F.coupon_code, partnerCode, false);
+      setValIfChanged(F.partner_discount_pct, String(partnerPct), false);
     }
 
     // Update displays
@@ -857,10 +811,155 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
       updateEBBanner();
       enhanceEBDisplay();
       var map = (window.tcBfPartnerMap && window.tcBfPartnerMap[fid]) ? window.tcBfPartnerMap[fid] : {};
-      var code = getVal(F.coupon_code) || '';
+      var code = partnerCode || getVal(F.coupon_code) || '';
       var data = (code && map && map[code]) ? map[code] : null;
       updateLedgerSummary(data, code);
     }, 50);
+  }
+
+  /**
+   * Clear all ledger fields and hide displays
+   */
+  function clearLedgerFields(){
+    setValIfChanged(F.ledger_base, '0', false);
+    setValIfChanged(F.ledger_eb_pct, '0', false);
+    setValIfChanged(F.ledger_eb_amount, '0', false);
+    setValIfChanged(F.ledger_partner_amt, '0', false);
+    setValIfChanged(F.ledger_total, '0', false);
+    var cleared = setValIfChanged(F.eb_discount_pct, '0', true);
+    if(cleared && typeof window.gf_apply_rules === 'function'){
+      try{ window.gf_apply_rules(fid, [F.eb_discount_pct]); }catch(e){}
+    }
+  }
+
+  /**
+   * Client-side fallback calculation (used if AJAX fails or no productId)
+   */
+  function calculateLedgerClientSide(basePrice, startDate){
+    var daysBefore = calculateDaysBefore(startDate);
+
+    // Calculate EB discount
+    var ebPct = 0;
+    var ebAmount = 0;
+    var ebStep = selectEBStep(daysBefore);
+    if(ebStep){
+      var stepType = ebStep.type || 'percent';
+      var stepValue = parseFloat(ebStep.value) || 0;
+
+      if(stepType === 'percent'){
+        ebPct = stepValue;
+        ebAmount = basePrice * ebPct / 100;
+        if(ebStep.cap && ebStep.cap.enabled && ebStep.cap.amount > 0 && ebAmount > ebStep.cap.amount){
+          ebAmount = ebStep.cap.amount;
+        }
+      } else {
+        ebAmount = stepValue;
+        ebPct = basePrice > 0 ? (ebAmount / basePrice * 100) : 0;
+      }
+
+      if(ebRules.global_cap && ebRules.global_cap.enabled && ebRules.global_cap.amount > 0 && ebAmount > ebRules.global_cap.amount){
+        ebAmount = ebRules.global_cap.amount;
+        ebPct = basePrice > 0 ? (ebAmount / basePrice * 100) : 0;
+      }
+      ebAmount = Math.round(ebAmount * 100) / 100;
+      ebPct = Math.round(ebPct * 100) / 100;
+    }
+
+    var afterEb = basePrice - ebAmount;
+
+    // Calculate partner discount using existing field values
+    var partnerPct = parseLocaleFloat(getVal(F.partner_discount_pct));
+    var partnerAmount = 0;
+    if(partnerPct > 0){
+      partnerAmount = afterEb * partnerPct / 100;
+      partnerAmount = Math.round(partnerAmount * 100) / 100;
+    }
+
+    var total = basePrice - ebAmount - partnerAmount;
+    total = Math.round(total * 100) / 100;
+
+    applyLedgerValues(basePrice, ebPct, ebAmount, partnerPct, partnerAmount, total, '');
+  }
+
+  /**
+   * Main ledger calculation - calls PHP endpoint for consistency with cart
+   * Falls back to client-side calculation if AJAX unavailable or fails
+   */
+  function calculateLedger(){
+    if(!isBookingForm) return;
+
+    var basePrice = getWcBookingsCost();
+    var startDate = getBookingStartDate();
+
+    // If no valid price or date, clear fields
+    if(basePrice <= 0 || !startDate){
+      clearLedgerFields();
+      return;
+    }
+
+    // If no productId or ajaxUrl, use client-side fallback
+    if(!productId || productId <= 0 || !ajaxUrl){
+      calculateLedgerClientSide(basePrice, startDate);
+      return;
+    }
+
+    // Skip if AJAX already pending (debounce)
+    if(__ledgerAjaxPending) return;
+    __ledgerAjaxPending = true;
+
+    // Format date as Y-m-d for PHP
+    var y = startDate.getFullYear();
+    var m = String(startDate.getMonth() + 1).padStart(2, '0');
+    var d = String(startDate.getDate()).padStart(2, '0');
+    var dateStr = y + '-' + m + '-' + d;
+
+    // Get current partner code (may be set by admin override or session)
+    var partnerCode = getVal(F.coupon_code) || '';
+
+    // Call PHP endpoint
+    var formData = new FormData();
+    formData.append('action', 'tcbf_calc_ledger');
+    formData.append('product_id', String(productId));
+    formData.append('base_price', String(basePrice));
+    formData.append('start_date', dateStr);
+    if(partnerCode) formData.append('partner_code', partnerCode);
+
+    fetch(ajaxUrl, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin'
+    })
+    .then(function(response){ return response.json(); })
+    .then(function(result){
+      __ledgerAjaxPending = false;
+      if(result && result.success && result.data){
+        var d = result.data;
+        applyLedgerValues(
+          parseFloat(d.base_price) || 0,
+          parseFloat(d.eb_pct) || 0,
+          parseFloat(d.eb_amount) || 0,
+          parseFloat(d.partner_pct) || 0,
+          parseFloat(d.partner_amount) || 0,
+          parseFloat(d.total) || 0,
+          d.partner_code || ''
+        );
+        // Also update partner context fields from PHP response
+        if(d.partner_active){
+          setValIfChanged(F.partner_email, d.partner_email || '', false);
+          setValIfChanged(F.partner_user_id, String(d.partner_user_id || ''), false);
+          setValIfChanged(F.partner_commission, String(d.commission_pct || ''), false);
+        }
+      } else {
+        // PHP returned error, use client-side fallback
+        calculateLedgerClientSide(basePrice, startDate);
+      }
+    })
+    .catch(function(err){
+      __ledgerAjaxPending = false;
+      // AJAX failed, use client-side fallback
+      console.warn('[TCBF] Ledger AJAX failed, using client-side fallback:', err);
+      calculateLedgerClientSide(basePrice, startDate);
+    });
   }
 
   function requestLedgerCalc(){
@@ -957,8 +1056,9 @@ JS;
 			$field_ids = (is_array($payload) && isset($payload['field_ids']) && is_array($payload['field_ids'])) ? $payload['field_ids'] : [];
 			$eb_rules = (is_array($payload) && isset($payload['eb_rules']) && is_array($payload['eb_rules'])) ? $payload['eb_rules'] : [];
 			$is_booking = (is_array($payload) && isset($payload['is_booking'])) ? (bool) $payload['is_booking'] : false;
+			$product_id = (is_array($payload) && isset($payload['product_id'])) ? (int) $payload['product_id'] : 0;
 
-			$js = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking );
+			$js = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking, $product_id );
 			if ( $js === '' ) continue;
 
 			echo "\n<script id=\"tc-bf-partner-override-{$form_id}\">\n";

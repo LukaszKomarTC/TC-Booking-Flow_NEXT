@@ -60,6 +60,122 @@ class Woo_BookingLedger {
 
 		// Persist ledger to order
 		add_action( 'woocommerce_checkout_create_order_line_item', [ __CLASS__, 'persist_ledger_to_order' ], 25, 4 );
+
+		// AJAX endpoint for live ledger calculation (same logic as cart)
+		add_action( 'wp_ajax_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
+		add_action( 'wp_ajax_nopriv_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
+	}
+
+	/**
+	 * AJAX handler for live ledger calculation
+	 *
+	 * Uses the same BookingLedger::calculate_for_booking() as cart processing,
+	 * ensuring JS preview matches cart pricing exactly.
+	 *
+	 * Expected POST params:
+	 * - product_id: WooCommerce product ID
+	 * - base_price: Base price from WC Bookings (numeric, dot decimal)
+	 * - start_date: Booking start date (Y-m-d format)
+	 * - partner_code: Optional partner discount code
+	 */
+	public static function ajax_calc_ledger() : void {
+		// Verify nonce if provided (optional for read-only endpoint)
+		// Note: This is a read-only calculation, no sensitive data changes
+		// We skip nonce for AJAX performance since calculation is idempotent
+
+		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+		$base_price = isset( $_POST['base_price'] ) ? (float) $_POST['base_price'] : 0.0;
+		$start_date = isset( $_POST['start_date'] ) ? sanitize_text_field( $_POST['start_date'] ) : '';
+		$partner_code = isset( $_POST['partner_code'] ) ? sanitize_text_field( $_POST['partner_code'] ) : '';
+
+		// Validate required params
+		if ( $product_id <= 0 ) {
+			wp_send_json_error( [ 'message' => 'Invalid product_id' ], 400 );
+		}
+
+		if ( $base_price <= 0 ) {
+			wp_send_json_success( self::get_empty_ledger_response() );
+			return;
+		}
+
+		// Parse start date to timestamp
+		$start_ts = 0;
+		if ( $start_date !== '' ) {
+			// Parse Y-m-d format
+			$parsed = \DateTime::createFromFormat( 'Y-m-d', $start_date );
+			if ( $parsed ) {
+				$parsed->setTime( 0, 0, 0 );
+				$start_ts = $parsed->getTimestamp();
+			} else {
+				// Try strtotime as fallback
+				$start_ts = strtotime( $start_date );
+				if ( $start_ts === false ) {
+					$start_ts = 0;
+				}
+			}
+		}
+
+		if ( $start_ts <= 0 ) {
+			wp_send_json_success( self::get_empty_ledger_response() );
+			return;
+		}
+
+		// Resolve partner context
+		$partner_ctx = [];
+		if ( $partner_code !== '' ) {
+			$partner_ctx = PartnerResolver::build_partner_context_from_code( $partner_code );
+		} else {
+			// Try session/logged-in user partner resolution
+			$partner_ctx = PartnerResolver::resolve_partner_context( 0 );
+		}
+
+		// Calculate ledger using the same function as cart processing
+		$ledger = BookingLedger::calculate_for_booking(
+			$product_id,
+			$base_price,
+			$start_ts,
+			$partner_ctx
+		);
+
+		// Return simplified response for JS
+		wp_send_json_success( [
+			'base_price'      => round( $ledger['base_price'], 2 ),
+			'days_before'     => $ledger['days_before'],
+			'eb_pct'          => round( $ledger['eb_discount_pct'], 2 ),
+			'eb_amount'       => round( $ledger['eb_discount_amount'], 2 ),
+			'partner_pct'     => ! empty( $ledger['partner']['active'] ) ? (float) ( $ledger['partner']['discount_pct'] ?? 0 ) : 0,
+			'partner_amount'  => round( $ledger['partner_discount_amount'], 2 ),
+			'commission_pct'  => ! empty( $ledger['partner']['active'] ) ? (float) ( $ledger['partner']['commission_pct'] ?? 0 ) : 0,
+			'commission'      => round( $ledger['partner_commission'], 2 ),
+			'total'           => round( $ledger['total_client'], 2 ),
+			'partner_active'  => ! empty( $ledger['partner']['active'] ),
+			'partner_code'    => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['code'] ?? '' ) : '',
+			'partner_email'   => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['partner_email'] ?? '' ) : '',
+			'partner_user_id' => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['partner_user_id'] ?? 0 ) : 0,
+		] );
+	}
+
+	/**
+	 * Get empty ledger response structure
+	 *
+	 * @return array Empty ledger values
+	 */
+	private static function get_empty_ledger_response() : array {
+		return [
+			'base_price'      => 0,
+			'days_before'     => 0,
+			'eb_pct'          => 0,
+			'eb_amount'       => 0,
+			'partner_pct'     => 0,
+			'partner_amount'  => 0,
+			'commission_pct'  => 0,
+			'commission'      => 0,
+			'total'           => 0,
+			'partner_active'  => false,
+			'partner_code'    => '',
+			'partner_email'   => '',
+			'partner_user_id' => 0,
+		];
 	}
 
 	/**
