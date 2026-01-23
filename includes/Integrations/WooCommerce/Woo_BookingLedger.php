@@ -246,9 +246,10 @@ class Woo_BookingLedger {
 		$partner_amount = $cart_item[ self::BK_LEDGER_PARTNER_AMT ] ?? 0;
 		if ( $partner_amount > 0 ) {
 			// Get partner code from lead using semantic field
+			// Note: BookingLedger writes to KEY_COUPON_CODE, so read from there
 			$lead    = $cart_item['_gravity_form_lead'] ?? [];
 			$form_id = (int) ( $lead['form_id'] ?? 0 );
-			$code    = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE );
+			$code    = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_COUPON_CODE );
 
 			$item_data[] = [
 				'key'     => __( 'Partner Discount', 'tc-booking-flow-next' ),
@@ -295,7 +296,8 @@ class Woo_BookingLedger {
 			$item->add_meta_data( '_tcbf_partner_user_id', $partner_user_id );
 		}
 
-		$partner_code = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE );
+		// Note: BookingLedger writes partner code to KEY_COUPON_CODE, so read from there
+		$partner_code = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_COUPON_CODE );
 		if ( ! empty( $partner_code ) ) {
 			$item->add_meta_data( '_tcbf_partner_code', $partner_code );
 		}
