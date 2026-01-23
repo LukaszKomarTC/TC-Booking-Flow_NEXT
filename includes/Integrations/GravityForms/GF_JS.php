@@ -761,10 +761,11 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
 
   function selectEBStep(daysBefore){
     if(!ebRules || !ebRules.enabled || !ebRules.steps || !ebRules.steps.length) return null;
-    // Steps are sorted by days descending - find first where daysBefore >= step.days
-    var steps = ebRules.steps.slice().sort(function(a,b){ return (b.days||0) - (a.days||0); });
+    // Steps are sorted by min_days_before descending - find first where daysBefore >= step.min_days_before
+    // PHP stores: min_days_before, type, value (not days, pct)
+    var steps = ebRules.steps.slice().sort(function(a,b){ return (b.min_days_before||0) - (a.min_days_before||0); });
     for(var i = 0; i < steps.length; i++){
-      if(daysBefore >= (steps[i].days || 0)){
+      if(daysBefore >= (steps[i].min_days_before || 0)){
         return steps[i];
       }
     }
@@ -779,15 +780,16 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
 
     // If no valid price or date, clear ledger fields to prevent stale display
     if(basePrice <= 0 || !startDate){
-      setValIfChanged(F.ledger_base, '0', true);
-      setValIfChanged(F.ledger_eb_pct, '0', true);
-      setValIfChanged(F.ledger_eb_amount, '0', true);
-      setValIfChanged(F.ledger_partner_amt, '0', true);
-      setValIfChanged(F.ledger_total, '0', true);
-      setValIfChanged(F.eb_discount_pct, '0', true);
-      // Trigger GF recalc to hide display fields
-      if(typeof window.gformCalculateTotalPrice === 'function'){
-        try{ window.gformCalculateTotalPrice(fid); }catch(e){}
+      // Don't fire change events on storage fields - only on eb_discount_pct for conditional logic
+      setValIfChanged(F.ledger_base, '0', false);
+      setValIfChanged(F.ledger_eb_pct, '0', false);
+      setValIfChanged(F.ledger_eb_amount, '0', false);
+      setValIfChanged(F.ledger_partner_amt, '0', false);
+      setValIfChanged(F.ledger_total, '0', false);
+      var cleared = setValIfChanged(F.eb_discount_pct, '0', true);
+      // Trigger conditional logic to hide display fields
+      if(cleared && typeof window.gf_apply_rules === 'function'){
+        try{ window.gf_apply_rules(fid, [F.eb_discount_pct]); }catch(e){}
       }
       return;
     }
@@ -798,13 +800,31 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     var ebAmount = 0;
     var ebStep = selectEBStep(daysBefore);
     if(ebStep){
-      ebPct = parseFloat(ebStep.pct) || 0;
-      ebAmount = basePrice * ebPct / 100;
-      // Apply global cap if configured
-      if(ebRules.global_cap && ebRules.global_cap.max_amount && ebAmount > ebRules.global_cap.max_amount){
-        ebAmount = ebRules.global_cap.max_amount;
+      // PHP stores: type ('percent' or 'fixed'), value (the discount amount/percentage)
+      var stepType = ebStep.type || 'percent';
+      var stepValue = parseFloat(ebStep.value) || 0;
+
+      if(stepType === 'percent'){
+        ebPct = stepValue;
+        ebAmount = basePrice * ebPct / 100;
+        // Apply per-step cap if configured
+        if(ebStep.cap && ebStep.cap.enabled && ebStep.cap.amount > 0 && ebAmount > ebStep.cap.amount){
+          ebAmount = ebStep.cap.amount;
+        }
+      } else {
+        // Fixed discount
+        ebAmount = stepValue;
+        ebPct = basePrice > 0 ? (ebAmount / basePrice * 100) : 0;
+      }
+
+      // Apply global cap if configured (PHP sends global_cap.amount, not max_amount)
+      if(ebRules.global_cap && ebRules.global_cap.enabled && ebRules.global_cap.amount > 0 && ebAmount > ebRules.global_cap.amount){
+        ebAmount = ebRules.global_cap.amount;
+        // Recalculate percentage after cap
+        ebPct = basePrice > 0 ? (ebAmount / basePrice * 100) : 0;
       }
       ebAmount = Math.round(ebAmount * 100) / 100;
+      ebPct = Math.round(ebPct * 100) / 100;
     }
 
     var afterEb = basePrice - ebAmount;
@@ -834,22 +854,30 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     // fmtPct() converts to comma which breaks (float)"12,34" = 12.0 in PHP.
     // We use toFixed(2) or String() which produce dot decimals.
     // Reserve fmtPct() ONLY for UI display text, never for hidden input storage.
+    //
+    // IMPORTANT: Do NOT fire change events on storage-only fields (ledger_base, ledger_eb_amount,
+    // ledger_partner_amt, ledger_total). Firing change events triggers GF's product calculation
+    // (gform-products.min.js) which may try to access product field elements that don't exist,
+    // causing "Cannot read properties of null (reading 'dataset')" errors.
+    //
+    // Only fire change events on fields that have GF conditional logic attached (eb_discount_pct).
     var changed = false;
-    changed = setValIfChanged(F.ledger_base, basePrice.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_eb_pct, String(ebPct), true) || changed;  // dot decimal for PHP
-    changed = setValIfChanged(F.ledger_eb_amount, ebAmount.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_partner_amt, partnerAmount.toFixed(2), true) || changed;
-    changed = setValIfChanged(F.ledger_total, total.toFixed(2), true) || changed;
+    changed = setValIfChanged(F.ledger_base, basePrice.toFixed(2), false) || changed;
+    changed = setValIfChanged(F.ledger_eb_pct, String(ebPct), false) || changed;  // dot decimal for PHP
+    changed = setValIfChanged(F.ledger_eb_amount, ebAmount.toFixed(2), false) || changed;
+    changed = setValIfChanged(F.ledger_partner_amt, partnerAmount.toFixed(2), false) || changed;
+    changed = setValIfChanged(F.ledger_total, total.toFixed(2), false) || changed;
 
     // CRITICAL: Always update the EB% field - set to 0 when no EB applies.
     // This ensures Field 32 hides when EB doesn't apply (e.g., date outside EB window).
     // Previously only set when ebPct > 0, causing "stuck on" display.
     // Use String() for dot decimal (e.g., "7.5" not "7,5").
-    setValIfChanged(F.eb_discount_pct, String(ebPct), true);
+    // This field DOES need change event for GF conditional logic.
+    var ebPctChanged = setValIfChanged(F.eb_discount_pct, String(ebPct), true);
 
-    // Trigger GF recalculation if values changed
-    if(changed && typeof window.gformCalculateTotalPrice === 'function'){
-      try{ window.gformCalculateTotalPrice(fid); }catch(e){}
+    // Manually trigger conditional logic update after EB% change
+    if(ebPctChanged && typeof window.gf_apply_rules === 'function'){
+      try{ window.gf_apply_rules(fid, [F.eb_discount_pct]); }catch(e){}
     }
 
     // Update displays
