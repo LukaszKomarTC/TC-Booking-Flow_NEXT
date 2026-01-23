@@ -165,6 +165,7 @@ final class Plugin {
 		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
 		add_action('wp_footer',                    [ $this, 'gf_output_partner_js' ], 100);
 		add_action('wp_footer',                    [ $this, 'output_late_diagnostic' ], 200); // Late diagnostic
+		add_action('wp_footer',                    [ $this, 'gf_output_debug_info' ], 201); // Debug info (debug mode only)
 
 
 		// ---- GF: submission to cart (single source of truth)
@@ -1028,6 +1029,10 @@ final class Plugin {
 
 	public function gf_output_partner_css() : void {
 		Integrations\GravityForms\GF_JS::output_partner_css();
+	}
+
+	public function gf_output_debug_info() : void {
+		Integrations\GravityForms\GF_JS::output_debug_info();
 	}
 
 	/**

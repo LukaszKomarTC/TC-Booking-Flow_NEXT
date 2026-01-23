@@ -21,6 +21,12 @@ final class GF_JS {
 	private static array $partner_js_payload = [];
 
 	/**
+	 * Track all forms seen this request (for debugging)
+	 * @var array<int, bool>
+	 */
+	private static array $all_forms_seen = [];
+
+	/**
 	 * GF: Populate partner fields + inject JS for admin override dropdown.
 	 *
 	 * Works for both Event forms and Booking forms using semantic field resolution.
@@ -28,12 +34,27 @@ final class GF_JS {
 	public static function partner_prepare_form( $form ) {
 		$form_id = (int) (is_array($form) && isset($form['id']) ? $form['id'] : 0);
 
+		// Track all forms that pass through gform_pre_render
+		if ( $form_id > 0 ) {
+			self::$all_forms_seen[ $form_id ] = true;
+		}
+
 		// Check if this is an Event form OR Booking form
 		$event_form_id = (int) Settings::get_form_id();
 		$booking_form_id = (int) Settings::get_booking_form_id();
 
 		$is_event_form = ( $form_id === $event_form_id );
 		$is_booking_form = ( $form_id === $booking_form_id );
+
+		// Debug logging for form detection
+		self::debug_log( sprintf(
+			'partner_prepare_form: form_id=%d event_form=%d booking_form=%d is_event=%s is_booking=%s',
+			$form_id,
+			$event_form_id,
+			$booking_form_id,
+			$is_event_form ? 'yes' : 'no',
+			$is_booking_form ? 'yes' : 'no'
+		) );
 
 		if ( ! $is_event_form && ! $is_booking_form ) {
 			return $form;
@@ -55,6 +76,16 @@ final class GF_JS {
 		// Resolve field IDs using semantic keys
 		$field_ids = self::resolve_field_ids( $form_id );
 
+		// Debug: log resolved field IDs
+		self::debug_log( sprintf(
+			'form_id=%d resolved_field_ids: partner_override=%d coupon_code=%d partner_discount=%d partners_enabled=%d',
+			$form_id,
+			$field_ids['partner_override'] ?? 0,
+			$field_ids['coupon_code'] ?? 0,
+			$field_ids['partner_discount_pct'] ?? 0,
+			$field_ids['partners_enabled'] ?? 0
+		) );
+
 		// Cache payload for footer output.
 		self::$partner_js_payload[ $form_id ] = [
 			'partners'     => $partners,
@@ -62,6 +93,13 @@ final class GF_JS {
 			'i18n'         => $i18n,
 			'field_ids'    => $field_ids,
 		];
+
+		self::debug_log( sprintf(
+			'form_id=%d JS payload cached. partners_count=%d initial_code=%s',
+			$form_id,
+			count( $partners ),
+			$initial_code ?: '(empty)'
+		) );
 
 		// Also register an init script so this works even when GF renders via AJAX.
 		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n, $field_ids );
@@ -515,7 +553,16 @@ JS;
 	}
 
 	public static function output_partner_js() : void {
-		if ( empty( self::$partner_js_payload ) ) return;
+		self::debug_log( sprintf(
+			'output_partner_js called. payload_count=%d is_admin=%s',
+			count( self::$partner_js_payload ),
+			is_admin() ? 'yes' : 'no'
+		) );
+
+		if ( empty( self::$partner_js_payload ) ) {
+			self::debug_log( 'output_partner_js: payload empty, skipping' );
+			return;
+		}
 		if ( is_admin() ) return;
 
 		foreach ( self::$partner_js_payload as $form_id => $payload ) {
@@ -539,6 +586,26 @@ JS;
 	/**
 	 * Output CSS for enhanced product displays and ledger summary.
 	 */
+	/**
+	 * Debug logging helper - only logs when TC_BF debug mode is enabled.
+	 *
+	 * @param string $message Log message
+	 */
+	private static function debug_log( string $message ) : void {
+		try {
+			if ( class_exists( '\\TC_BF\\Admin\\Settings' ) && method_exists( '\\TC_BF\\Admin\\Settings', 'is_debug' ) ) {
+				if ( ! \TC_BF\Admin\Settings::is_debug() ) {
+					return;
+				}
+			}
+			if ( class_exists( '\\TC_BF\\Admin\\Settings' ) && method_exists( '\\TC_BF\\Admin\\Settings', 'append_log' ) ) {
+				\TC_BF\Admin\Settings::append_log( '[GF_JS] ' . $message );
+			}
+		} catch ( \Throwable $e ) {
+			// Silent fail
+		}
+	}
+
 	public static function output_partner_css() : void {
 		if ( is_admin() ) return;
 
@@ -665,5 +732,45 @@ JS;
 .tcbf-ledger-total .tcbf-ledger-value { font-size: 20px; font-weight: 700; color: #1e293b; }
 ";
 		echo "</style>\n";
+	}
+
+	/**
+	 * Output diagnostic HTML comment for debugging form detection.
+	 *
+	 * Called at wp_footer to show which forms were processed.
+	 * Only outputs when debug mode is enabled.
+	 */
+	public static function output_debug_info() : void {
+		if ( is_admin() ) return;
+
+		// Only output when debug mode is enabled
+		try {
+			if ( ! class_exists( '\\TC_BF\\Admin\\Settings' ) || ! \TC_BF\Admin\Settings::is_debug() ) {
+				return;
+			}
+		} catch ( \Throwable $e ) {
+			return;
+		}
+
+		$event_form_id   = (int) Settings::get_form_id();
+		$booking_form_id = (int) Settings::get_booking_form_id();
+		$processed_forms = array_keys( self::$partner_js_payload );
+		$all_forms_seen  = array_keys( self::$all_forms_seen );
+
+		echo "\n<!-- TC Booking Flow Debug Info -->\n";
+		echo "<!-- Event form ID (configured): {$event_form_id} -->\n";
+		echo "<!-- Booking form ID (configured): {$booking_form_id} -->\n";
+		echo "<!-- All forms seen via gform_pre_render: " . ( empty( $all_forms_seen ) ? 'none' : implode( ', ', $all_forms_seen ) ) . " -->\n";
+		echo "<!-- Forms processed (JS injected): " . ( empty( $processed_forms ) ? 'none' : implode( ', ', $processed_forms ) ) . " -->\n";
+
+		// Diagnostic help
+		if ( empty( $all_forms_seen ) ) {
+			echo "<!-- No GF forms rendered on this page via gform_pre_render hook -->\n";
+		} elseif ( empty( $processed_forms ) ) {
+			echo "<!-- GF forms were rendered but none matched configured event/booking form IDs -->\n";
+			echo "<!-- Check if your booking form ID in TC Flow Settings matches the actual form ID -->\n";
+		}
+
+		echo "<!-- /TC Booking Flow Debug Info -->\n";
 	}
 }
