@@ -1096,7 +1096,7 @@
         "is_payment": false,
         "type": "html",
         "id": 14,
-        "formId": 0,
+        "formId": 45,
         "label": "Pricing summary",
         "adminLabel": "pricing_summary_html",
         "isRequired": false,
@@ -1813,7 +1813,8 @@
         "label": "partner_user_id",
         "adminLabel": "partner_user_id",
         "inputName": "partner_user_id",
-        "visibility": "hidden"
+        "visibility": "hidden",
+        "formId": 45
       },
       {
         "type": "hidden",
@@ -1821,7 +1822,8 @@
         "label": "partner_coupon_code",
         "adminLabel": "partner_coupon_code",
         "inputName": "partner_coupon_code",
-        "visibility": "hidden"
+        "visibility": "hidden",
+        "formId": 45
       },
       {
         "type": "hidden",
@@ -1829,7 +1831,8 @@
         "label": "partner_discount_pct",
         "adminLabel": "partner_discount_pct",
         "inputName": "partner_discount_pct",
-        "visibility": "hidden"
+        "visibility": "hidden",
+        "formId": 45
       },
       {
         "type": "hidden",
@@ -1837,7 +1840,8 @@
         "label": "partner_commission_pct",
         "adminLabel": "partner_commission_pct",
         "inputName": "partner_commission_pct",
-        "visibility": "hidden"
+        "visibility": "hidden",
+        "formId": 45
       },
       {
         "type": "hidden",
@@ -1845,12 +1849,13 @@
         "label": "partner_email",
         "adminLabel": "partner_email",
         "inputName": "partner_email",
-        "visibility": "hidden"
+        "visibility": "hidden",
+        "formId": 45
       },
       {
         "type": "hidden",
         "id": 30,
-        "formId": 55,
+        "formId": 45,
         "label": "Partners Enabled",
         "adminLabel": "partners_enabled",
         "inputName": "partners_enabled",
@@ -1864,7 +1869,7 @@
       {
         "type": "hidden",
         "id": 31,
-        "formId": 55,
+        "formId": 45,
         "label": "Early Booking Discount %",
         "adminLabel": "early_booking_discount_pct",
         "inputName": "early_booking_discount_pct",
@@ -1879,7 +1884,7 @@
         "is_payment": false,
         "type": "product",
         "id": 32,
-        "formId": 55,
+        "formId": 45,
         "label": "Early booking discount",
         "adminLabel": "display_eb_discount",
         "isRequired": false,
@@ -1940,7 +1945,7 @@
         "is_payment": false,
         "type": "product",
         "id": 33,
-        "formId": 55,
+        "formId": 45,
         "label": "Partner discount",
         "adminLabel": "display_partner_discount",
         "isRequired": false,
@@ -2005,9 +2010,9 @@
       {
         "type": "html",
         "id": 34,
-        "formId": 55,
+        "formId": 45,
         "label": "Partner Banner",
-        "content": "<div class=\"tcbf-partner-banner\" id=\"tcbf-partner-banner-55\" data-form-id=\"55\" style=\"display:none;\"><div class=\"tcbf-partner-banner__icon\">✓</div><div class=\"tcbf-partner-banner__content\"><div class=\"tcbf-partner-banner__title\"></div><div class=\"tcbf-partner-banner__details\"><span class=\"tcbf-partner-name\"></span><span class=\"tcbf-partner-discount\"></span></div></div></div>",
+        "content": "<div class=\"tcbf-partner-banner\" id=\"tcbf-partner-banner-45\" data-form-id=\"45\" style=\"display:none;\"><div class=\"tcbf-partner-banner__icon\">✓</div><div class=\"tcbf-partner-banner__content\"><div class=\"tcbf-partner-banner__title\"></div><div class=\"tcbf-partner-banner__details\"><span class=\"tcbf-partner-name\"></span><span class=\"tcbf-partner-discount\"></span></div></div></div>",
         "cssClass": "tcbf-partner-banner-field",
         "conditionalLogic": {
           "enabled": true,
@@ -2038,7 +2043,7 @@
     "title": "Booking Product — Client Details (MINIMAL LEDGER v2)",
     "description": "Minimal static form for booking products to support TCBF PHP ledger (EB + Partner + Totals) + optional client notification. Pricing fields are populated by PHP.",
     "version": "2.9.5",
-    "id": 0,
+    "id": 45,
     "markupVersion": 2,
     "nextFieldId": 35,
     "useCurrentUserAsAuthor": true,
