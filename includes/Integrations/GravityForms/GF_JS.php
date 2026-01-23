@@ -55,16 +55,34 @@ final class GF_JS {
 		// Resolve field IDs using semantic keys
 		$field_ids = self::resolve_field_ids( $form_id );
 
+		// For booking forms on product pages, get EB rules for client-side calculation
+		$eb_rules = [];
+		if ( $is_booking_form && function_exists('is_product') && is_product() ) {
+			$product_id = (int) get_queried_object_id();
+			if ( $product_id > 0 && class_exists( '\\TC_BF\\Domain\\ProductEBConfig' ) ) {
+				$eb_cfg = \TC_BF\Domain\ProductEBConfig::get_product_config( $product_id );
+				if ( ! empty( $eb_cfg['enabled'] ) && ! empty( $eb_cfg['steps'] ) ) {
+					$eb_rules = [
+						'enabled'    => true,
+						'steps'      => $eb_cfg['steps'],
+						'global_cap' => $eb_cfg['global_cap'] ?? [],
+					];
+				}
+			}
+		}
+
 		// Cache payload for footer output.
 		self::$partner_js_payload[ $form_id ] = [
 			'partners'     => $partners,
 			'initial_code' => $initial_code,
 			'i18n'         => $i18n,
 			'field_ids'    => $field_ids,
+			'eb_rules'     => $eb_rules,
+			'is_booking'   => $is_booking_form,
 		];
 
 		// Also register an init script so this works even when GF renders via AJAX.
-		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n, $field_ids );
+		self::register_partner_init_script( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking_form );
 
 		// Inject partner banner HTML field if it doesn't exist in the form
 		$form = self::maybe_inject_partner_banner( $form, $form_id );
@@ -352,11 +370,11 @@ final class GF_JS {
 		];
 	}
 
-	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids ) : void {
+	private static function register_partner_init_script( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids, array $eb_rules = [], bool $is_booking = false ) : void {
 		if ( $form_id <= 0 ) return;
 		if ( ! class_exists('\GFFormDisplay') ) return;
 
-		$script = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids );
+		$script = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking );
 		if ( $script === '' ) return;
 
 		\GFFormDisplay::add_init_script(
@@ -372,9 +390,11 @@ final class GF_JS {
 	 *
 	 * Uses semantic field IDs passed from PHP - no hardcoded field numbers in JS.
 	 */
-	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids ) : string {
+	private static function build_partner_override_js( int $form_id, array $partners, string $initial_code, array $i18n, array $field_ids, array $eb_rules = [], bool $is_booking = false ) : string {
 		$json = wp_json_encode( $partners );
 		$field_ids_json = wp_json_encode( $field_ids );
+		$eb_rules_json = wp_json_encode( $eb_rules );
+		$is_booking_js = $is_booking ? 'true' : 'false';
 
 		// i18n strings (qTranslateX processed server-side)
 		$banner_title   = esc_js( $i18n['title'] ?? 'Partner Discount Applied' );
@@ -392,6 +412,8 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
   var fid = {$form_id};
   var initialCode = '{$initial_code}';
   var F = {$field_ids_json};
+  var ebRules = {$eb_rules_json};
+  var isBookingForm = {$is_booking_js};
 
   // i18n
   var i18n = {
@@ -689,6 +711,182 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     }
   }
 
+  // ===== WC Bookings Live Ledger Calculation (Booking forms only) =====
+  var lastBookingCost = 0;
+  var ledgerCalcTimer = null;
+
+  function getWcBookingsCost(){
+    // WC Bookings displays the calculated cost in .wc-bookings-booking-cost
+    var costEl = document.querySelector('.wc-bookings-booking-cost .amount, .wc-bookings-booking-cost');
+    if(!costEl) return 0;
+    var text = costEl.textContent || costEl.innerText || '';
+    return parseLocaleFloat(text);
+  }
+
+  function getBookingStartDate(){
+    // WC Bookings date fields - try various selectors
+    var yearEl = document.querySelector('[name="wc_bookings_field_start_date_year"]');
+    var monthEl = document.querySelector('[name="wc_bookings_field_start_date_month"]');
+    var dayEl = document.querySelector('[name="wc_bookings_field_start_date_day"]');
+
+    if(yearEl && monthEl && dayEl){
+      var y = parseInt(yearEl.value, 10);
+      var m = parseInt(monthEl.value, 10);
+      var d = parseInt(dayEl.value, 10);
+      if(y > 0 && m > 0 && d > 0){
+        return new Date(y, m - 1, d);
+      }
+    }
+
+    // Fallback: try datepicker input
+    var dateInput = document.querySelector('.wc-bookings-date-picker input[type="text"], #wc-bookings-booking-form input.booking_date');
+    if(dateInput && dateInput.value){
+      var parsed = new Date(dateInput.value);
+      if(!isNaN(parsed.getTime())) return parsed;
+    }
+
+    return null;
+  }
+
+  function calculateDaysBefore(startDate){
+    if(!startDate) return 0;
+    var now = new Date();
+    now.setHours(0,0,0,0);
+    var start = new Date(startDate);
+    start.setHours(0,0,0,0);
+    var diff = start.getTime() - now.getTime();
+    var days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    return days > 0 ? days : 0;
+  }
+
+  function selectEBStep(daysBefore){
+    if(!ebRules || !ebRules.enabled || !ebRules.steps || !ebRules.steps.length) return null;
+    // Steps are sorted by days descending - find first where daysBefore >= step.days
+    var steps = ebRules.steps.slice().sort(function(a,b){ return (b.days||0) - (a.days||0); });
+    for(var i = 0; i < steps.length; i++){
+      if(daysBefore >= (steps[i].days || 0)){
+        return steps[i];
+      }
+    }
+    return null;
+  }
+
+  function calculateLedger(){
+    if(!isBookingForm) return;
+
+    var basePrice = getWcBookingsCost();
+    if(basePrice <= 0) return;
+
+    var startDate = getBookingStartDate();
+    var daysBefore = calculateDaysBefore(startDate);
+
+    // Calculate EB discount
+    var ebPct = 0;
+    var ebAmount = 0;
+    var ebStep = selectEBStep(daysBefore);
+    if(ebStep){
+      ebPct = parseFloat(ebStep.pct) || 0;
+      ebAmount = basePrice * ebPct / 100;
+      // Apply global cap if configured
+      if(ebRules.global_cap && ebRules.global_cap.max_amount && ebAmount > ebRules.global_cap.max_amount){
+        ebAmount = ebRules.global_cap.max_amount;
+      }
+      ebAmount = Math.round(ebAmount * 100) / 100;
+    }
+
+    var afterEb = basePrice - ebAmount;
+
+    // Calculate partner discount
+    var partnerPct = parseLocaleFloat(getVal(F.partner_discount_pct));
+    var partnerAmount = 0;
+    if(partnerPct > 0){
+      partnerAmount = afterEb * partnerPct / 100;
+      partnerAmount = Math.round(partnerAmount * 100) / 100;
+    }
+
+    // Calculate total
+    var total = basePrice - ebAmount - partnerAmount;
+    total = Math.round(total * 100) / 100;
+
+    // Calculate commission
+    var commissionPct = parseLocaleFloat(getVal(F.partner_commission));
+    var commission = 0;
+    if(commissionPct > 0){
+      commission = total * commissionPct / 100;
+      commission = Math.round(commission * 100) / 100;
+    }
+
+    // Populate ledger fields
+    var changed = false;
+    changed = setValIfChanged(F.ledger_base, fmtPct(basePrice), true) || changed;
+    changed = setValIfChanged(F.ledger_eb_pct, fmtPct(ebPct), true) || changed;
+    changed = setValIfChanged(F.ledger_eb_amount, fmtPct(ebAmount), true) || changed;
+    changed = setValIfChanged(F.ledger_partner_amt, fmtPct(partnerAmount), true) || changed;
+    changed = setValIfChanged(F.ledger_total, fmtPct(total), true) || changed;
+
+    // Also update the EB% field if we have a calculated value
+    if(ebPct > 0){
+      setValIfChanged(F.eb_discount_pct, fmtPct(ebPct), true);
+    }
+
+    // Trigger GF recalculation if values changed
+    if(changed && typeof window.gformCalculateTotalPrice === 'function'){
+      try{ window.gformCalculateTotalPrice(fid); }catch(e){}
+    }
+
+    // Update displays
+    setTimeout(function(){
+      updateEBBanner();
+      enhanceEBDisplay();
+      var map = (window.tcBfPartnerMap && window.tcBfPartnerMap[fid]) ? window.tcBfPartnerMap[fid] : {};
+      var code = getVal(F.coupon_code) || '';
+      var data = (code && map && map[code]) ? map[code] : null;
+      updateLedgerSummary(data, code);
+    }, 50);
+  }
+
+  function requestLedgerCalc(){
+    if(ledgerCalcTimer) clearTimeout(ledgerCalcTimer);
+    ledgerCalcTimer = setTimeout(calculateLedger, 100);
+  }
+
+  function watchWcBookings(){
+    if(!isBookingForm) return;
+
+    // Watch for WC Bookings cost changes using MutationObserver
+    var costContainer = document.querySelector('.wc-bookings-booking-cost');
+    if(costContainer){
+      var observer = new MutationObserver(function(mutations){
+        var newCost = getWcBookingsCost();
+        if(newCost !== lastBookingCost){
+          lastBookingCost = newCost;
+          requestLedgerCalc();
+        }
+      });
+      observer.observe(costContainer, { childList: true, subtree: true, characterData: true });
+    }
+
+    // Also watch date field changes
+    var dateFields = document.querySelectorAll('[name^="wc_bookings_field_start_date"], .wc-bookings-date-picker input');
+    dateFields.forEach(function(el){
+      if(!el.__tcBfDateBound){
+        el.__tcBfDateBound = true;
+        el.addEventListener('change', requestLedgerCalc);
+      }
+    });
+
+    // Watch for WC Bookings form updates (jQuery events)
+    if(window.jQuery){
+      try{
+        jQuery('body').off('wc_bookings_calculated_cost.tcbf').on('wc_bookings_calculated_cost.tcbf', requestLedgerCalc);
+        jQuery('.wc-bookings-booking-form').off('date-selected.tcbf').on('date-selected.tcbf', requestLedgerCalc);
+      }catch(e){}
+    }
+
+    // Initial calculation
+    requestLedgerCalc();
+  }
+
   // ===== Bind Events =====
   function bindOnce(){
     if(F.partner_override > 0){
@@ -697,6 +895,11 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
         sel.__tcBfBound = true;
         sel.addEventListener('change', requestApplyPartner);
       }
+    }
+
+    // For booking forms, set up WC Bookings watchers
+    if(isBookingForm){
+      watchWcBookings();
     }
   }
 
@@ -724,8 +927,10 @@ JS;
 			$initial_code = (is_array($payload) && isset($payload['initial_code'])) ? (string) $payload['initial_code'] : '';
 			$i18n = (is_array($payload) && isset($payload['i18n']) && is_array($payload['i18n'])) ? $payload['i18n'] : [];
 			$field_ids = (is_array($payload) && isset($payload['field_ids']) && is_array($payload['field_ids'])) ? $payload['field_ids'] : [];
+			$eb_rules = (is_array($payload) && isset($payload['eb_rules']) && is_array($payload['eb_rules'])) ? $payload['eb_rules'] : [];
+			$is_booking = (is_array($payload) && isset($payload['is_booking'])) ? (bool) $payload['is_booking'] : false;
 
-			$js = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids );
+			$js = self::build_partner_override_js( $form_id, $partners, $initial_code, $i18n, $field_ids, $eb_rules, $is_booking );
 			if ( $js === '' ) continue;
 
 			echo "\n<script id=\"tc-bf-partner-override-{$form_id}\">\n";
