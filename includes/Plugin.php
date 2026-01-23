@@ -469,11 +469,43 @@ final class Plugin {
 		if ( $event_id <= 0 && isset($_GET['event_id']) ) {
 			$event_id = (int) $_GET['event_id'];
 		}
-		if ( $event_id <= 0 ) return $value;
-		$calc = $this->calculate_for_event($event_id);
-		$pct = (float) ($calc['pct'] ?? 0.0);
-		if ( $pct <= 0 ) return $value;
-		return $this->pct_to_gf_str($pct);
+
+		// Event page flow
+		if ( $event_id > 0 ) {
+			$calc = $this->calculate_for_event($event_id);
+			$pct = (float) ($calc['pct'] ?? 0.0);
+			if ( $pct <= 0 ) return $value;
+			return $this->pct_to_gf_str($pct);
+		}
+
+		// WooCommerce product page flow (booking products)
+		// TCBF-14: Populate EB% for booking products based on category rules
+		if ( function_exists('is_product') && is_product() ) {
+			$product_id = (int) get_queried_object_id();
+			if ( $product_id > 0 && class_exists( '\\TC_BF\\Domain\\ProductEBConfig' ) ) {
+				$eb_cfg = \TC_BF\Domain\ProductEBConfig::get_product_config( $product_id );
+
+				if ( ! empty( $eb_cfg['enabled'] ) && ! empty( $eb_cfg['steps'] ) ) {
+					// Calculate EB% based on a reasonable future booking date.
+					// Since we don't know the actual booking date at page load,
+					// we use the max EB% from the steps as an indicator that EB is available.
+					// The actual calculation happens in BookingLedger when added to cart.
+					$max_pct = 0.0;
+					foreach ( $eb_cfg['steps'] as $step ) {
+						$pct = (float) ( $step['pct'] ?? 0 );
+						if ( $pct > $max_pct ) {
+							$max_pct = $pct;
+						}
+					}
+
+					if ( $max_pct > 0 ) {
+						return $this->pct_to_gf_str( $max_pct );
+					}
+				}
+			}
+		}
+
+		return $value;
 	}
 
 	/**

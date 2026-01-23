@@ -47,7 +47,13 @@ final class GF_Partner {
 		}
 
 		// Write values deterministically using semantic field resolution
-		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_COUPON_CODE, (string) ($ctx['code'] ?? '') );
+		$partner_code = (string) ($ctx['code'] ?? '');
+		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_COUPON_CODE, $partner_code );
+
+		// CRITICAL: Also populate partner_coupon_code (field 26 in booking form)
+		// Field 33 (display_partner_discount) conditional logic depends on this field!
+		// Without this, partner discount display stays hidden even when partner is active.
+		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE, $partner_code );
 
 		// IMPORTANT: feed percent values as decimal-comma to avoid GF interpreting "7.5" as "75".
 		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_PARTNER_DISCOUNT_PCT,
@@ -71,6 +77,7 @@ final class GF_Partner {
 	 */
 	private static function clear_partner_fields( int $form_id ) : void {
 		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_COUPON_CODE, '' );
+		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_PARTNER_COUPON_CODE, '' );
 		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_PARTNER_DISCOUNT_PCT, '' );
 		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_PARTNER_COMMISSION_PCT, '' );
 		GF_SemanticFields::set_post_value( $form_id, GF_SemanticFields::KEY_PARTNER_EMAIL, '' );
