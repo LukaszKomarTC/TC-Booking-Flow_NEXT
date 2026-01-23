@@ -110,14 +110,20 @@ class BookingLedger {
 		}
 
 		// Calculate totals
+		// IMPORTANT: total_after_eb is used for cart price (EB is internal, always applied)
+		// total_after_partner is for preview only (partner discount is coupon-based, not baked into cart)
+		$result['total_after_eb']      = round( $base_price - $result['eb_discount_amount'], 2 );
+		$result['total_after_partner'] = round( $result['total_after_eb'] - $result['partner_discount_amount'], 2 );
+
+		// Backward compatibility aliases
 		$total_discount = $result['eb_discount_amount'] + $result['partner_discount_amount'];
 		$result['total_discount'] = round( $total_discount, 2 );
-		$result['total_client']   = round( $base_price - $total_discount, 2 );
+		$result['total_client']   = $result['total_after_partner']; // Alias for backward compat
 
-		// Calculate partner commission (based on client total)
+		// Calculate partner commission (based on amount after partner discount)
 		if ( ! empty( $partner_ctx['active'] ) && $partner_ctx['commission_pct'] > 0 ) {
 			$result['partner_commission'] = round(
-				$result['total_client'] * ( $partner_ctx['commission_pct'] / 100 ),
+				$result['total_after_partner'] * ( $partner_ctx['commission_pct'] / 100 ),
 				2
 			);
 		}
@@ -193,14 +199,20 @@ class BookingLedger {
 		}
 
 		// Calculate totals
+		// IMPORTANT: total_after_eb is used for cart price (EB is internal, always applied)
+		// total_after_partner is for preview only (partner discount is coupon-based, not baked into cart)
+		$result['total_after_eb']      = round( $base_price - $result['eb_discount_amount'], 2 );
+		$result['total_after_partner'] = round( $result['total_after_eb'] - $result['partner_discount_amount'], 2 );
+
+		// Backward compatibility aliases
 		$total_discount = $result['eb_discount_amount'] + $result['partner_discount_amount'];
 		$result['total_discount'] = round( $total_discount, 2 );
-		$result['total_client']   = round( $base_price - $total_discount, 2 );
+		$result['total_client']   = $result['total_after_partner']; // Alias for backward compat
 
-		// Calculate partner commission (based on client total)
+		// Calculate partner commission (based on amount after partner discount)
 		if ( ! empty( $partner_ctx['active'] ) && $partner_ctx['commission_pct'] > 0 ) {
 			$result['partner_commission'] = round(
-				$result['total_client'] * ( $partner_ctx['commission_pct'] / 100 ),
+				$result['total_after_partner'] * ( $partner_ctx['commission_pct'] / 100 ),
 				2
 			);
 		}
@@ -256,14 +268,18 @@ class BookingLedger {
 			'eb_discount_pct'         => 0.0,
 			'eb_discount_amount'      => 0.0,
 
-			// Partner discount
+			// Partner discount (for preview/reporting only - NOT baked into cart price)
 			'partner'                 => [ 'active' => false ],
 			'partner_discount_amount' => 0.0,
 			'partner_commission'      => 0.0,
 
-			// Totals
+			// Totals - IMPORTANT for booking products:
+			// - total_after_eb: Used for cart item price (EB is internal, always applied)
+			// - total_after_partner: Preview only (partner discount is coupon-based, not baked)
 			'total_discount'          => 0.0,
-			'total_client'            => 0.0,
+			'total_after_eb'          => 0.0,  // Cart price for booking products
+			'total_after_partner'     => 0.0,  // Preview only - DO NOT use for cart price
+			'total_client'            => 0.0,  // Alias for total_after_partner (backward compat)
 		];
 	}
 

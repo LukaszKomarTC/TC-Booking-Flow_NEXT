@@ -702,6 +702,8 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
   }
 
   // ===== Ledger Summary (Booking forms) =====
+  // NOTE: Partner discount is coupon-based, NOT baked into cart price
+  // The summary shows it as a "preview" of what the coupon will apply
   function updateLedgerSummary(data, code){
     var container = qs('#tcbf-booking-ledger-summary');
     if(!container) return;
@@ -712,6 +714,12 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
     var total = parseLocaleFloat(getVal(F.ledger_total));
     var partnerCode = (code || getVal(F.coupon_code) || '').toUpperCase();
     var partnerPct = data ? parseLocaleFloat(data.discount) : parseLocaleFloat(getVal(F.partner_discount_pct));
+
+    // Calculate totals:
+    // - total_after_eb = base - ebAmt (this is what goes to cart)
+    // - total_after_partner = total_after_eb - partnerAmt (preview only)
+    var totalAfterEb = base - ebAmt;
+
     var html = '';
     // Base price row
     if(base > 0){
@@ -727,14 +735,15 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
       html += '<div class="tcbf-ledger-info"><span class="tcbf-ledger-pct">' + fmtPct(ebPct) + '% ' + i18n.discount + '</span><span class="tcbf-ledger-amt">-' + fmtCurrency(ebAmt) + '</span></div>';
       html += '</div>';
     }
-    // Partner discount row
+    // Partner discount row (preview - applied via coupon at checkout)
     if(partnerAmt > 0 && partnerCode){
-      html += '<div class="tcbf-ledger-row tcbf-ledger-partner">';
+      html += '<div class="tcbf-ledger-row tcbf-ledger-partner tcbf-ledger-partner-preview">';
       html += '<div class="tcbf-ledger-badge"><span class="tcbf-ledger-icon">✓</span><span class="tcbf-ledger-text">' + partnerCode + '</span></div>';
-      html += '<div class="tcbf-ledger-info"><span class="tcbf-ledger-pct">' + fmtPct(partnerPct) + '% ' + i18n.discount + '</span><span class="tcbf-ledger-amt">-' + fmtCurrency(partnerAmt) + '</span></div>';
+      html += '<div class="tcbf-ledger-info"><span class="tcbf-ledger-pct">' + fmtPct(partnerPct) + '% ' + i18n.discount + '</span><span class="tcbf-ledger-amt">-' + fmtCurrency(partnerAmt) + '</span><span class="tcbf-ledger-coupon-note">(via coupon)</span></div>';
       html += '</div>';
     }
-    // Total row
+    // Total row - show the preview total (after partner discount)
+    // Note: Cart price will be total_after_eb; partner discount comes from WC coupon
     if(total > 0){
       html += '<div class="tcbf-ledger-row tcbf-ledger-total">';
       html += '<span class="tcbf-ledger-label">' + i18n.total + '</span>';
@@ -1146,7 +1155,15 @@ window.tcBfPartnerMap[{$form_id}] = {$json};
       var sel = qs('#input_'+fid+'_'+F.partner_override);
       if(sel && !sel.__tcBfBound){
         sel.__tcBfBound = true;
-        sel.addEventListener('change', requestApplyPartner);
+        sel.addEventListener('change', function(){
+          // Apply partner fields immediately
+          requestApplyPartner();
+          // For booking forms, also recalculate ledger with new partner context
+          // This triggers a new AJAX call with the updated partner code
+          if(isBookingForm){
+            requestLedgerCalc();
+          }
+        });
       }
     }
 
@@ -1348,6 +1365,7 @@ JS;
 .tcbf-ledger-partner .tcbf-ledger-info { text-align: right; }
 .tcbf-ledger-partner .tcbf-ledger-pct { font-size: 13px; color: #14532d; }
 .tcbf-ledger-partner .tcbf-ledger-amt { font-size: 18px; font-weight: 700; color: #14532d; }
+.tcbf-ledger-partner .tcbf-ledger-coupon-note { display: block; font-size: 11px; color: #64748b; font-weight: 400; font-style: italic; margin-top: 2px; }
 .tcbf-ledger-total {
   padding-top: 12px;
   margin-top: 8px;

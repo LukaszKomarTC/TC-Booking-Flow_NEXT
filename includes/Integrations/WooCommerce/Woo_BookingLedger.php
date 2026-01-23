@@ -138,20 +138,23 @@ class Woo_BookingLedger {
 		);
 
 		// Return simplified response for JS
+		// IMPORTANT: total_after_eb is the cart price (EB-only), total_after_partner is preview only
 		wp_send_json_success( [
-			'base_price'      => round( $ledger['base_price'], 2 ),
-			'days_before'     => $ledger['days_before'],
-			'eb_pct'          => round( $ledger['eb_discount_pct'], 2 ),
-			'eb_amount'       => round( $ledger['eb_discount_amount'], 2 ),
-			'partner_pct'     => ! empty( $ledger['partner']['active'] ) ? (float) ( $ledger['partner']['discount_pct'] ?? 0 ) : 0,
-			'partner_amount'  => round( $ledger['partner_discount_amount'], 2 ),
-			'commission_pct'  => ! empty( $ledger['partner']['active'] ) ? (float) ( $ledger['partner']['commission_pct'] ?? 0 ) : 0,
-			'commission'      => round( $ledger['partner_commission'], 2 ),
-			'total'           => round( $ledger['total_client'], 2 ),
-			'partner_active'  => ! empty( $ledger['partner']['active'] ),
-			'partner_code'    => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['code'] ?? '' ) : '',
-			'partner_email'   => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['partner_email'] ?? '' ) : '',
-			'partner_user_id' => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['partner_user_id'] ?? 0 ) : 0,
+			'base_price'         => round( $ledger['base_price'], 2 ),
+			'days_before'        => $ledger['days_before'],
+			'eb_pct'             => round( $ledger['eb_discount_pct'], 2 ),
+			'eb_amount'          => round( $ledger['eb_discount_amount'], 2 ),
+			'partner_pct'        => ! empty( $ledger['partner']['active'] ) ? (float) ( $ledger['partner']['discount_pct'] ?? 0 ) : 0,
+			'partner_amount'     => round( $ledger['partner_discount_amount'], 2 ),
+			'commission_pct'     => ! empty( $ledger['partner']['active'] ) ? (float) ( $ledger['partner']['commission_pct'] ?? 0 ) : 0,
+			'commission'         => round( $ledger['partner_commission'], 2 ),
+			'total_after_eb'     => round( $ledger['total_after_eb'], 2 ),     // Cart price (EB applied)
+			'total_after_partner'=> round( $ledger['total_after_partner'], 2 ), // Preview only (partner via coupon)
+			'total'              => round( $ledger['total_after_partner'], 2 ), // Backward compat alias
+			'partner_active'     => ! empty( $ledger['partner']['active'] ),
+			'partner_code'       => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['code'] ?? '' ) : '',
+			'partner_email'      => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['partner_email'] ?? '' ) : '',
+			'partner_user_id'    => ! empty( $ledger['partner']['active'] ) ? ( $ledger['partner']['partner_user_id'] ?? 0 ) : 0,
 		] );
 	}
 
@@ -162,19 +165,21 @@ class Woo_BookingLedger {
 	 */
 	private static function get_empty_ledger_response() : array {
 		return [
-			'base_price'      => 0,
-			'days_before'     => 0,
-			'eb_pct'          => 0,
-			'eb_amount'       => 0,
-			'partner_pct'     => 0,
-			'partner_amount'  => 0,
-			'commission_pct'  => 0,
-			'commission'      => 0,
-			'total'           => 0,
-			'partner_active'  => false,
-			'partner_code'    => '',
-			'partner_email'   => '',
-			'partner_user_id' => 0,
+			'base_price'         => 0,
+			'days_before'        => 0,
+			'eb_pct'             => 0,
+			'eb_amount'          => 0,
+			'partner_pct'        => 0,
+			'partner_amount'     => 0,
+			'commission_pct'     => 0,
+			'commission'         => 0,
+			'total_after_eb'     => 0,
+			'total_after_partner'=> 0,
+			'total'              => 0,
+			'partner_active'     => false,
+			'partner_code'       => '',
+			'partner_email'      => '',
+			'partner_user_id'    => 0,
 		];
 	}
 
@@ -229,11 +234,13 @@ class Woo_BookingLedger {
 		);
 
 		// Store ledger values in cart item
+		// IMPORTANT: BK_LEDGER_TOTAL uses total_after_eb (EB-only price) for cart pricing
+		// Partner discount is coupon-based, NOT baked into cart item price
 		$cart_item_data[ self::BK_LEDGER_BASE ]        = $ledger['base_price'];
 		$cart_item_data[ self::BK_LEDGER_EB_PCT ]      = $ledger['eb_discount_pct'];
 		$cart_item_data[ self::BK_LEDGER_EB_AMOUNT ]   = $ledger['eb_discount_amount'];
-		$cart_item_data[ self::BK_LEDGER_PARTNER_AMT ] = $ledger['partner_discount_amount'];
-		$cart_item_data[ self::BK_LEDGER_TOTAL ]       = $ledger['total_client'];
+		$cart_item_data[ self::BK_LEDGER_PARTNER_AMT ] = $ledger['partner_discount_amount']; // For reporting only
+		$cart_item_data[ self::BK_LEDGER_TOTAL ]       = $ledger['total_after_eb']; // EB-only price for cart
 		$cart_item_data[ self::BK_LEDGER_COMMISSION ]  = $ledger['partner_commission'];
 		$cart_item_data[ self::BK_LEDGER_PROCESSED ]   = true;
 
@@ -358,7 +365,9 @@ class Woo_BookingLedger {
 			];
 		}
 
-		// Show partner discount if applicable
+		// Show partner discount preview if applicable
+		// Note: Partner discount is applied via WC coupon, NOT baked into item price
+		// This display is for informational purposes only
 		$partner_amount = $cart_item[ self::BK_LEDGER_PARTNER_AMT ] ?? 0;
 		if ( $partner_amount > 0 ) {
 			// Get partner code from lead using semantic field
@@ -368,7 +377,7 @@ class Woo_BookingLedger {
 			$code    = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_COUPON_CODE );
 
 			$item_data[] = [
-				'key'     => __( 'Partner Discount', 'tc-booking-flow-next' ),
+				'key'     => __( 'Partner Discount (via coupon)', 'tc-booking-flow-next' ),
 				'value'   => sprintf(
 					'-%s%s',
 					wc_price( $partner_amount ),
