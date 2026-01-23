@@ -479,30 +479,15 @@ final class Plugin {
 		}
 
 		// WooCommerce product page flow (booking products)
-		// TCBF-14: Populate EB% for booking products based on category rules
+		// TCBF-14: For booking products, EB% depends on the selected booking date.
+		// We cannot know the date at page load, so we return 0 here.
+		// The live ledger JS will calculate and set the actual EB% when
+		// the user selects a booking date. This prevents showing "EB active"
+		// before the user has made a selection.
+		// Note: EB rules are passed to JS via GF_JS.php for client-side calculation.
 		if ( function_exists('is_product') && is_product() ) {
-			$product_id = (int) get_queried_object_id();
-			if ( $product_id > 0 && class_exists( '\\TC_BF\\Domain\\ProductEBConfig' ) ) {
-				$eb_cfg = \TC_BF\Domain\ProductEBConfig::get_product_config( $product_id );
-
-				if ( ! empty( $eb_cfg['enabled'] ) && ! empty( $eb_cfg['steps'] ) ) {
-					// Calculate EB% based on a reasonable future booking date.
-					// Since we don't know the actual booking date at page load,
-					// we use the max EB% from the steps as an indicator that EB is available.
-					// The actual calculation happens in BookingLedger when added to cart.
-					$max_pct = 0.0;
-					foreach ( $eb_cfg['steps'] as $step ) {
-						$pct = (float) ( $step['pct'] ?? 0 );
-						if ( $pct > $max_pct ) {
-							$max_pct = $pct;
-						}
-					}
-
-					if ( $max_pct > 0 ) {
-						return $this->pct_to_gf_str( $max_pct );
-					}
-				}
-			}
+			// Return 0 - JS will calculate actual EB% based on selected date
+			return '0';
 		}
 
 		return $value;

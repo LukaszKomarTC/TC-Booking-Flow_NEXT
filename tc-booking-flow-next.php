@@ -72,9 +72,11 @@ add_action('plugins_loaded', function () {
 	// TCBF-11: Initialize consolidated event meta box
 	// TCBF-13: Initialize product category EB settings
 	// TCBF-14: Initialize form validator for admin notices
+	// TCBF-14: Initialize product category Partner settings
 	if ( is_admin() ) {
 		\TC_BF\Admin\Admin_Event_Meta::init();
 		\TC_BF\Admin\Admin_Product_Category_EB::init();
+		\TC_BF\Admin\Admin_Product_Category_Partner::init();
 		\TC_BF\Integrations\GravityForms\GF_FormValidator::init();
 	}
 });
