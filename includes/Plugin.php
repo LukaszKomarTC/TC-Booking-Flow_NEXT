@@ -161,6 +161,7 @@ final class Plugin {
 
 		add_filter('gform_pre_submission_filter',  [ $this, 'gf_partner_prepare_form' ], 10, 1);
 		add_action('wp_head',                      [ $this, 'output_form_field_css' ], 100); // CSS for enhanced fields
+		add_action('wp_head',                      [ $this, 'gf_output_partner_css' ], 101); // Partner UI CSS (unified)
 		add_action('wp_footer',                    [ $this, 'output_early_diagnostic' ], 5); // Early diagnostic
 		add_action('wp_footer',                    [ $this, 'gf_output_partner_js' ], 100);
 		add_action('wp_footer',                    [ $this, 'output_late_diagnostic' ], 200); // Late diagnostic
@@ -1023,6 +1024,10 @@ final class Plugin {
 
 	public function gf_output_partner_js() : void {
 		Integrations\GravityForms\GF_JS::output_partner_js();
+	}
+
+	public function gf_output_partner_css() : void {
+		Integrations\GravityForms\GF_JS::output_partner_css();
 	}
 
 	/**
