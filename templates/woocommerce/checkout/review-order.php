@@ -120,7 +120,7 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 							</div>
 							<?php endif; ?>
 							<div class="tcbf-pack-footer-line tcbf-pack-footer-total">
-								<span class="tcbf-pack-footer-label"><?php esc_html_e( 'Pack total', 'tc-booking-flow-next' ); ?></span>
+								<span class="tcbf-pack-footer-label"><?php echo esc_html( $pack_totals['total_label'] ?? __( 'Pack total', 'tc-booking-flow-next' ) ); ?></span>
 								<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $pack_totals['pack_total'] ) ); ?></span>
 							</div>
 						</div>
@@ -142,6 +142,11 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 				$_product = apply_filters( 'woocommerce_cart_item_product', $cart_item['data'], $cart_item, $cart_item_key );
 
 				if ( $_product && $_product->exists() && $cart_item['quantity'] > 0 && apply_filters( 'woocommerce_cart_item_visible', true, $cart_item, $cart_item_key ) ) {
+					// Check if this is a booking product with EB (has our ledger data)
+					$is_booking_with_eb = ! empty( $cart_item['_tcbf_ledger_processed'] );
+					$booking_eb_amount = $is_booking_with_eb ? (float) ( $cart_item['_tcbf_ledger_eb_amount'] ?? 0 ) : 0;
+					$booking_base = $is_booking_with_eb ? (float) ( $cart_item['_tcbf_ledger_base'] ?? 0 ) : 0;
+					$booking_total = $is_booking_with_eb ? (float) ( $cart_item['_tcbf_ledger_total'] ?? 0 ) : 0;
 					?>
 					<tr class="<?php echo esc_attr( apply_filters( 'woocommerce_cart_item_class', 'cart_item', $cart_item, $cart_item_key ) ); ?>">
 						<td class="product-name">
@@ -159,6 +164,33 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 						</td>
 					</tr>
 					<?php
+					// Render booking product footer if has EB discount
+					if ( $is_booking_with_eb && $booking_eb_amount > 0 && $booking_base > 0 ) :
+						// Labels
+						$base_label = __( 'Price before EB', 'tc-booking-flow-next' );
+						$eb_label = __( 'Early booking discount', 'tc-booking-flow-next' );
+						$total_label = __( 'Total', 'tc-booking-flow-next' );
+						?>
+						<tr class="tcbf-pack-footer-row tcbf-booking-footer-row">
+							<td colspan="2" class="tcbf-pack-footer-cell">
+								<div class="tcbf-pack-footer tcbf-pack-footer--checkout tcbf-pack-footer--booking">
+									<div class="tcbf-pack-footer-line tcbf-pack-footer-base">
+										<span class="tcbf-pack-footer-label"><?php echo esc_html( $base_label ); ?></span>
+										<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $booking_base ) ); ?></span>
+									</div>
+									<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">
+										<span class="tcbf-pack-footer-label"><?php echo esc_html( $eb_label ); ?></span>
+										<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-<?php echo wp_kses_post( wc_price( $booking_eb_amount ) ); ?></span>
+									</div>
+									<div class="tcbf-pack-footer-line tcbf-pack-footer-total">
+										<span class="tcbf-pack-footer-label"><?php echo esc_html( $total_label ); ?></span>
+										<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $booking_total ) ); ?></span>
+									</div>
+								</div>
+							</td>
+						</tr>
+						<?php
+					endif;
 				}
 			endforeach;
 			?>
