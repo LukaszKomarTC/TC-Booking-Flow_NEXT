@@ -43,6 +43,13 @@ class Woo_BookingLedger {
 	const GF_FIELD_NOTIFY = '13.1';
 
 	/**
+	 * GF field IDs for client name (booking form 55)
+	 * Name field 11 with subfields: .3 = First, .6 = Last
+	 */
+	const GF_FIELD_FIRST_NAME = '11.3';
+	const GF_FIELD_LAST_NAME  = '11.6';
+
+	/**
 	 * Get the configured booking form ID
 	 *
 	 * Uses admin setting for flexibility (default 55).
@@ -275,14 +282,23 @@ class Woo_BookingLedger {
 		$cart_item_data[ self::BK_LEDGER_PROCESSED ]   = true;
 
 		// Store client name for participant badge (same pattern as event products)
-		$client_name = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_USER_NAME );
-		if ( ! empty( $client_name ) ) {
-			$cart_item_data[ self::BK_PARTICIPANT_NAME ] = trim( $client_name );
+		// GF Name field has subfields: .3 = First, .6 = Last
+		$first_name = trim( (string) ( $lead[ self::GF_FIELD_FIRST_NAME ] ?? '' ) );
+		$last_name  = trim( (string) ( $lead[ self::GF_FIELD_LAST_NAME ] ?? '' ) );
+		$client_name = trim( $first_name . ' ' . $last_name );
+		if ( $client_name !== '' ) {
+			$cart_item_data[ self::BK_PARTICIPANT_NAME ] = $client_name;
 		}
 
-		// Store notification flag (email confirmation checkbox)
-		$notify_checked = ! empty( $lead[ self::GF_FIELD_NOTIFY ] ?? '' );
-		$cart_item_data[ self::BK_NOTIFY_PARTICIPANT ] = $notify_checked ? '1' : '0';
+		// Check if this reservation was made by admin/partner (not regular client)
+		// Notification badge only shows for partner/admin reservations
+		$is_partner_reservation = self::is_partner_or_admin_reservation( $lead, $form_id );
+
+		// Store notification flag (email confirmation checkbox) - only for partner/admin reservations
+		if ( $is_partner_reservation ) {
+			$notify_checked = ! empty( $lead[ self::GF_FIELD_NOTIFY ] ?? '' );
+			$cart_item_data[ self::BK_NOTIFY_PARTICIPANT ] = $notify_checked ? '1' : '0';
+		}
 
 		// Populate GF lead with ledger data
 		BookingLedger::populate_lead_with_ledger( $lead, $ledger, $form_id );
@@ -450,6 +466,45 @@ class Woo_BookingLedger {
 
 		// Fall back to standard resolution
 		return PartnerResolver::resolve_partner_context( $form_id );
+	}
+
+	/**
+	 * Check if reservation was made by partner or admin
+	 *
+	 * Returns true if:
+	 * - Admin override field has a value (admin making reservation)
+	 * - Current user is admin
+	 * - Current user is partner (tcbf_partner role)
+	 *
+	 * Used to determine if notification badge should be shown.
+	 *
+	 * @param array $lead    GF lead data
+	 * @param int   $form_id Form ID
+	 * @return bool
+	 */
+	private static function is_partner_or_admin_reservation( array $lead, int $form_id ) : bool {
+
+		// Check if admin is making reservation (override field has value)
+		$admin_field = GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE );
+		if ( $admin_field > 0 ) {
+			$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
+			if ( $override_code !== '' && current_user_can( 'administrator' ) ) {
+				return true;
+			}
+		}
+
+		// Check if current user is admin
+		if ( current_user_can( 'administrator' ) ) {
+			return true;
+		}
+
+		// Check if current user is partner
+		$user = wp_get_current_user();
+		if ( $user && in_array( 'tcbf_partner', (array) $user->roles, true ) ) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
