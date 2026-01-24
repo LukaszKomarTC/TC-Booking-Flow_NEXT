@@ -58,11 +58,13 @@ class Woo_BookingLedger {
 		// Apply ledger pricing during cart calculations
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'apply_ledger_to_cart' ], 25, 1 );
 
-		// Display EB breakdown after cart item name (cart and mini-cart)
-		// Note: Using only woocommerce_after_cart_item_name, NOT woocommerce_cart_item_name
-		// to avoid duplicate rendering
-		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_breakdown' ], 15, 2 );
-		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_eb_breakdown' ], 15, 2 );
+		// Display small EB badge after cart item name (like event products)
+		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
+		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
+
+		// Render booking footer rows (price breakdown) as separate table rows
+		// Same pattern as event pack footers
+		add_action( 'woocommerce_cart_contents', [ __CLASS__, 'render_booking_footer_rows' ], 15 );
 
 		// Persist ledger to order
 		add_action( 'woocommerce_checkout_create_order_line_item', [ __CLASS__, 'persist_ledger_to_order' ], 25, 4 );
@@ -463,19 +465,15 @@ class Woo_BookingLedger {
 	}
 
 	/**
-	 * Render EB price breakdown after cart item name
+	 * Render small EB badge after cart item name (like event products)
 	 *
-	 * Shows price summary similar to pack footers:
-	 * - Price before EB (base)
-	 * - Early booking discount
-	 * - Total
-	 *
-	 * Partner discount is NOT shown - it's applied via WC coupon.
+	 * Shows just the percentage and amount in a gradient badge.
+	 * The full breakdown is rendered in a separate footer row.
 	 *
 	 * @param array       $cart_item     Cart item data
 	 * @param string|null $cart_item_key Cart item key
 	 */
-	public static function render_cart_eb_breakdown( $cart_item, $cart_item_key = null ) : void {
+	public static function render_cart_eb_badge( $cart_item, $cart_item_key = null ) : void {
 
 		// Handle both cart and mini-cart signatures (mini-cart passes reversed params)
 		if ( is_string( $cart_item ) && is_array( $cart_item_key ) ) {
@@ -488,18 +486,48 @@ class Woo_BookingLedger {
 			return;
 		}
 
-		$base      = (float) ( $cart_item[ self::BK_LEDGER_BASE ] ?? 0 );
+		$eb_pct    = (float) ( $cart_item[ self::BK_LEDGER_EB_PCT ] ?? 0 );
 		$eb_amount = (float) ( $cart_item[ self::BK_LEDGER_EB_AMOUNT ] ?? 0 );
-		$total     = (float) ( $cart_item[ self::BK_LEDGER_TOTAL ] ?? 0 );
 
 		// Only show if EB was applied
-		if ( $eb_amount <= 0 || $base <= 0 ) {
+		if ( $eb_amount <= 0 || $eb_pct <= 0 ) {
+			return;
+		}
+
+		// Multilingual label (same as event products)
+		$label = '[:en]EB discount[:es]Descuento RA[:]';
+		if ( function_exists( 'tc_sc_event_tr' ) ) {
+			$label = tc_sc_event_tr( $label );
+		}
+
+		$amount_formatted = wc_price( $eb_amount );
+
+		// Output small badge (same structure as event products)
+		echo '<div class="tcbf-cart-item-footer">';
+		echo '<div class="tcbf-cart-eb-badge">';
+		echo '<span class="tcbf-cart-eb-badge__text">';
+		echo esc_html( number_format_i18n( $eb_pct, 0 ) ) . '% | ';
+		echo wp_kses_post( $amount_formatted ) . ' ' . esc_html( $label );
+		echo '</span>';
+		echo '</div>';
+		echo '</div>';
+	}
+
+	/**
+	 * Render booking footer rows with price breakdown
+	 *
+	 * Same pattern as event pack footers - renders as separate table rows.
+	 * Uses JavaScript to position them after their booking item.
+	 */
+	public static function render_booking_footer_rows() : void {
+		$cart = WC()->cart;
+		if ( ! $cart ) {
 			return;
 		}
 
 		// Multilingual labels
-		$base_label = '[:en]Price before EB[:es]Precio antes de RA[:]';
-		$eb_label   = '[:en]Early booking discount[:es]Descuento reserva anticipada[:]';
+		$base_label  = '[:en]Price before EB[:es]Precio antes de RA[:]';
+		$eb_label    = '[:en]Early booking discount[:es]Descuento reserva anticipada[:]';
 		$total_label = '[:en]Total[:es]Total[:]';
 
 		if ( function_exists( 'tc_sc_event_tr' ) ) {
@@ -508,28 +536,80 @@ class Woo_BookingLedger {
 			$total_label = tc_sc_event_tr( $total_label );
 		}
 
-		// Output breakdown with pack footer styling
-		echo '<div class="tcbf-pack-footer tcbf-pack-footer--booking">';
+		$booking_footers = [];
 
-		// Base price row
-		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
-		echo '<span class="tcbf-pack-footer-label">' . esc_html( $base_label ) . '</span>';
-		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $base ) ) . '</span>';
-		echo '</div>';
+		// Find all booking items with EB discount
+		foreach ( $cart->get_cart() as $cart_key => $cart_item ) {
+			if ( empty( $cart_item[ self::BK_LEDGER_PROCESSED ] ) ) {
+				continue;
+			}
 
-		// EB discount row
-		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">';
-		echo '<span class="tcbf-pack-footer-label">' . esc_html( $eb_label ) . '</span>';
-		echo '<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-' . wp_kses_post( wc_price( $eb_amount ) ) . '</span>';
-		echo '</div>';
+			$base      = (float) ( $cart_item[ self::BK_LEDGER_BASE ] ?? 0 );
+			$eb_amount = (float) ( $cart_item[ self::BK_LEDGER_EB_AMOUNT ] ?? 0 );
+			$total     = (float) ( $cart_item[ self::BK_LEDGER_TOTAL ] ?? 0 );
 
-		// Total row
-		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
-		echo '<span class="tcbf-pack-footer-label">' . esc_html( $total_label ) . '</span>';
-		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $total ) ) . '</span>';
-		echo '</div>';
+			// Only show footer if EB was applied
+			if ( $eb_amount <= 0 || $base <= 0 ) {
+				continue;
+			}
 
-		echo '</div>';
+			$booking_footers[ $cart_key ] = [
+				'base'      => $base,
+				'eb_amount' => $eb_amount,
+				'total'     => $total,
+			];
+		}
+
+		if ( empty( $booking_footers ) ) {
+			return;
+		}
+
+		// Output footer rows for each booking
+		foreach ( $booking_footers as $cart_key => $data ) {
+			?>
+			<tr class="tcbf-pack-footer-row tcbf-booking-footer-row" data-tcbf-cart-key="<?php echo esc_attr( $cart_key ); ?>">
+				<td colspan="6" class="tcbf-pack-footer-cell">
+					<div class="tcbf-pack-footer tcbf-pack-footer--booking">
+						<div class="tcbf-pack-footer-line tcbf-pack-footer-base">
+							<span class="tcbf-pack-footer-label"><?php echo esc_html( $base_label ); ?></span>
+							<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $data['base'] ) ); ?></span>
+						</div>
+						<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">
+							<span class="tcbf-pack-footer-label"><?php echo esc_html( $eb_label ); ?></span>
+							<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-<?php echo wp_kses_post( wc_price( $data['eb_amount'] ) ); ?></span>
+						</div>
+						<div class="tcbf-pack-footer-line tcbf-pack-footer-total">
+							<span class="tcbf-pack-footer-label"><?php echo esc_html( $total_label ); ?></span>
+							<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $data['total'] ) ); ?></span>
+						</div>
+					</div>
+				</td>
+			</tr>
+			<?php
+		}
+
+		// JavaScript to position footer rows after their booking item
+		?>
+		<script>
+		(function() {
+			document.querySelectorAll('.tcbf-booking-footer-row').forEach(function(footerRow) {
+				var cartKey = footerRow.getAttribute('data-tcbf-cart-key');
+				// Find the cart item row by its cart_item_key
+				var itemRow = document.querySelector('tr.woocommerce-cart-form__cart-item[data-cart_item_key="' + cartKey + '"]');
+				if (!itemRow) {
+					// Fallback: try finding by cart key in remove link
+					var removeLink = document.querySelector('a.remove[data-cart_item_key="' + cartKey + '"]');
+					if (removeLink) {
+						itemRow = removeLink.closest('tr');
+					}
+				}
+				if (itemRow) {
+					itemRow.parentNode.insertBefore(footerRow, itemRow.nextSibling);
+				}
+			});
+		})();
+		</script>
+		<?php
 	}
 
 	/**
