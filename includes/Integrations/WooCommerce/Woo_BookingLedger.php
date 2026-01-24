@@ -64,6 +64,9 @@ class Woo_BookingLedger {
 	 * Initialize hooks
 	 */
 	public static function init() : void {
+		// Hardening: ensure _booking_id exists for WooCommerce Bookings (PHP 8+ strict)
+		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'ensure_booking_id_exists' ], 1, 1 );
+
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
 
@@ -104,6 +107,32 @@ class Woo_BookingLedger {
 		// AJAX endpoint for live ledger calculation (same logic as cart)
 		add_action( 'wp_ajax_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
 		add_action( 'wp_ajax_nopriv_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
+	}
+
+	/**
+	 * Ensure _booking_id exists in all booking cart items
+	 *
+	 * WooCommerce Bookings expects _booking_id to be set, even if 0.
+	 * PHP 8+ throws "Undefined array key" errors when it's missing.
+	 * This is a hardening layer to ensure the key always exists.
+	 *
+	 * @param \WC_Cart $cart WooCommerce cart object
+	 */
+	public static function ensure_booking_id_exists( $cart ) : void {
+		if ( ! $cart || ! is_a( $cart, 'WC_Cart' ) ) {
+			return;
+		}
+
+		foreach ( $cart->get_cart() as $cart_key => $item ) {
+			if ( empty( $item['booking'] ) || ! is_array( $item['booking'] ) ) {
+				continue;
+			}
+
+			// Use array_key_exists because 0 is a valid value
+			if ( ! array_key_exists( '_booking_id', $item['booking'] ) ) {
+				$cart->cart_contents[ $cart_key ]['booking']['_booking_id'] = 0;
+			}
+		}
 	}
 
 	/**

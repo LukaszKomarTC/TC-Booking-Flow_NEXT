@@ -715,6 +715,9 @@ final class Plugin {
 		$cart_item_meta_part = [];
 		$cart_item_meta_part['booking'] = wc_bookings_get_posted_data($sim_post_part, $product_part);
 
+		// WooCommerce Bookings expects _booking_id to exist (PHP 8+ strict)
+		$cart_item_meta_part['booking']['_booking_id'] = 0;
+
 		$cart_item_meta_part['booking'][self::BK_EVENT_ID]    = $event_id;
 		$cart_item_meta_part['booking'][self::BK_EVENT_TITLE] = $event_title;
 		$cart_item_meta_part['booking'][self::BK_ENTRY_ID]    = $entry_id;
@@ -856,6 +859,9 @@ final class Plugin {
 
 				$cart_item_meta_rental = [];
 				$cart_item_meta_rental['booking'] = wc_bookings_get_posted_data($sim_post_rental, $product_rental);
+
+				// WooCommerce Bookings expects _booking_id to exist (PHP 8+ strict)
+				$cart_item_meta_rental['booking']['_booking_id'] = 0;
 
 				$cart_item_meta_rental['booking'][self::BK_EVENT_ID]    = $event_id;
 				$cart_item_meta_rental['booking'][self::BK_EVENT_TITLE] = $event_title;
