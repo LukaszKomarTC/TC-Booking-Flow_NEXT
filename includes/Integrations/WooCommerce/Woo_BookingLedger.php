@@ -77,14 +77,14 @@ class Woo_BookingLedger {
 		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'filter_cart_item_data' ], 25, 2 );
 
 		// Display participant badge after cart item name (priority 10 = shows first, like event products)
+		// Note: Only in cart and mini-cart, NOT in checkout
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
-		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 
 		// Display notification badge after participant badge (priority 12)
+		// Note: Only in cart and mini-cart, NOT in checkout
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
-		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 
 		// Display small EB badge after cart item name (priority 15 = shows after participant badge)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
