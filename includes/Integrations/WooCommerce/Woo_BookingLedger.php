@@ -79,14 +79,17 @@ class Woo_BookingLedger {
 		// Display participant badge after cart item name (priority 10 = shows first, like event products)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
+		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 
 		// Display notification badge after participant badge (priority 12)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
+		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 
 		// Display small EB badge after cart item name (priority 15 = shows after participant badge)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
+		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
 
 		// Render booking footer rows (price breakdown) as separate table rows
 		// Same pattern as event pack footers
