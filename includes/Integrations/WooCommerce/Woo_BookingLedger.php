@@ -462,9 +462,13 @@ class Woo_BookingLedger {
 	}
 
 	/**
-	 * Render EB discount badge after cart item name
+	 * Render EB price breakdown after cart item name
 	 *
-	 * Styled exactly like Event products with gradient badge.
+	 * Shows price summary similar to pack footers:
+	 * - Price before EB (base)
+	 * - Early booking discount
+	 * - Total
+	 *
 	 * Partner discount is NOT shown - it's applied via WC coupon.
 	 *
 	 * @param array       $cart_item     Cart item data
@@ -483,39 +487,57 @@ class Woo_BookingLedger {
 			return;
 		}
 
+		$base      = (float) ( $cart_item[ self::BK_LEDGER_BASE ] ?? 0 );
 		$eb_amount = (float) ( $cart_item[ self::BK_LEDGER_EB_AMOUNT ] ?? 0 );
-		$eb_pct    = (float) ( $cart_item[ self::BK_LEDGER_EB_PCT ] ?? 0 );
+		$total     = (float) ( $cart_item[ self::BK_LEDGER_TOTAL ] ?? 0 );
 
-		if ( $eb_amount <= 0 || $eb_pct <= 0 ) {
+		// Only show if EB was applied
+		if ( $eb_amount <= 0 || $base <= 0 ) {
 			return;
 		}
 
-		// Multilingual label (same as Event products)
-		$label = '[:en]EB discount[:es]Descuento RA[:]';
+		// Multilingual labels
+		$base_label = '[:en]Price before EB[:es]Precio antes de RA[:]';
+		$eb_label   = '[:en]Early booking discount[:es]Descuento reserva anticipada[:]';
+		$total_label = '[:en]Total[:es]Total[:]';
+
 		if ( function_exists( 'tc_sc_event_tr' ) ) {
-			$label = tc_sc_event_tr( $label );
+			$base_label  = tc_sc_event_tr( $base_label );
+			$eb_label    = tc_sc_event_tr( $eb_label );
+			$total_label = tc_sc_event_tr( $total_label );
 		}
 
-		$amount_formatted = wc_price( $eb_amount );
+		// Output breakdown with pack footer styling
+		echo '<div class="tcbf-pack-footer tcbf-pack-footer--booking">';
 
-		// Output badge with same structure as Event products
-		echo '<div class="tcbf-cart-item-footer">';
-		echo '<div class="tcbf-cart-eb-badge">';
-		echo '<span class="tcbf-cart-eb-badge__text">';
-		echo esc_html( number_format_i18n( $eb_pct, 0 ) ) . '% | ';
-		echo wp_kses_post( $amount_formatted ) . ' ' . esc_html( $label );
-		echo '</span>';
+		// Base price row
+		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
+		echo '<span class="tcbf-pack-footer-label">' . esc_html( $base_label ) . '</span>';
+		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $base ) ) . '</span>';
 		echo '</div>';
+
+		// EB discount row
+		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">';
+		echo '<span class="tcbf-pack-footer-label">' . esc_html( $eb_label ) . '</span>';
+		echo '<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-' . wp_kses_post( wc_price( $eb_amount ) ) . '</span>';
+		echo '</div>';
+
+		// Total row
+		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
+		echo '<span class="tcbf-pack-footer-label">' . esc_html( $total_label ) . '</span>';
+		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $total ) ) . '</span>';
+		echo '</div>';
+
 		echo '</div>';
 	}
 
 	/**
-	 * Append EB badge to cart item name (for checkout table)
+	 * Append EB breakdown to cart item name (for checkout table)
 	 *
 	 * @param string $name         Product name
 	 * @param array  $cart_item    Cart item data
 	 * @param string $cart_item_key Cart item key
-	 * @return string Modified name with badge
+	 * @return string Modified name with breakdown
 	 */
 	public static function append_eb_badge_to_name( string $name, array $cart_item, string $cart_item_key ) : string {
 
@@ -523,36 +545,51 @@ class Woo_BookingLedger {
 			return $name;
 		}
 
+		$base      = (float) ( $cart_item[ self::BK_LEDGER_BASE ] ?? 0 );
 		$eb_amount = (float) ( $cart_item[ self::BK_LEDGER_EB_AMOUNT ] ?? 0 );
-		$eb_pct    = (float) ( $cart_item[ self::BK_LEDGER_EB_PCT ] ?? 0 );
+		$total     = (float) ( $cart_item[ self::BK_LEDGER_TOTAL ] ?? 0 );
 
-		if ( $eb_amount <= 0 || $eb_pct <= 0 ) {
+		// Only show if EB was applied
+		if ( $eb_amount <= 0 || $base <= 0 ) {
 			return $name;
 		}
 
-		// Multilingual label
-		$label = '[:en]EB discount[:es]Descuento RA[:]';
+		// Multilingual labels
+		$base_label  = '[:en]Price before EB[:es]Precio antes de RA[:]';
+		$eb_label    = '[:en]Early booking discount[:es]Descuento reserva anticipada[:]';
+		$total_label = '[:en]Total[:es]Total[:]';
+
 		if ( function_exists( 'tc_sc_event_tr' ) ) {
-			$label = tc_sc_event_tr( $label );
+			$base_label  = tc_sc_event_tr( $base_label );
+			$eb_label    = tc_sc_event_tr( $eb_label );
+			$total_label = tc_sc_event_tr( $total_label );
 		}
 
-		$amount_formatted = wc_price( $eb_amount );
+		// Build breakdown HTML
+		$breakdown = '<div class="tcbf-pack-footer tcbf-pack-footer--booking">';
 
-		// Append badge after name
-		$badge = '<div class="tcbf-cart-item-footer">';
-		$badge .= '<div class="tcbf-cart-eb-badge">';
-		$badge .= '<span class="tcbf-cart-eb-badge__text">';
-		$badge .= esc_html( number_format_i18n( $eb_pct, 0 ) ) . '% | ';
-		$badge .= wp_kses_post( $amount_formatted ) . ' ' . esc_html( $label );
-		$badge .= '</span>';
-		$badge .= '</div>';
-		$badge .= '</div>';
+		$breakdown .= '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
+		$breakdown .= '<span class="tcbf-pack-footer-label">' . esc_html( $base_label ) . '</span>';
+		$breakdown .= '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $base ) ) . '</span>';
+		$breakdown .= '</div>';
 
-		return $name . $badge;
+		$breakdown .= '<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">';
+		$breakdown .= '<span class="tcbf-pack-footer-label">' . esc_html( $eb_label ) . '</span>';
+		$breakdown .= '<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-' . wp_kses_post( wc_price( $eb_amount ) ) . '</span>';
+		$breakdown .= '</div>';
+
+		$breakdown .= '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
+		$breakdown .= '<span class="tcbf-pack-footer-label">' . esc_html( $total_label ) . '</span>';
+		$breakdown .= '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $total ) ) . '</span>';
+		$breakdown .= '</div>';
+
+		$breakdown .= '</div>';
+
+		return $name . $breakdown;
 	}
 
 	/**
-	 * Render EB badge in order item display
+	 * Render EB breakdown in order item display
 	 *
 	 * Shows on thank you page, order emails, and admin order view.
 	 *
@@ -569,33 +606,50 @@ class Woo_BookingLedger {
 		}
 
 		// Check for our ledger meta
-		$eb_pct    = (float) $item->get_meta( '_tcbf_ledger_eb_pct' );
+		$base      = (float) $item->get_meta( '_tcbf_ledger_base' );
 		$eb_amount = (float) $item->get_meta( '_tcbf_ledger_eb_amount' );
+		$total     = (float) $item->get_meta( '_tcbf_ledger_total' );
 
-		if ( $eb_amount <= 0 || $eb_pct <= 0 ) {
+		// Only show if EB was applied
+		if ( $eb_amount <= 0 || $base <= 0 ) {
 			return;
 		}
 
-		// Multilingual label
-		$label = '[:en]EB discount[:es]Descuento RA[:]';
+		// Multilingual labels
+		$base_label  = '[:en]Price before EB[:es]Precio antes de RA[:]';
+		$eb_label    = '[:en]Early booking discount[:es]Descuento reserva anticipada[:]';
+		$total_label = '[:en]Total[:es]Total[:]';
+
 		if ( function_exists( 'tc_sc_event_tr' ) ) {
-			$label = tc_sc_event_tr( $label );
+			$base_label  = tc_sc_event_tr( $base_label );
+			$eb_label    = tc_sc_event_tr( $eb_label );
+			$total_label = tc_sc_event_tr( $total_label );
 		}
 
 		if ( $plain_text ) {
 			// Plain text for emails
-			echo "\n" . esc_html( $label ) . ': -' . esc_html( number_format_i18n( $eb_pct, 0 ) ) . '% (-' . wp_strip_all_tags( wc_price( $eb_amount ) ) . ")\n";
+			echo "\n" . esc_html( $base_label ) . ': ' . wp_strip_all_tags( wc_price( $base ) ) . "\n";
+			echo esc_html( $eb_label ) . ': -' . wp_strip_all_tags( wc_price( $eb_amount ) ) . "\n";
+			echo esc_html( $total_label ) . ': ' . wp_strip_all_tags( wc_price( $total ) ) . "\n";
 		} else {
-			// HTML badge (same style as cart)
-			$amount_formatted = wc_price( $eb_amount );
+			// HTML breakdown with pack footer styling
+			echo '<div class="tcbf-pack-footer tcbf-pack-footer--booking">';
 
-			echo '<div class="tcbf-cart-item-footer tcbf-order-item-eb">';
-			echo '<div class="tcbf-cart-eb-badge">';
-			echo '<span class="tcbf-cart-eb-badge__text">';
-			echo esc_html( number_format_i18n( $eb_pct, 0 ) ) . '% | ';
-			echo wp_kses_post( $amount_formatted ) . ' ' . esc_html( $label );
-			echo '</span>';
+			echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
+			echo '<span class="tcbf-pack-footer-label">' . esc_html( $base_label ) . '</span>';
+			echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $base ) ) . '</span>';
 			echo '</div>';
+
+			echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">';
+			echo '<span class="tcbf-pack-footer-label">' . esc_html( $eb_label ) . '</span>';
+			echo '<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-' . wp_kses_post( wc_price( $eb_amount ) ) . '</span>';
+			echo '</div>';
+
+			echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
+			echo '<span class="tcbf-pack-footer-label">' . esc_html( $total_label ) . '</span>';
+			echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $total ) ) . '</span>';
+			echo '</div>';
+
 			echo '</div>';
 		}
 	}
