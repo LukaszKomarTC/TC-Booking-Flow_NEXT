@@ -52,6 +52,9 @@ class Woo_BookingLedger {
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
 
+		// Apply partner coupon after cart item is added (coupon-based partner discount)
+		add_action( 'woocommerce_add_to_cart', [ __CLASS__, 'maybe_apply_partner_coupon_after_add' ], 25, 6 );
+
 		// Apply ledger pricing during cart calculations
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'apply_ledger_to_cart' ], 25, 1 );
 
@@ -261,6 +264,123 @@ class Woo_BookingLedger {
 		] );
 
 		return $cart_item_data;
+	}
+
+	/**
+	 * Apply partner coupon after cart item is added
+	 *
+	 * This is called after a booking item is successfully added to the cart.
+	 * If the booking has a partner context (via admin override or logged-in partner),
+	 * we apply the partner's WooCommerce coupon to the cart.
+	 *
+	 * Partner discount is coupon-based, NOT baked into cart item price.
+	 * This ensures the discount appears correctly in cart totals and checkout.
+	 *
+	 * @param string $cart_item_key Cart item key
+	 * @param int    $product_id    Product ID
+	 * @param int    $quantity      Quantity
+	 * @param int    $variation_id  Variation ID
+	 * @param array  $variation     Variation data
+	 * @param array  $cart_item_data Cart item data
+	 */
+	public static function maybe_apply_partner_coupon_after_add( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) : void {
+
+		// Check if this is a booking item from our form
+		if ( empty( $cart_item_data['_gravity_form_lead'] ) ) {
+			return;
+		}
+
+		$lead    = $cart_item_data['_gravity_form_lead'];
+		$form_id = (int) ( $lead['form_id'] ?? 0 );
+
+		// Only process for our configured booking form
+		if ( $form_id !== self::get_booking_form_id() ) {
+			return;
+		}
+
+		// Get the partner coupon code from the lead
+		$coupon_code = '';
+
+		// First check admin override
+		$admin_field = GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_PARTNER_OVERRIDE_CODE );
+		if ( $admin_field > 0 ) {
+			$override_code = trim( (string) ( $lead[ (string) $admin_field ] ?? '' ) );
+			if ( $override_code !== '' && current_user_can( 'administrator' ) ) {
+				$coupon_code = $override_code;
+			}
+		}
+
+		// Then check coupon code field
+		if ( $coupon_code === '' ) {
+			$coupon_field = GF_SemanticFields::field_id( $form_id, GF_SemanticFields::KEY_COUPON_CODE );
+			if ( $coupon_field > 0 ) {
+				$coupon_code = trim( (string) ( $lead[ (string) $coupon_field ] ?? '' ) );
+			}
+		}
+
+		// No coupon code to apply
+		if ( $coupon_code === '' ) {
+			return;
+		}
+
+		// Normalize coupon code
+		if ( function_exists( 'wc_format_coupon_code' ) ) {
+			$coupon_code = wc_format_coupon_code( $coupon_code );
+		} else {
+			$coupon_code = strtolower( trim( $coupon_code ) );
+		}
+
+		// Get cart instance
+		$cart = WC()->cart;
+		if ( ! $cart ) {
+			return;
+		}
+
+		// Check if coupon is already applied
+		$applied_coupons = array_map(
+			function( $c ) { return function_exists( 'wc_format_coupon_code' ) ? wc_format_coupon_code( $c ) : strtolower( $c ); },
+			(array) $cart->get_applied_coupons()
+		);
+
+		if ( in_array( $coupon_code, $applied_coupons, true ) ) {
+			Logger::log( 'woo.booking_ledger.coupon_already_applied', [
+				'coupon_code' => $coupon_code,
+			] );
+			return;
+		}
+
+		// Verify coupon exists before applying
+		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			$coupon_id = (int) wc_get_coupon_id_by_code( $coupon_code );
+			if ( $coupon_id <= 0 ) {
+				Logger::log( 'woo.booking_ledger.coupon_not_found', [
+					'coupon_code' => $coupon_code,
+				] );
+				return;
+			}
+		}
+
+		// Apply the coupon
+		$result = $cart->apply_coupon( $coupon_code );
+
+		Logger::log( 'woo.booking_ledger.coupon_applied', [
+			'coupon_code' => $coupon_code,
+			'result'      => $result ? 'success' : 'failed',
+			'product_id'  => $product_id,
+		] );
+
+		// Persist coupon + totals immediately (like Event form does)
+		if ( $result ) {
+			if ( method_exists( $cart, 'calculate_totals' ) ) {
+				$cart->calculate_totals();
+			}
+			if ( method_exists( $cart, 'set_session' ) ) {
+				$cart->set_session();
+			}
+			if ( WC()->session && method_exists( WC()->session, 'save_data' ) ) {
+				WC()->session->save_data();
+			}
+		}
 	}
 
 	/**
