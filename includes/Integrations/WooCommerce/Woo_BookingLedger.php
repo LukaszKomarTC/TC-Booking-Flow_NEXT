@@ -67,6 +67,11 @@ class Woo_BookingLedger {
 		// Hardening: ensure _booking_id exists for WooCommerce Bookings (PHP 8+ strict)
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'ensure_booking_id_exists' ], 1, 1 );
 
+		// Hardening: clear WC Bookings availability cache before checkout validation
+		// This prevents stale/corrupted cache data from causing "string - int" errors
+		add_action( 'woocommerce_checkout_process', [ __CLASS__, 'clear_booking_availability_cache' ], 1 );
+		add_action( 'woocommerce_store_api_checkout_update_order_from_request', [ __CLASS__, 'clear_booking_availability_cache' ], 1 );
+
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
 
@@ -133,6 +138,56 @@ class Woo_BookingLedger {
 				$cart->cart_contents[ $cart_key ]['booking']['_booking_id'] = 0;
 			}
 		}
+	}
+
+	/**
+	 * Clear WooCommerce Bookings availability cache before checkout validation
+	 *
+	 * WC Bookings caches availability data internally. When TCBF checks bike availability
+	 * during form population, this cache may get populated with data that later causes
+	 * "Unsupported operand types: string - int" errors during checkout validation.
+	 *
+	 * This method clears relevant caches and resets product objects to ensure
+	 * fresh availability data is used during checkout.
+	 */
+	public static function clear_booking_availability_cache() : void {
+		if ( ! WC() || ! WC()->cart ) {
+			return;
+		}
+
+		$cart = WC()->cart;
+
+		// Clear WC Bookings availability transients for cart products
+		foreach ( $cart->get_cart() as $item ) {
+			$product_id = $item['product_id'] ?? 0;
+			if ( $product_id <= 0 ) {
+				continue;
+			}
+
+			// Clear product-specific availability transients
+			delete_transient( 'wc_booking_availability_rules_' . $product_id );
+			delete_transient( 'book_dr_' . $product_id );
+
+			// Clear booking availability slots transient
+			$booking = $item['booking'] ?? [];
+			if ( ! empty( $booking['_start_date'] ) && ! empty( $booking['_end_date'] ) ) {
+				$start = (int) $booking['_start_date'];
+				$end = (int) $booking['_end_date'];
+				delete_transient( 'book_ts_' . md5( http_build_query( [ $product_id, $start, $end ] ) ) );
+			}
+
+			// Reset the product object cache to force fresh data
+			$cache_key = \WC_Cache_Helper::get_cache_prefix( 'products' ) . 'product_' . $product_id;
+			wp_cache_delete( $cache_key, 'products' );
+		}
+
+		// Clear global booking slots cache if exists
+		delete_transient( 'wc_bookings_global_availability_rules' );
+
+		Logger::log( 'booking.availability_cache.cleared', [
+			'cart_items' => count( $cart->get_cart() ),
+			'context'    => current_action(),
+		] );
 	}
 
 	/**
