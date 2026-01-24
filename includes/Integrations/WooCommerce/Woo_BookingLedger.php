@@ -34,6 +34,13 @@ class Woo_BookingLedger {
 	const BK_LEDGER_COMMISSION  = '_tcbf_ledger_commission';
 	const BK_LEDGER_PROCESSED   = '_tcbf_ledger_processed';
 	const BK_PARTICIPANT_NAME   = '_tcbf_participant_name';
+	const BK_NOTIFY_PARTICIPANT = '_tcbf_notify_participant';
+
+	/**
+	 * GF field ID for email confirmation checkbox (booking form 55)
+	 * This is the checkbox "Send email confirmation to client"
+	 */
+	const GF_FIELD_NOTIFY = '13.1';
 
 	/**
 	 * Get the configured booking form ID
@@ -59,9 +66,16 @@ class Woo_BookingLedger {
 		// Apply ledger pricing during cart calculations
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'apply_ledger_to_cart' ], 25, 1 );
 
+		// Filter out unwanted meta fields from cart item display (Client, Email, Confirmation, Partner)
+		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'filter_cart_item_data' ], 25, 2 );
+
 		// Display participant badge after cart item name (priority 10 = shows first, like event products)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
+
+		// Display notification badge after participant badge (priority 12)
+		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
+		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 
 		// Display small EB badge after cart item name (priority 15 = shows after participant badge)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
@@ -265,6 +279,10 @@ class Woo_BookingLedger {
 		if ( ! empty( $client_name ) ) {
 			$cart_item_data[ self::BK_PARTICIPANT_NAME ] = trim( $client_name );
 		}
+
+		// Store notification flag (email confirmation checkbox)
+		$notify_checked = ! empty( $lead[ self::GF_FIELD_NOTIFY ] ?? '' );
+		$cart_item_data[ self::BK_NOTIFY_PARTICIPANT ] = $notify_checked ? '1' : '0';
 
 		// Populate GF lead with ledger data
 		BookingLedger::populate_lead_with_ledger( $lead, $ledger, $form_id );
@@ -476,6 +494,52 @@ class Woo_BookingLedger {
 	}
 
 	/**
+	 * Filter cart item data to remove unwanted meta fields for booking products
+	 *
+	 * Removes: Client, Email, Confirmation, Partner/Booking source
+	 * These are now shown via badges or are internal fields.
+	 *
+	 * @param array $item_data Cart item data array
+	 * @param array $cart_item Cart item
+	 * @return array Filtered item data
+	 */
+	public static function filter_cart_item_data( array $item_data, array $cart_item ) : array {
+
+		// Only filter booking items with our ledger
+		if ( empty( $cart_item[ self::BK_LEDGER_PROCESSED ] ) ) {
+			return $item_data;
+		}
+
+		// Fields to hide (case-insensitive partial match)
+		$hidden_fields = [
+			'client',           // Client name - shown as participant badge
+			'email',            // Email address - internal
+			'confirmation',     // Email confirmation - shown as notify badge
+			'partner',          // Partner info - internal
+			'booking source',   // Booking source - internal
+		];
+
+		$filtered = [];
+		foreach ( $item_data as $data ) {
+			$name = isset( $data['name'] ) ? strtolower( (string) $data['name'] ) : '';
+
+			$should_hide = false;
+			foreach ( $hidden_fields as $hidden ) {
+				if ( strpos( $name, $hidden ) !== false ) {
+					$should_hide = true;
+					break;
+				}
+			}
+
+			if ( ! $should_hide ) {
+				$filtered[] = $data;
+			}
+		}
+
+		return $filtered;
+	}
+
+	/**
 	 * Render participant badge after cart item name (like event products)
 	 *
 	 * Shows "👤 Client Name" badge matching event product style.
@@ -508,6 +572,77 @@ class Woo_BookingLedger {
 		echo '<span class="tcbf-pack-participant-badge__icon">👤</span>';
 		echo '<span class="tcbf-pack-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
 		echo '</div>';
+	}
+
+	/**
+	 * Check if current user can see notification badge
+	 *
+	 * Only admins and partners can see the notification indicator.
+	 *
+	 * @return bool
+	 */
+	private static function can_see_notification_badge() : bool {
+		if ( current_user_can( 'administrator' ) ) {
+			return true;
+		}
+
+		// Check if user has partner role
+		$user = wp_get_current_user();
+		if ( $user && in_array( 'tcbf_partner', (array) $user->roles, true ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Render notification badge after participant badge (admin/partner only)
+	 *
+	 * Shows notification indicator matching event products pattern.
+	 *
+	 * @param array       $cart_item     Cart item data
+	 * @param string|null $cart_item_key Cart item key
+	 */
+	public static function render_cart_notify_badge( $cart_item, $cart_item_key = null ) : void {
+
+		// Handle both cart and mini-cart signatures (mini-cart passes reversed params)
+		if ( is_string( $cart_item ) && is_array( $cart_item_key ) ) {
+			$temp          = $cart_item;
+			$cart_item     = $cart_item_key;
+			$cart_item_key = $temp;
+		}
+
+		// Only process booking items with our ledger
+		if ( empty( $cart_item[ self::BK_LEDGER_PROCESSED ] ) ) {
+			return;
+		}
+
+		// Only show to admins and partners
+		if ( ! self::can_see_notification_badge() ) {
+			return;
+		}
+
+		// Get notification flag
+		$notify_flag = $cart_item[ self::BK_NOTIFY_PARTICIPANT ] ?? null;
+		if ( $notify_flag === null ) {
+			return;
+		}
+
+		$enabled = ( $notify_flag === '1' );
+
+		// Multilingual labels
+		$title_enabled  = '[:es]Notificación al participante: habilitada[:en]Participant notification: enabled[:]';
+		$title_disabled = '[:es]Notificación al participante: deshabilitada[:en]Participant notification: disabled[:]';
+
+		if ( function_exists( 'tc_sc_event_tr' ) ) {
+			$title_enabled  = tc_sc_event_tr( $title_enabled );
+			$title_disabled = tc_sc_event_tr( $title_disabled );
+		}
+
+		$class = $enabled ? 'tcbf-notify-badge is-yes' : 'tcbf-notify-badge is-no';
+		$title = $enabled ? $title_enabled : $title_disabled;
+
+		echo '<span class="' . esc_attr( $class ) . '" title="' . esc_attr( $title ) . '" aria-label="' . esc_attr( $title ) . '"></span>';
 	}
 
 	/**
@@ -762,6 +897,11 @@ class Woo_BookingLedger {
 		// Store participant name for order display
 		if ( ! empty( $values[ self::BK_PARTICIPANT_NAME ] ) ) {
 			$item->add_meta_data( '_tcbf_participant_name', $values[ self::BK_PARTICIPANT_NAME ] );
+		}
+
+		// Store notification flag for order display
+		if ( isset( $values[ self::BK_NOTIFY_PARTICIPANT ] ) ) {
+			$item->add_meta_data( '_tcbf_notify_participant', $values[ self::BK_NOTIFY_PARTICIPANT ] );
 		}
 
 		// Store partner attribution using semantic fields
