@@ -58,16 +58,17 @@ class Woo_BookingLedger {
 		// Apply ledger pricing during cart calculations
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'apply_ledger_to_cart' ], 25, 1 );
 
-		// Display EB badge after cart item name (styled like Event products)
-		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
-		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
-		add_filter( 'woocommerce_cart_item_name', [ __CLASS__, 'append_eb_badge_to_name' ], 20, 3 );
+		// Display EB breakdown after cart item name (cart and mini-cart)
+		// Note: Using only woocommerce_after_cart_item_name, NOT woocommerce_cart_item_name
+		// to avoid duplicate rendering
+		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_breakdown' ], 15, 2 );
+		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_eb_breakdown' ], 15, 2 );
 
 		// Persist ledger to order
 		add_action( 'woocommerce_checkout_create_order_line_item', [ __CLASS__, 'persist_ledger_to_order' ], 25, 4 );
 
-		// Display EB badge in order items (thank you page, order emails, admin)
-		add_action( 'woocommerce_order_item_meta_end', [ __CLASS__, 'render_order_item_eb_badge' ], 15, 4 );
+		// Display EB breakdown in order items (thank you page, order emails, admin)
+		add_action( 'woocommerce_order_item_meta_end', [ __CLASS__, 'render_order_item_eb_breakdown' ], 15, 4 );
 
 		// AJAX endpoint for live ledger calculation (same logic as cart)
 		add_action( 'wp_ajax_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
@@ -474,7 +475,7 @@ class Woo_BookingLedger {
 	 * @param array       $cart_item     Cart item data
 	 * @param string|null $cart_item_key Cart item key
 	 */
-	public static function render_cart_eb_badge( $cart_item, $cart_item_key = null ) : void {
+	public static function render_cart_eb_breakdown( $cart_item, $cart_item_key = null ) : void {
 
 		// Handle both cart and mini-cart signatures (mini-cart passes reversed params)
 		if ( is_string( $cart_item ) && is_array( $cart_item_key ) ) {
@@ -532,63 +533,6 @@ class Woo_BookingLedger {
 	}
 
 	/**
-	 * Append EB breakdown to cart item name (for checkout table)
-	 *
-	 * @param string $name         Product name
-	 * @param array  $cart_item    Cart item data
-	 * @param string $cart_item_key Cart item key
-	 * @return string Modified name with breakdown
-	 */
-	public static function append_eb_badge_to_name( string $name, array $cart_item, string $cart_item_key ) : string {
-
-		if ( empty( $cart_item[ self::BK_LEDGER_PROCESSED ] ) ) {
-			return $name;
-		}
-
-		$base      = (float) ( $cart_item[ self::BK_LEDGER_BASE ] ?? 0 );
-		$eb_amount = (float) ( $cart_item[ self::BK_LEDGER_EB_AMOUNT ] ?? 0 );
-		$total     = (float) ( $cart_item[ self::BK_LEDGER_TOTAL ] ?? 0 );
-
-		// Only show if EB was applied
-		if ( $eb_amount <= 0 || $base <= 0 ) {
-			return $name;
-		}
-
-		// Multilingual labels
-		$base_label  = '[:en]Price before EB[:es]Precio antes de RA[:]';
-		$eb_label    = '[:en]Early booking discount[:es]Descuento reserva anticipada[:]';
-		$total_label = '[:en]Total[:es]Total[:]';
-
-		if ( function_exists( 'tc_sc_event_tr' ) ) {
-			$base_label  = tc_sc_event_tr( $base_label );
-			$eb_label    = tc_sc_event_tr( $eb_label );
-			$total_label = tc_sc_event_tr( $total_label );
-		}
-
-		// Build breakdown HTML
-		$breakdown = '<div class="tcbf-pack-footer tcbf-pack-footer--booking">';
-
-		$breakdown .= '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
-		$breakdown .= '<span class="tcbf-pack-footer-label">' . esc_html( $base_label ) . '</span>';
-		$breakdown .= '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $base ) ) . '</span>';
-		$breakdown .= '</div>';
-
-		$breakdown .= '<div class="tcbf-pack-footer-line tcbf-pack-footer-eb">';
-		$breakdown .= '<span class="tcbf-pack-footer-label">' . esc_html( $eb_label ) . '</span>';
-		$breakdown .= '<span class="tcbf-pack-footer-value tcbf-pack-footer-discount">-' . wp_kses_post( wc_price( $eb_amount ) ) . '</span>';
-		$breakdown .= '</div>';
-
-		$breakdown .= '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
-		$breakdown .= '<span class="tcbf-pack-footer-label">' . esc_html( $total_label ) . '</span>';
-		$breakdown .= '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $total ) ) . '</span>';
-		$breakdown .= '</div>';
-
-		$breakdown .= '</div>';
-
-		return $name . $breakdown;
-	}
-
-	/**
 	 * Render EB breakdown in order item display
 	 *
 	 * Shows on thank you page, order emails, and admin order view.
@@ -598,7 +542,7 @@ class Woo_BookingLedger {
 	 * @param \WC_Order              $order     Order object
 	 * @param bool                   $plain_text Whether this is plain text email
 	 */
-	public static function render_order_item_eb_badge( int $item_id, $item, $order, bool $plain_text = false ) : void {
+	public static function render_order_item_eb_breakdown( int $item_id, $item, $order, bool $plain_text = false ) : void {
 
 		// Only for product items
 		if ( ! $item instanceof \WC_Order_Item_Product ) {
