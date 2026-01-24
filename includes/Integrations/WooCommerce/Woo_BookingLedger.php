@@ -33,6 +33,7 @@ class Woo_BookingLedger {
 	const BK_LEDGER_TOTAL       = '_tcbf_ledger_total';
 	const BK_LEDGER_COMMISSION  = '_tcbf_ledger_commission';
 	const BK_LEDGER_PROCESSED   = '_tcbf_ledger_processed';
+	const BK_PARTICIPANT_NAME   = '_tcbf_participant_name';
 
 	/**
 	 * Get the configured booking form ID
@@ -58,7 +59,11 @@ class Woo_BookingLedger {
 		// Apply ledger pricing during cart calculations
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'apply_ledger_to_cart' ], 25, 1 );
 
-		// Display small EB badge after cart item name (like event products)
+		// Display participant badge after cart item name (priority 10 = shows first, like event products)
+		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
+		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
+
+		// Display small EB badge after cart item name (priority 15 = shows after participant badge)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
 
@@ -254,6 +259,12 @@ class Woo_BookingLedger {
 		$cart_item_data[ self::BK_LEDGER_TOTAL ]       = $ledger['total_after_eb']; // EB-only price for cart
 		$cart_item_data[ self::BK_LEDGER_COMMISSION ]  = $ledger['partner_commission'];
 		$cart_item_data[ self::BK_LEDGER_PROCESSED ]   = true;
+
+		// Store client name for participant badge (same pattern as event products)
+		$client_name = GF_SemanticFields::entry_value( $lead, $form_id, GF_SemanticFields::KEY_USER_NAME );
+		if ( ! empty( $client_name ) ) {
+			$cart_item_data[ self::BK_PARTICIPANT_NAME ] = trim( $client_name );
+		}
 
 		// Populate GF lead with ledger data
 		BookingLedger::populate_lead_with_ledger( $lead, $ledger, $form_id );
@@ -465,6 +476,41 @@ class Woo_BookingLedger {
 	}
 
 	/**
+	 * Render participant badge after cart item name (like event products)
+	 *
+	 * Shows "👤 Client Name" badge matching event product style.
+	 *
+	 * @param array       $cart_item     Cart item data
+	 * @param string|null $cart_item_key Cart item key
+	 */
+	public static function render_cart_participant_badge( $cart_item, $cart_item_key = null ) : void {
+
+		// Handle both cart and mini-cart signatures (mini-cart passes reversed params)
+		if ( is_string( $cart_item ) && is_array( $cart_item_key ) ) {
+			$temp          = $cart_item;
+			$cart_item     = $cart_item_key;
+			$cart_item_key = $temp;
+		}
+
+		// Only process booking items with our ledger
+		if ( empty( $cart_item[ self::BK_LEDGER_PROCESSED ] ) ) {
+			return;
+		}
+
+		// Get participant name
+		$participant_name = $cart_item[ self::BK_PARTICIPANT_NAME ] ?? '';
+		if ( empty( $participant_name ) ) {
+			return;
+		}
+
+		// Output participant badge (same structure as event products)
+		echo '<div class="tcbf-pack-participant-badge">';
+		echo '<span class="tcbf-pack-participant-badge__icon">👤</span>';
+		echo '<span class="tcbf-pack-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
+		echo '</div>';
+	}
+
+	/**
 	 * Render small EB badge after cart item name (like event products)
 	 *
 	 * Shows just the percentage and amount in a gradient badge.
@@ -630,9 +676,10 @@ class Woo_BookingLedger {
 		}
 
 		// Check for our ledger meta
-		$base      = (float) $item->get_meta( '_tcbf_ledger_base' );
-		$eb_amount = (float) $item->get_meta( '_tcbf_ledger_eb_amount' );
-		$total     = (float) $item->get_meta( '_tcbf_ledger_total' );
+		$base            = (float) $item->get_meta( '_tcbf_ledger_base' );
+		$eb_amount       = (float) $item->get_meta( '_tcbf_ledger_eb_amount' );
+		$total           = (float) $item->get_meta( '_tcbf_ledger_total' );
+		$participant_name = (string) $item->get_meta( '_tcbf_participant_name' );
 
 		// Only show if EB was applied
 		if ( $eb_amount <= 0 || $base <= 0 ) {
@@ -652,11 +699,23 @@ class Woo_BookingLedger {
 
 		if ( $plain_text ) {
 			// Plain text for emails
+			if ( ! empty( $participant_name ) ) {
+				echo "\n👤 " . esc_html( $participant_name ) . "\n";
+			}
 			echo "\n" . esc_html( $base_label ) . ': ' . wp_strip_all_tags( wc_price( $base ) ) . "\n";
 			echo esc_html( $eb_label ) . ': -' . wp_strip_all_tags( wc_price( $eb_amount ) ) . "\n";
 			echo esc_html( $total_label ) . ': ' . wp_strip_all_tags( wc_price( $total ) ) . "\n";
 		} else {
 			// HTML breakdown with pack footer styling
+
+			// Participant badge (same style as cart)
+			if ( ! empty( $participant_name ) ) {
+				echo '<div class="tcbf-pack-participant-badge">';
+				echo '<span class="tcbf-pack-participant-badge__icon">👤</span>';
+				echo '<span class="tcbf-pack-participant-badge__text">' . esc_html( $participant_name ) . '</span>';
+				echo '</div>';
+			}
+
 			echo '<div class="tcbf-pack-footer tcbf-pack-footer--booking">';
 
 			echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-base">';
@@ -699,6 +758,11 @@ class Woo_BookingLedger {
 		$item->add_meta_data( '_tcbf_ledger_partner_amount', $values[ self::BK_LEDGER_PARTNER_AMT ] ?? 0 );
 		$item->add_meta_data( '_tcbf_ledger_total', $values[ self::BK_LEDGER_TOTAL ] ?? 0 );
 		$item->add_meta_data( '_tcbf_ledger_commission', $values[ self::BK_LEDGER_COMMISSION ] ?? 0 );
+
+		// Store participant name for order display
+		if ( ! empty( $values[ self::BK_PARTICIPANT_NAME ] ) ) {
+			$item->add_meta_data( '_tcbf_participant_name', $values[ self::BK_PARTICIPANT_NAME ] );
+		}
 
 		// Store partner attribution using semantic fields
 		$lead    = $values['_gravity_form_lead'] ?? [];
