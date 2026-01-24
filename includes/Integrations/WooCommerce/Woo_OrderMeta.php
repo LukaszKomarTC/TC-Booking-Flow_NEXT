@@ -1576,6 +1576,7 @@ class Woo_OrderMeta {
 		$pack_base_price  = 0.0;
 		$has_eb           = false;
 		$base_from_meta   = true; // Track if we have authoritative base prices
+		$has_rental       = false; // Track if this is a true pack (participation + rental)
 
 		// Tax display mode for order context
 		$inc_tax = ( 'incl' === get_option( 'woocommerce_tax_display_cart' ) );
@@ -1583,6 +1584,11 @@ class Woo_OrderMeta {
 		foreach ( $group_items as $record ) {
 			$item = $record['item'];
 			$qty  = max( 1, (int) $item->get_quantity() );
+
+			// Check if this is a rental item (makes it a true "pack")
+			if ( ( $record['scope'] ?? '' ) === 'rental' ) {
+				$has_rental = true;
+			}
 
 			// EB discount: use stored meta amount (per unit * qty)
 			if ( $record['eb_eligible'] && $record['eb_amount'] > 0 ) {
@@ -1603,19 +1609,29 @@ class Woo_OrderMeta {
 		// Calculate pack total (after EB)
 		$pack_total = $pack_base_price - $pack_eb_discount;
 
-		// Determine safe label for base price
-		// Only say "before EB" if we have authoritative base from meta AND there is EB
-		$base_label = ( $base_from_meta && $has_eb )
-			? __( 'Pack price before EB', TC_BF_TEXTDOMAIN )
-			: __( 'Pack price', TC_BF_TEXTDOMAIN );
+		// Use "Pack" prefix only if this is a true pack (has rental bike)
+		// For participation-only, use simpler labels
+		if ( $has_rental ) {
+			$base_label = ( $base_from_meta && $has_eb )
+				? __( 'Pack price before EB', TC_BF_TEXTDOMAIN )
+				: __( 'Pack price', TC_BF_TEXTDOMAIN );
+			$total_label = __( 'Pack total', TC_BF_TEXTDOMAIN );
+		} else {
+			$base_label = ( $base_from_meta && $has_eb )
+				? __( 'Price before EB', TC_BF_TEXTDOMAIN )
+				: __( 'Price', TC_BF_TEXTDOMAIN );
+			$total_label = __( 'Total', TC_BF_TEXTDOMAIN );
+		}
 
 		return [
-			'base_price'  => $pack_base_price,
-			'base_label'  => $base_label,
-			'eb_discount' => $pack_eb_discount,
-			'pack_total'  => $pack_total,
-			'has_eb'      => $has_eb,
-			'inc_tax'     => $inc_tax,
+			'base_price'   => $pack_base_price,
+			'base_label'   => $base_label,
+			'eb_discount'  => $pack_eb_discount,
+			'pack_total'   => $pack_total,
+			'total_label'  => $total_label,
+			'has_eb'       => $has_eb,
+			'is_pack'      => $has_rental,
+			'inc_tax'      => $inc_tax,
 		];
 	}
 
@@ -1649,9 +1665,10 @@ class Woo_OrderMeta {
 			echo '</div>';
 		}
 
-		// Pack total line
+		// Total line (Pack total or Total depending on whether rental exists)
+		$total_label = $pack_totals['total_label'] ?? __( 'Pack total', TC_BF_TEXTDOMAIN );
 		echo '<div class="tcbf-pack-footer-line tcbf-pack-footer-total">';
-		echo '<span class="tcbf-pack-footer-label">' . esc_html__( 'Pack total', TC_BF_TEXTDOMAIN ) . '</span>';
+		echo '<span class="tcbf-pack-footer-label">' . esc_html( $total_label ) . '</span>';
 		echo '<span class="tcbf-pack-footer-value">' . wp_kses_post( wc_price( $pack_totals['pack_total'] ) ) . '</span>';
 		echo '</div>';
 
@@ -1671,9 +1688,23 @@ class Woo_OrderMeta {
 		$pack_base_price  = 0.0;
 		$has_eb           = false;
 		$base_from_meta   = true;
+		$has_rental       = false; // Track if this is a true pack (participation + rental)
 
 		foreach ( $cart_items as $cart_item ) {
 			$qty = max( 1, (int) $cart_item['quantity'] );
+
+			// Check if this is a rental item (makes it a true "pack")
+			$scope = '';
+			if ( class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Pack_Grouping' ) ) {
+				$scope = \TC_BF\Integrations\WooCommerce\Pack_Grouping::get_scope( $cart_item );
+			} elseif ( isset( $cart_item['booking']['_tcbf_scope'] ) ) {
+				$scope = (string) $cart_item['booking']['_tcbf_scope'];
+			} elseif ( isset( $cart_item['_tcbf_scope'] ) ) {
+				$scope = (string) $cart_item['_tcbf_scope'];
+			}
+			if ( $scope === 'rental' ) {
+				$has_rental = true;
+			}
 
 			// EB data is stored in $cart_item['booking'] array
 			$booking = isset( $cart_item['booking'] ) && is_array( $cart_item['booking'] )
@@ -1711,16 +1742,28 @@ class Woo_OrderMeta {
 
 		$pack_total = $pack_base_price - $pack_eb_discount;
 
-		$base_label = ( $base_from_meta && $has_eb )
-			? __( 'Pack price before EB', TC_BF_TEXTDOMAIN )
-			: __( 'Pack price', TC_BF_TEXTDOMAIN );
+		// Use "Pack" prefix only if this is a true pack (has rental bike)
+		// For participation-only, use simpler labels
+		if ( $has_rental ) {
+			$base_label = ( $base_from_meta && $has_eb )
+				? __( 'Pack price before EB', TC_BF_TEXTDOMAIN )
+				: __( 'Pack price', TC_BF_TEXTDOMAIN );
+			$total_label = __( 'Pack total', TC_BF_TEXTDOMAIN );
+		} else {
+			$base_label = ( $base_from_meta && $has_eb )
+				? __( 'Price before EB', TC_BF_TEXTDOMAIN )
+				: __( 'Price', TC_BF_TEXTDOMAIN );
+			$total_label = __( 'Total', TC_BF_TEXTDOMAIN );
+		}
 
 		return [
-			'base_price'  => $pack_base_price,
-			'base_label'  => $base_label,
-			'eb_discount' => $pack_eb_discount,
-			'pack_total'  => $pack_total,
-			'has_eb'      => $has_eb,
+			'base_price'   => $pack_base_price,
+			'base_label'   => $base_label,
+			'eb_discount'  => $pack_eb_discount,
+			'pack_total'   => $pack_total,
+			'total_label'  => $total_label,
+			'has_eb'       => $has_eb,
+			'is_pack'      => $has_rental,
 		];
 	}
 

@@ -2016,7 +2016,7 @@ final class Plugin {
 						</div>
 						<?php endif; ?>
 						<div class="tcbf-pack-footer-line tcbf-pack-footer-total">
-							<span class="tcbf-pack-footer-label"><?php esc_html_e( 'Pack total', 'tc-booking-flow-next' ); ?></span>
+							<span class="tcbf-pack-footer-label"><?php echo esc_html( $pack_totals['total_label'] ?? __( 'Pack total', 'tc-booking-flow-next' ) ); ?></span>
 							<span class="tcbf-pack-footer-value"><?php echo wp_kses_post( wc_price( $pack_totals['pack_total'] ) ); ?></span>
 						</div>
 					</div>
