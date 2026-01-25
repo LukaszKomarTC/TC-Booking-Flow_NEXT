@@ -715,11 +715,42 @@ final class Plugin {
 		$cart_item_meta_part = [];
 		$cart_item_meta_part['booking'] = wc_bookings_get_posted_data($sim_post_part, $product_part);
 
-		// TCBF-14 FIX: Set _booking_id = 0 to prevent WC Bookings 3.x crash.
-		// WC Bookings expects _booking_id to be set (normally done by configure_cart_item_data).
-		// Without it, WC_Booking is created with invalid ID, get_start() returns '' (empty string),
-		// which causes "Unsupported operand types: string - int" in get_blocks_availability().
-		$cart_item_meta_part['booking']['_booking_id'] = 0;
+		// TCBF-14 FIX: Create proper in-cart booking via WC Bookings Cart Manager.
+		// WC Bookings 3.x expects cart items to have actual in-cart bookings created.
+		// Without this, validate_booking_order() creates WC_Booking objects with empty
+		// start values, causing "Unsupported operand types: string - int" crashes.
+		$booking_configured = false;
+		if ( class_exists( 'WC_Booking_Cart_Manager' ) ) {
+			$cart_manager = new \WC_Booking_Cart_Manager();
+			if ( method_exists( $cart_manager, 'configure_cart_item_data' ) ) {
+				try {
+					$cart_item_meta_part['booking'] = $cart_manager->configure_cart_item_data(
+						$cart_item_meta_part['booking'],
+						$product_part
+					);
+					$booking_configured = true;
+					$this->log( 'cart.add.participation.booking_configured', [
+						'product_id' => $product_id_participation,
+						'_booking_id' => $cart_item_meta_part['booking']['_booking_id'] ?? 'NOT_SET',
+						'_start_date' => $cart_item_meta_part['booking']['_start_date'] ?? 'NOT_SET',
+					] );
+				} catch ( \Exception $e ) {
+					$this->log( 'cart.add.participation.booking_config_failed', [
+						'error' => $e->getMessage(),
+						'product_id' => $product_id_participation,
+					], 'error' );
+				}
+			}
+		}
+
+		// If booking configuration failed, log warning but continue
+		// (might still crash at checkout - this helps debug)
+		if ( ! $booking_configured ) {
+			$this->log( 'cart.add.participation.no_booking_config', [
+				'product_id' => $product_id_participation,
+				'reason' => 'WC_Booking_Cart_Manager not available or configure_cart_item_data failed',
+			], 'warning' );
+		}
 
 		$cart_item_meta_part['booking'][self::BK_EVENT_ID]    = $event_id;
 		$cart_item_meta_part['booking'][self::BK_EVENT_TITLE] = $event_title;
@@ -869,8 +900,23 @@ final class Plugin {
 				$cart_item_meta_rental = [];
 				$cart_item_meta_rental['booking'] = wc_bookings_get_posted_data($sim_post_rental, $product_rental);
 
-				// TCBF-14 FIX: Set _booking_id = 0 (see participation comment above)
-				$cart_item_meta_rental['booking']['_booking_id'] = 0;
+				// TCBF-14 FIX: Create proper in-cart booking (see participation comment above)
+				if ( class_exists( 'WC_Booking_Cart_Manager' ) ) {
+					$cart_manager = new \WC_Booking_Cart_Manager();
+					if ( method_exists( $cart_manager, 'configure_cart_item_data' ) ) {
+						try {
+							$cart_item_meta_rental['booking'] = $cart_manager->configure_cart_item_data(
+								$cart_item_meta_rental['booking'],
+								$product_rental
+							);
+						} catch ( \Exception $e ) {
+							$this->log( 'cart.add.rental.booking_config_failed', [
+								'error' => $e->getMessage(),
+								'product_id' => $product_id_bicycle,
+							], 'error' );
+						}
+					}
+				}
 
 				$cart_item_meta_rental['booking'][self::BK_EVENT_ID]    = $event_id;
 				$cart_item_meta_rental['booking'][self::BK_EVENT_TITLE] = $event_title;
