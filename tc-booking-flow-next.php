@@ -9,7 +9,7 @@
 
 if ( ! defined('ABSPATH') ) exit;
 
-if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.7.40');
+if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.7.41');
 if ( ! defined('TC_BF_PATH') ) define('TC_BF_PATH', plugin_dir_path(__FILE__));
 if ( ! defined('TC_BF_URL') ) define('TC_BF_URL', plugin_dir_url(__FILE__));
 

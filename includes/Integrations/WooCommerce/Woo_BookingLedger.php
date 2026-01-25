@@ -64,6 +64,14 @@ class Woo_BookingLedger {
 	 * Initialize hooks
 	 */
 	public static function init() : void {
+		// TCBF-14 DEBUG: Tripwire to catch string-keyed blocks arrays
+		// Enable by adding: define('TCBF_DEBUG_BLOCKS', true); to wp-config.php
+		// Check WooCommerce logs after triggering Tour+Rental checkout
+		// Remove this block once root cause is identified
+		if ( defined( 'TCBF_DEBUG_BLOCKS' ) && TCBF_DEBUG_BLOCKS ) {
+			self::init_blocks_tripwire();
+		}
+
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
 
@@ -104,6 +112,83 @@ class Woo_BookingLedger {
 		// AJAX endpoint for live ledger calculation (same logic as cart)
 		add_action( 'wp_ajax_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
 		add_action( 'wp_ajax_nopriv_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
+	}
+
+	/**
+	 * Initialize blocks tripwire for debugging TCBF-14
+	 *
+	 * Hooks into WC Bookings filters to detect when string-keyed blocks arrays
+	 * are introduced. Logs a full backtrace to WooCommerce logs when detected.
+	 *
+	 * Enable by adding to wp-config.php:
+	 *   define('TCBF_DEBUG_BLOCKS', true);
+	 *
+	 * Check logs at: WooCommerce > Status > Logs > tcbf-blocks-debug-*
+	 *
+	 * @internal Debug only - remove once root cause is identified
+	 */
+	private static function init_blocks_tripwire() : void {
+		add_action( 'plugins_loaded', function() {
+			if ( ! function_exists( 'wc_get_logger' ) ) {
+				return;
+			}
+
+			$logger = wc_get_logger();
+			$context = [ 'source' => 'tcbf-blocks-debug' ];
+
+			$check_blocks = function( $arr, $tag ) use ( $logger, $context ) {
+				if ( ! is_array( $arr ) ) {
+					return $arr;
+				}
+
+				foreach ( array_keys( $arr ) as $key ) {
+					// Valid keys: integers or numeric strings (timestamps)
+					if ( is_int( $key ) || ( is_string( $key ) && ctype_digit( $key ) ) ) {
+						continue;
+					}
+
+					// Found a string key that's not a timestamp - log backtrace
+					$backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 30 );
+					$formatted_trace = array_map( function( $frame ) {
+						return [
+							'file' => $frame['file'] ?? '(unknown)',
+							'line' => $frame['line'] ?? 0,
+							'func' => ( $frame['class'] ?? '' ) . ( $frame['type'] ?? '' ) . ( $frame['function'] ?? '' ),
+						];
+					}, $backtrace );
+
+					$logger->error( 'TCBF-14 TRIPWIRE: String-keyed blocks array detected!', array_merge( $context, [
+						'filter_tag'   => $tag,
+						'bad_key'      => $key,
+						'keys_sample'  => array_slice( array_keys( $arr ), 0, 10 ),
+						'backtrace'    => $formatted_trace,
+					] ) );
+
+					// Only log once per request
+					break;
+				}
+
+				return $arr;
+			};
+
+			// Hook into all potential WC Bookings block/slot filters
+			$filters = [
+				'wc_bookings_get_time_slots',
+				'woocommerce_bookings_get_time_slots',
+				'wc_bookings_get_blocks',
+				'woocommerce_bookings_get_blocks',
+				'wc_booking_get_blocks_in_range',
+				'woocommerce_booking_get_blocks_in_range',
+			];
+
+			foreach ( $filters as $filter ) {
+				add_filter( $filter, function( $value ) use ( $check_blocks, $filter ) {
+					return $check_blocks( $value, $filter );
+				}, 9999 );
+			}
+
+			$logger->info( 'TCBF-14 blocks tripwire activated', $context );
+		}, 20 );
 	}
 
 	/**
