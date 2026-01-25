@@ -1,0 +1,154 @@
+/**
+ * DEBUG PATCH for class-wc-booking-cart-manager.php
+ *
+ * Apply this patch to: wp-content/plugins/woocommerce-bookings/includes/class-wc-booking-cart-manager.php
+ *
+ * Find the validate_booking_order() method (around line 180) and replace it with:
+ */
+
+public function validate_booking_order( \WP_Error $errors, \WC_Cart $cart ) {
+    // Do not need to validate if cart is empty.
+    if ( $cart->is_empty() ) {
+        return;
+    }
+
+    // TCBF DEBUG: Log start of validation
+    error_log( '=== TCBF_DEBUG validate_booking_order START ===' );
+
+    $cart_items = $cart->get_cart();
+    $temporary_confirmed_order_bookings = [];
+
+    $booking_errors = [];
+
+    $item_index = 0;
+    foreach ( $cart_items as $cart_key => $product_data ) {
+        $item_index++;
+        /* @var WC_Product_Booking $product */
+        $product = $product_data['data'];
+
+        if ( ! is_wc_booking_product( $product ) ) {
+            continue;
+        }
+
+        // TCBF DEBUG: Log cart item details BEFORE creating booking
+        $booking_id_raw = $product_data['booking']['_booking_id'] ?? 'NOT_SET';
+        $start_date_raw = $product_data['booking']['_start_date'] ?? 'NOT_SET';
+        $tc_scope = $product_data['booking']['_tc_scope'] ?? 'unknown';
+
+        error_log( sprintf(
+            'TCBF_DEBUG [item %d] cart_key=%s, product_id=%d, product_name=%s, _tc_scope=%s',
+            $item_index,
+            $cart_key,
+            $product->get_id(),
+            $product->get_name(),
+            $tc_scope
+        ));
+        error_log( sprintf(
+            'TCBF_DEBUG [item %d] _booking_id=%s (type=%s), _start_date=%s (type=%s)',
+            $item_index,
+            var_export( $booking_id_raw, true ),
+            gettype( $booking_id_raw ),
+            var_export( $start_date_raw, true ),
+            gettype( $start_date_raw )
+        ));
+
+        // TCBF DEBUG: Log full booking array keys
+        error_log( sprintf(
+            'TCBF_DEBUG [item %d] booking array keys: %s',
+            $item_index,
+            implode( ', ', array_keys( $product_data['booking'] ?? [] ) )
+        ));
+
+        try {
+            $booking = new WC_Booking( $product_data['booking']['_booking_id'] );
+        } catch ( Exception $e ) {
+            error_log( sprintf(
+                'TCBF_DEBUG [item %d] EXCEPTION creating WC_Booking: %s',
+                $item_index,
+                $e->getMessage()
+            ));
+            wc_get_logger()->error( $e->getMessage() );
+            continue;
+        }
+
+        // TCBF DEBUG: Log booking object properties AFTER creation
+        error_log( sprintf(
+            'TCBF_DEBUG [item %d] WC_Booking created: ID=%s, start=%s (type=%s), end=%s, status=%s',
+            $item_index,
+            var_export( $booking->get_id(), true ),
+            var_export( $booking->get_start(), true ),
+            gettype( $booking->get_start() ),
+            var_export( $booking->get_end(), true ),
+            $booking->get_status()
+        ));
+
+        // TCBF DEBUG: Check if start is problematic
+        if ( $booking->get_start() === '' || $booking->get_start() === null || $booking->get_start() === 0 ) {
+            error_log( sprintf(
+                'TCBF_DEBUG [item %d] *** WARNING: Booking has INVALID start value! This will cause crash! ***',
+                $item_index
+            ));
+        }
+
+        // Unique key to store temporary confirmed bookings in array.
+        // Each booking has following unique key: booking_id + resource_id + start_date + end_date.
+        $temporary_confirmed_checkout_bookings_array_key = "{$booking->get_product_id()}_{$booking->get_resource_id()}_{$booking->get_start()}_{$booking->get_end()}";
+
+        // TCBF DEBUG: Log the key being used
+        error_log( sprintf(
+            'TCBF_DEBUG [item %d] temp_key=%s',
+            $item_index,
+            $temporary_confirmed_checkout_bookings_array_key
+        ));
+
+        if ( array_key_exists( $temporary_confirmed_checkout_bookings_array_key,
+            $temporary_confirmed_order_bookings ) ) {
+            $product->confirmed_order_bookings[] = $temporary_confirmed_order_bookings[ $temporary_confirmed_checkout_bookings_array_key ];
+
+            // TCBF DEBUG: Log when adding to confirmed_order_bookings
+            error_log( sprintf(
+                'TCBF_DEBUG [item %d] Added to confirmed_order_bookings, count now: %d',
+                $item_index,
+                count( $product->confirmed_order_bookings )
+            ));
+        }
+
+        $product->check_in_cart = false;
+
+        // TCBF DEBUG: Log before is_bookable call
+        error_log( sprintf(
+            'TCBF_DEBUG [item %d] Calling is_bookable(), confirmed_order_bookings count: %d',
+            $item_index,
+            count( $product->confirmed_order_bookings ?? [] )
+        ));
+
+        $validate = $product->is_bookable( $product_data['booking'] );
+
+        if ( is_wp_error( $validate ) ) {
+            error_log( sprintf(
+                'TCBF_DEBUG [item %d] is_bookable returned WP_Error: %s',
+                $item_index,
+                $validate->get_error_message()
+            ));
+            $booking_errors["booking-order-item-error-{$booking->get_product_id()}"] = sprintf(
+                /* translators: 1: Booking product name */
+                esc_html__(
+                    'Sorry, the selected block is no longer available for %1$s. Please choose another block.',
+                    'woocommerce-bookings' ),
+                $product->get_name()
+            );
+        }
+
+        // Flag booking as temporary confirmed for availability check.
+        $temporary_confirmed_order_bookings[ $temporary_confirmed_checkout_bookings_array_key ] = $booking;
+    }
+
+    error_log( '=== TCBF_DEBUG validate_booking_order END ===' );
+
+    // Add booking checkout errors.
+    if ( ! empty( $booking_errors ) ) {
+        foreach ( $booking_errors as $error_code => $error_message ) {
+            $errors->add( $error_code, $error_message );
+        }
+    }
+}

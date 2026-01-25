@@ -1,0 +1,113 @@
+/**
+ * DEBUG PATCH for class-wc-product-booking.php
+ *
+ * Apply this patch to: wp-content/plugins/woocommerce-bookings/includes/data-objects/class-wc-product-booking.php
+ *
+ * Find the section around line 1686-1722 in get_blocks_availability() method and replace with:
+ */
+
+// --- START PATCHED SECTION (around line 1686) ---
+
+// Getting bookings including the buffer period to respect the buffer in booked slots.
+// We will consider buffer period as a booking to avoide overbooking.
+$existing_bookings = WC_Booking_Data_Store::get_bookings_in_date_range(
+    $start_date_with_buffer,
+    $end_date_with_buffer,
+    $this->has_resources() && $resource_id ? $resource_id : $this->get_id(),
+    $this->check_in_cart
+);
+
+// TCBF DEBUG: Log existing bookings from database
+error_log( sprintf(
+    'TCBF_DEBUG get_blocks_availability: product_id=%d, existing_bookings_from_db=%d',
+    $this->get_id(),
+    count( $existing_bookings )
+));
+
+// In case of processing checkout/order, we need to include the pending bookings to calculate the availability.
+$existing_bookings = $this->confirmed_order_bookings ?
+    array_merge( $existing_bookings, $this->confirmed_order_bookings ) :
+    $existing_bookings;
+
+// TCBF DEBUG: Log after merging confirmed_order_bookings
+if ( $this->confirmed_order_bookings ) {
+    error_log( sprintf(
+        'TCBF_DEBUG get_blocks_availability: merged confirmed_order_bookings=%d, total_existing_bookings=%d',
+        count( $this->confirmed_order_bookings ),
+        count( $existing_bookings )
+    ));
+}
+
+// TCBF DEBUG: Log each booking's start value
+foreach ( $existing_bookings as $idx => $eb ) {
+    $eb_start = $eb->get_start();
+    $eb_id = $eb->get_id();
+    $is_problematic = ( $eb_start === '' || $eb_start === null || ! is_numeric( $eb_start ) );
+
+    error_log( sprintf(
+        'TCBF_DEBUG get_blocks_availability: booking[%d] ID=%s, start=%s (type=%s), status=%s %s',
+        $idx,
+        var_export( $eb_id, true ),
+        var_export( $eb_start, true ),
+        gettype( $eb_start ),
+        $eb->get_status(),
+        $is_problematic ? '*** PROBLEMATIC ***' : ''
+    ));
+}
+
+// Get all the unique start times from the existing bookings.
+$new_blocks_from_bookings = array_unique(
+    array_map(
+        function ( $booking ) {
+            return $booking->get_start();
+        },
+        $existing_bookings
+    )
+);
+
+// TCBF DEBUG: Log the timestamps being added to blocks
+error_log( sprintf(
+    'TCBF_DEBUG get_blocks_availability: new_blocks_from_bookings=%s',
+    implode( ', ', array_map( function( $ts ) {
+        return var_export( $ts, true ) . '(' . gettype( $ts ) . ')';
+    }, $new_blocks_from_bookings ) )
+));
+
+// Merge the new timestamps into the existing $blocks array.
+foreach ( $new_blocks_from_bookings as $timestamp ) {
+    // TCBF DEBUG: Check for problematic timestamp BEFORE it causes crash
+    if ( ! is_numeric( $timestamp ) || $timestamp === '' ) {
+        error_log( sprintf(
+            'TCBF_DEBUG get_blocks_availability: *** SKIPPING INVALID TIMESTAMP: %s (type=%s) - THIS WOULD CRASH! ***',
+            var_export( $timestamp, true ),
+            gettype( $timestamp )
+        ));
+        continue; // Skip to prevent crash - remove this line to see actual crash
+    }
+
+    if ( ! isset( $blocks[ $timestamp ] ) ) {
+        $blocks[ $timestamp ] = 0;
+    }
+}
+
+$original_available_qty = $this->get_available_quantity( $booking_resource );
+$interval_with_buffer   = $interval + $buffer_period + $adjacent_buffer_period;
+
+// Check all blocks availability
+$available_qtys = array();
+foreach ( $blocks as $block => $booked_slots ) {
+    // TCBF DEBUG: Log each block before arithmetic
+    if ( ! is_numeric( $block ) ) {
+        error_log( sprintf(
+            'TCBF_DEBUG get_blocks_availability: *** CRASH POINT: block=%s (type=%s), adjacent_buffer=%d ***',
+            var_export( $block, true ),
+            gettype( $block ),
+            $adjacent_buffer_period_in_seconds
+        ));
+    }
+
+    // Initially, for every minute block, there will be 0 bookings.
+    $block_start         = $block - $adjacent_buffer_period_in_seconds; // Covering the buffer time.
+    // ... rest of the loop continues unchanged ...
+
+// --- END PATCHED SECTION ---
