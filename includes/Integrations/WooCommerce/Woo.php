@@ -526,4 +526,113 @@ if ( $default_pid > 0 && self::is_valid_participation_product($default_pid) ) {
 		return $cache[$ck] = 0;
 	}
 
+	/* =========================================================
+	 * EB Teaser (product page)
+	 * ========================================================= */
+
+	/**
+	 * Render the Early Booking teaser before the add-to-cart form.
+	 *
+	 * Shows available EB discount tiers to inform customers BEFORE
+	 * they select a booking date. Hooked to woocommerce_before_add_to_cart_form.
+	 *
+	 * @since TCBF-14
+	 */
+	public static function render_eb_teaser() : void {
+		// Only on single product pages
+		if ( ! is_product() ) {
+			return;
+		}
+
+		global $product;
+		if ( ! $product || ! is_object( $product ) ) {
+			$product = wc_get_product( get_the_ID() );
+		}
+
+		if ( ! $product || ! is_a( $product, 'WC_Product' ) ) {
+			return;
+		}
+
+		$product_id = $product->get_id();
+		if ( $product_id <= 0 ) {
+			return;
+		}
+
+		// Get EB configuration for this product
+		if ( ! class_exists( '\\TC_BF\\Domain\\ProductEBConfig' ) ) {
+			return;
+		}
+
+		$eb_cfg = \TC_BF\Domain\ProductEBConfig::get_product_config( $product_id );
+		if ( empty( $eb_cfg['enabled'] ) || empty( $eb_cfg['steps'] ) ) {
+			return;
+		}
+
+		$steps = $eb_cfg['steps'];
+
+		// Sort steps by min_days_before descending (highest first)
+		usort( $steps, function( $a, $b ) {
+			return ( (int) ( $b['min_days_before'] ?? 0 ) ) <=> ( (int) ( $a['min_days_before'] ?? 0 ) );
+		});
+
+		// Get i18n strings
+		$teaser_title = '[:en]Early Booking Discounts[:es]Descuentos por Reserva Anticipada[:]';
+		$book_before  = '[:en]Book[:es]Reserva[:]';
+		$days_before  = '[:en]days before[:es]días antes[:]';
+		$save_text    = '[:en]Save[:es]Ahorra[:]';
+
+		$teaser_title = self::translate( $teaser_title );
+		$book_before  = self::translate( $book_before );
+		$days_before  = self::translate( $days_before );
+		$save_text    = self::translate( $save_text );
+
+		// Build rows HTML
+		$rows_html = '';
+		foreach ( $steps as $step ) {
+			$min_days = (int) ( $step['min_days_before'] ?? 0 );
+			$type     = $step['type'] ?? 'percent';
+			$value    = (float) ( $step['value'] ?? 0 );
+
+			if ( $value <= 0 ) continue;
+
+			// Format the discount text
+			if ( $type === 'percent' ) {
+				$discount_text = number_format( $value, 0 ) . '%';
+			} else {
+				$discount_text = number_format( $value, 2 ) . ' €';
+			}
+
+			$rows_html .= sprintf(
+				'<div class="tcbf-eb-teaser__row">' .
+				'<span class="tcbf-eb-teaser__days">%s <strong>%d+</strong> %s</span>' .
+				'<span class="tcbf-eb-teaser__arrow">→</span>' .
+				'<span class="tcbf-eb-teaser__discount">%s <strong>%s</strong></span>' .
+				'</div>',
+				esc_html( $book_before ),
+				$min_days,
+				esc_html( $days_before ),
+				esc_html( $save_text ),
+				esc_html( $discount_text )
+			);
+		}
+
+		if ( empty( $rows_html ) ) {
+			return;
+		}
+
+		// Output teaser HTML
+		printf(
+			'<div class="tcbf-eb-teaser tcbf-eb-teaser--wc" id="tcbf-eb-teaser-wc-%d" data-product-id="%d">' .
+			'<div class="tcbf-eb-teaser__icon">⏰</div>' .
+			'<div class="tcbf-eb-teaser__content">' .
+			'<div class="tcbf-eb-teaser__title">%s</div>' .
+			'<div class="tcbf-eb-teaser__rules">%s</div>' .
+			'</div></div>',
+			$product_id,
+			$product_id,
+			esc_html( $teaser_title ),
+			$rows_html
+		);
+	}
+
 }
