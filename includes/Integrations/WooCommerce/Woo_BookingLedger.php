@@ -117,8 +117,8 @@ class Woo_BookingLedger {
 	/**
 	 * Initialize blocks tripwire for debugging TCBF-14
 	 *
-	 * Hooks into WC Bookings 3.x filters to detect when string-keyed blocks
-	 * arrays are introduced. Logs a full backtrace when detected.
+	 * Uses a PHP error handler to catch the exact crash point and log
+	 * the full state when "Unsupported operand types: string - int" occurs.
 	 *
 	 * Enable by adding to wp-config.php:
 	 *   define('TCBF_DEBUG_BLOCKS', true);
@@ -140,64 +140,97 @@ class Woo_BookingLedger {
 			static $activated = false;
 			if ( ! $activated ) {
 				$activated = true;
-				$logger->info( 'TCBF-14 blocks tripwire activated (v3 - WC Bookings 3.x filters)', $context );
+				$logger->info( 'TCBF-14 blocks tripwire activated (v4 - error handler)', $context );
 			}
 
-			// Check function for detecting poisoned array keys
-			$check = function( $arr, $tag ) use ( $logger, $context ) {
-				if ( ! is_array( $arr ) ) {
-					return $arr;
+			// Set up error handler to catch the TypeError at crash time
+			set_error_handler( function( $errno, $errstr, $errfile, $errline ) use ( $logger, $context ) {
+				// Check if this is our target error (string - int in WC Bookings)
+				if ( strpos( $errstr, 'Unsupported operand types' ) === false ) {
+					return false; // Let PHP handle other errors
 				}
 
-				foreach ( array_keys( $arr ) as $k ) {
-					// Valid keys: int timestamps OR numeric-string timestamps
-					if ( is_int( $k ) || ( is_string( $k ) && ctype_digit( $k ) ) ) {
-						continue;
+				// Get full backtrace
+				$backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 40 );
+				$formatted_trace = [];
+				foreach ( $backtrace as $i => $frame ) {
+					$formatted_trace[] = sprintf(
+						'#%d %s:%s %s%s%s()',
+						$i,
+						$frame['file'] ?? '(internal)',
+						$frame['line'] ?? '0',
+						$frame['class'] ?? '',
+						$frame['type'] ?? '',
+						$frame['function'] ?? '(unknown)'
+					);
+				}
+
+				$logger->error( 'TCBF-14 CRASH CAUGHT! Unsupported operand types error', array_merge( $context, [
+					'error_message' => $errstr,
+					'error_file'    => $errfile,
+					'error_line'    => $errline,
+					'backtrace'     => $formatted_trace,
+				] ) );
+
+				// Log cart state at crash time
+				if ( function_exists( 'WC' ) && WC()->cart ) {
+					$cart_debug = [];
+					foreach ( WC()->cart->get_cart() as $cart_key => $item ) {
+						$booking_data = $item['booking'] ?? [];
+						$cart_debug[ $cart_key ] = [
+							'product_id'   => $item['product_id'] ?? 0,
+							'variation_id' => $item['variation_id'] ?? 0,
+							'quantity'     => $item['quantity'] ?? 1,
+							'has_booking'  => ! empty( $booking_data ),
+							'booking_keys' => array_keys( $booking_data ),
+							'_start_date'  => $booking_data['_start_date'] ?? 'N/A',
+							'_end_date'    => $booking_data['_end_date'] ?? 'N/A',
+							'_resource_id' => $booking_data['_resource_id'] ?? 'N/A',
+							'_event_id'    => $booking_data['_event_id'] ?? 'N/A',
+							'_booking_id'  => $booking_data['_booking_id'] ?? 'N/A',
+						];
 					}
-
-					// BAD KEY FOUND -> dump backtrace
-					$bt = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 30 );
-
-					$logger->error( 'TCBF-14 BLOCKS KEY POISONED', array_merge( $context, [
-						'tag'       => $tag,
-						'bad_key'   => $k,
-						'keys_head' => array_slice( array_keys( $arr ), 0, 12 ),
-						'backtrace' => array_map( function( $f ) {
-							return [
-								'file' => $f['file'] ?? '',
-								'line' => $f['line'] ?? '',
-								'call' => ( $f['class'] ?? '' ) . ( $f['type'] ?? '' ) . ( $f['function'] ?? '' ),
-							];
-						}, $bt ),
+					$logger->error( 'TCBF-14 CRASH: Cart state at crash time', array_merge( $context, [
+						'cart_items' => $cart_debug,
 					] ) );
-
-					break; // Only log once per array
 				}
 
-				return $arr;
-			};
+				return false; // Let PHP continue with normal error handling
+			}, E_ALL );
 
-			// ✅ The key filter right before Bookings uses $blocks internally
-			add_filter( 'wc_bookings_product_get_available_blocks', function( $available_times, $product, $blocks, $intervals, $resource_id ) use ( $check ) {
-				// The poisoned array may be $blocks or $available_times
-				$check( $blocks, 'wc_bookings_product_get_available_blocks::$blocks' );
-				$check( $available_times, 'wc_bookings_product_get_available_blocks::$available_times' );
-				return $available_times;
-			}, 9999, 5 );
+			// Also register shutdown function to catch fatal errors
+			register_shutdown_function( function() use ( $logger, $context ) {
+				$error = error_get_last();
+				if ( $error === null ) {
+					return;
+				}
 
-			// ✅ If some code poisons booked day/month blocks
-			add_filter( 'woocommerce_bookings_booked_day_blocks', function( $booked_day_blocks, $product ) use ( $check ) {
-				return $check( $booked_day_blocks, 'woocommerce_bookings_booked_day_blocks' );
-			}, 9999, 2 );
+				// Check if this is our target error
+				if ( strpos( $error['message'], 'Unsupported operand types' ) === false ) {
+					return;
+				}
 
-			add_filter( 'woocommerce_bookings_booked_month_blocks', function( $booked_month_blocks, $product ) use ( $check ) {
-				return $check( $booked_month_blocks, 'woocommerce_bookings_booked_month_blocks' );
-			}, 9999, 2 );
+				$logger->error( 'TCBF-14 FATAL CRASH via shutdown handler', array_merge( $context, [
+					'error_type'    => $error['type'],
+					'error_message' => $error['message'],
+					'error_file'    => $error['file'],
+					'error_line'    => $error['line'],
+				] ) );
 
-			// ✅ If someone poisons time slots arrays
-			add_filter( 'woocommerce_bookings_filter_time_slots', function( $available_slots, $product, $args ) use ( $check ) {
-				return $check( $available_slots, 'woocommerce_bookings_filter_time_slots' );
-			}, 9999, 3 );
+				// Try to log cart state
+				if ( function_exists( 'WC' ) && WC()->cart ) {
+					$cart_debug = [];
+					foreach ( WC()->cart->get_cart() as $cart_key => $item ) {
+						$cart_debug[ $cart_key ] = [
+							'product_id'  => $item['product_id'] ?? 0,
+							'booking'     => $item['booking'] ?? [],
+						];
+					}
+					$logger->error( 'TCBF-14 FATAL: Cart state', array_merge( $context, [
+						'cart_items' => $cart_debug,
+					] ) );
+				}
+			} );
 
 		}, 20 );
 	}
