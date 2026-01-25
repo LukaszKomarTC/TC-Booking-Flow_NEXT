@@ -826,10 +826,16 @@ final class Plugin {
 
 		$added_keys = [];
 
-		// If participation product requires resource and rental exists, use rental resource as fallback (legacy compatibility)
-		if ( $part_requires_resource && $has_rental ) {
-			$cart_item_meta_part['booking']['resource_id'] = $resource_id_bicycle;
-			$cart_item_meta_part['booking']['wc_bookings_field_resource'] = $resource_id_bicycle;
+		// TCBF-14 FIX: Do NOT inject rental resource into participation booking.
+		// Using a resource from a different product causes WC Bookings validation to
+		// query bookings from the wrong product/resource, leading to checkout crashes.
+		// If participation product requires resources, it should have its own resources configured.
+		if ( $part_requires_resource ) {
+			$this->log('cart.add.participation.requires_resource_warning', [
+				'event_id' => $event_id,
+				'product_id' => $product_id_participation,
+				'note' => 'Participation product has resources enabled but no valid participation resource is configured. Proceeding without resource.',
+			], 'warning');
 		}
 
 		$this->log('cart.add.participation', ['event_id'=>$event_id,'product_id'=>$product_id_participation,'custom_cost'=>$cart_item_meta_part['booking'][self::BK_CUSTOM_COST] ?? null,'duration_days'=>$duration_days]);
