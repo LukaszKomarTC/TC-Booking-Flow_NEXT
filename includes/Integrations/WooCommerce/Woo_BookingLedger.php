@@ -117,8 +117,8 @@ class Woo_BookingLedger {
 	/**
 	 * Initialize blocks tripwire for debugging TCBF-14
 	 *
-	 * Hooks into WC Bookings validation to capture the exact state when
-	 * the "string - int" error occurs.
+	 * Hooks into WC Bookings 3.x filters to detect when string-keyed blocks
+	 * arrays are introduced. Logs a full backtrace when detected.
 	 *
 	 * Enable by adding to wp-config.php:
 	 *   define('TCBF_DEBUG_BLOCKS', true);
@@ -136,96 +136,69 @@ class Woo_BookingLedger {
 			$logger = wc_get_logger();
 			$context = [ 'source' => 'tcbf-blocks-debug' ];
 
-			// Hook into checkout validation BEFORE WC Bookings runs
-			add_action( 'woocommerce_checkout_process', function() use ( $logger, $context ) {
-				if ( ! WC()->cart ) {
-					return;
+			// Log activation ONCE per request
+			static $activated = false;
+			if ( ! $activated ) {
+				$activated = true;
+				$logger->info( 'TCBF-14 blocks tripwire activated (v3 - WC Bookings 3.x filters)', $context );
+			}
+
+			// Check function for detecting poisoned array keys
+			$check = function( $arr, $tag ) use ( $logger, $context ) {
+				if ( ! is_array( $arr ) ) {
+					return $arr;
 				}
 
-				$logger->info( 'TCBF-14: Checkout validation starting, logging cart booking data...', $context );
-
-				foreach ( WC()->cart->get_cart() as $cart_key => $item ) {
-					$product_id = $item['product_id'] ?? 0;
-					$product = wc_get_product( $product_id );
-
-					if ( ! $product || ! $product->is_type( 'booking' ) ) {
+				foreach ( array_keys( $arr ) as $k ) {
+					// Valid keys: int timestamps OR numeric-string timestamps
+					if ( is_int( $k ) || ( is_string( $k ) && ctype_digit( $k ) ) ) {
 						continue;
 					}
 
-					$booking_data = $item['booking'] ?? [];
+					// BAD KEY FOUND -> dump backtrace
+					$bt = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 30 );
 
-					$logger->info( 'TCBF-14: Cart item booking data', array_merge( $context, [
-						'cart_key'     => $cart_key,
-						'product_id'   => $product_id,
-						'product_name' => $product->get_name(),
-						'booking_keys' => array_keys( $booking_data ),
-						'booking_data' => array_map( function( $v ) {
-							return is_array( $v ) ? 'Array(' . count( $v ) . ')' : $v;
-						}, $booking_data ),
-						'has_event_id' => ! empty( $booking_data['_event_id'] ),
+					$logger->error( 'TCBF-14 BLOCKS KEY POISONED', array_merge( $context, [
+						'tag'       => $tag,
+						'bad_key'   => $k,
+						'keys_head' => array_slice( array_keys( $arr ), 0, 12 ),
+						'backtrace' => array_map( function( $f ) {
+							return [
+								'file' => $f['file'] ?? '',
+								'line' => $f['line'] ?? '',
+								'call' => ( $f['class'] ?? '' ) . ( $f['type'] ?? '' ) . ( $f['function'] ?? '' ),
+							];
+						}, $bt ),
 					] ) );
 
-					// Check if this product has resources (rental bikes)
-					if ( method_exists( $product, 'has_resources' ) && $product->has_resources() ) {
-						$logger->info( 'TCBF-14: Product has resources (rental product)', array_merge( $context, [
-							'product_id'   => $product_id,
-							'resource_ids' => method_exists( $product, 'get_resource_ids' ) ? $product->get_resource_ids() : 'N/A',
-						] ) );
-					}
-				}
-			}, 1 ); // Priority 1 = run before WC Bookings validation
-
-			// Hook into is_bookable to catch right before crash
-			add_filter( 'woocommerce_booking_is_bookable', function( $is_bookable, $product, $data ) use ( $logger, $context ) {
-				$logger->info( 'TCBF-14: is_bookable check', array_merge( $context, [
-					'product_id'   => $product ? $product->get_id() : 0,
-					'is_bookable'  => $is_bookable,
-					'data_keys'    => is_array( $data ) ? array_keys( $data ) : gettype( $data ),
-					'start_date'   => $data['_start_date'] ?? 'N/A',
-					'end_date'     => $data['_end_date'] ?? 'N/A',
-					'resource_id'  => $data['_resource_id'] ?? 'N/A',
-				] ) );
-				return $is_bookable;
-			}, 1, 3 );
-
-			// Add error handler to catch the actual crash
-			$previous_handler = set_error_handler( function( $errno, $errstr, $errfile, $errline ) use ( $logger, $context, &$previous_handler ) {
-				// Check if this is our target error
-				if ( strpos( $errstr, 'Unsupported operand types' ) !== false && strpos( $errfile, 'woocommerce-bookings' ) !== false ) {
-					$backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 30 );
-					$formatted_trace = array_map( function( $frame ) {
-						return ( $frame['file'] ?? '' ) . ':' . ( $frame['line'] ?? '' ) . ' ' . ( $frame['class'] ?? '' ) . ( $frame['type'] ?? '' ) . ( $frame['function'] ?? '' );
-					}, $backtrace );
-
-					$logger->error( 'TCBF-14 CRASH DETECTED! Unsupported operand types error', array_merge( $context, [
-						'error_msg'  => $errstr,
-						'error_file' => $errfile,
-						'error_line' => $errline,
-						'backtrace'  => $formatted_trace,
-					] ) );
-
-					// Try to get current cart state
-					if ( WC()->cart ) {
-						foreach ( WC()->cart->get_cart() as $cart_key => $item ) {
-							if ( ! empty( $item['booking'] ) ) {
-								$logger->error( 'TCBF-14 CRASH: Cart item at crash time', array_merge( $context, [
-									'cart_key'     => $cart_key,
-									'product_id'   => $item['product_id'] ?? 0,
-									'booking_data' => $item['booking'],
-								] ) );
-							}
-						}
-					}
+					break; // Only log once per array
 				}
 
-				// Call previous handler if exists
-				if ( $previous_handler ) {
-					return $previous_handler( $errno, $errstr, $errfile, $errline );
-				}
-				return false;
-			} );
+				return $arr;
+			};
 
-			$logger->info( 'TCBF-14 blocks tripwire activated (v2 - validation hooks)', $context );
+			// ✅ The key filter right before Bookings uses $blocks internally
+			add_filter( 'wc_bookings_product_get_available_blocks', function( $available_times, $product, $blocks, $intervals, $resource_id ) use ( $check ) {
+				// The poisoned array may be $blocks or $available_times
+				$check( $blocks, 'wc_bookings_product_get_available_blocks::$blocks' );
+				$check( $available_times, 'wc_bookings_product_get_available_blocks::$available_times' );
+				return $available_times;
+			}, 9999, 5 );
+
+			// ✅ If some code poisons booked day/month blocks
+			add_filter( 'woocommerce_bookings_booked_day_blocks', function( $booked_day_blocks, $product ) use ( $check ) {
+				return $check( $booked_day_blocks, 'woocommerce_bookings_booked_day_blocks' );
+			}, 9999, 2 );
+
+			add_filter( 'woocommerce_bookings_booked_month_blocks', function( $booked_month_blocks, $product ) use ( $check ) {
+				return $check( $booked_month_blocks, 'woocommerce_bookings_booked_month_blocks' );
+			}, 9999, 2 );
+
+			// ✅ If someone poisons time slots arrays
+			add_filter( 'woocommerce_bookings_filter_time_slots', function( $available_slots, $product, $args ) use ( $check ) {
+				return $check( $available_slots, 'woocommerce_bookings_filter_time_slots' );
+			}, 9999, 3 );
+
 		}, 20 );
 	}
 
