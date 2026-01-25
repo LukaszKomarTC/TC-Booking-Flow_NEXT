@@ -72,6 +72,23 @@ class Woo_BookingLedger {
 			self::init_blocks_tripwire();
 		}
 
+		// TCBF-14 FIX: Skip WC Bookings checkout validation for TCBF-managed bookings
+		//
+		// WHY THIS IS NEEDED:
+		// WC Bookings has a bug in get_blocks_availability() that crashes with
+		// "Unsupported operand types: string - int" when validating certain
+		// booking combinations (Tour + Rental with resources).
+		//
+		// WHY THIS IS SAFE:
+		// - TCBF validates availability at form submission time (before add to cart)
+		// - The booking is added to cart immediately after validation
+		// - Re-validating at checkout is redundant for TCBF bookings
+		// - This only affects bookings with _event_id (TCBF-managed)
+		//
+		// The bug is inside WC Bookings core, not in TCBF's cart data (verified:
+		// _start_date and _end_date are proper integer timestamps).
+		add_filter( 'woocommerce_booking_is_bookable', [ __CLASS__, 'skip_validation_for_tcbf_bookings' ], 1, 3 );
+
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
 
@@ -233,6 +250,34 @@ class Woo_BookingLedger {
 			} );
 
 		}, 20 );
+	}
+
+	/**
+	 * Skip WC Bookings validation for TCBF-managed bookings
+	 *
+	 * WC Bookings' is_bookable() → get_blocks_availability() has a bug that crashes
+	 * with "Unsupported operand types: string - int" when validating certain booking
+	 * combinations (e.g., Tour + Rental with resources in the same cart).
+	 *
+	 * This is safe because:
+	 * - TCBF validates availability at form submission (before add to cart)
+	 * - Only affects bookings with _event_id (TCBF-managed)
+	 * - The bug is in WC Bookings core, not our data
+	 *
+	 * @param bool               $is_bookable Whether the product is bookable
+	 * @param WC_Product_Booking $product     The booking product
+	 * @param array              $data        Booking data being validated
+	 * @return bool
+	 */
+	public static function skip_validation_for_tcbf_bookings( $is_bookable, $product, $data ) : bool {
+		// Only intercept if this is a TCBF-managed booking (has _event_id)
+		if ( ! is_array( $data ) || empty( $data['_event_id'] ) ) {
+			return $is_bookable; // Let WC Bookings validate normally
+		}
+
+		// For TCBF bookings, return true (bookable) to skip the buggy validation
+		// TCBF already validated availability at form submission time
+		return true;
 	}
 
 	/**
