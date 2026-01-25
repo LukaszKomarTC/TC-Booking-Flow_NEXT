@@ -283,11 +283,44 @@ class Woo_BookingLedger {
 
 								$entry['existing_ids_count'] = is_array( $ids ) ? count( $ids ) : 0;
 
+								// ENHANCED: Capture raw IDs with types
+								$raw_ids_info = [];
+								foreach ( (array) $ids as $idx => $bid ) {
+									$info = [
+										'index'    => $idx,
+										'type'     => gettype( $bid ),
+										'is_object'=> is_object( $bid ),
+									];
+									if ( is_object( $bid ) ) {
+										$info['class'] = get_class( $bid );
+										// If it's a WC_Booking object, get its start directly
+										if ( method_exists( $bid, 'get_start' ) ) {
+											$obj_start = $bid->get_start();
+											$info['obj_get_start'] = $obj_start;
+											$info['obj_start_type'] = gettype( $obj_start );
+										}
+										if ( method_exists( $bid, 'get_id' ) ) {
+											$info['obj_get_id'] = $bid->get_id();
+										}
+									} elseif ( is_int( $bid ) || is_string( $bid ) ) {
+										$info['value'] = $bid;
+									}
+									$raw_ids_info[] = $info;
+								}
+								$entry['raw_ids_info'] = $raw_ids_info;
+
 								$weird = [];
 								foreach ( (array) $ids as $bid ) {
-									$b = function_exists( 'wc_get_booking' ) ? wc_get_booking( $bid ) : null;
+									// If bid is already an object, extract ID
+									$bid_id = is_object( $bid ) && method_exists( $bid, 'get_id' ) ? $bid->get_id() : $bid;
+
+									$b = function_exists( 'wc_get_booking' ) ? wc_get_booking( $bid_id ) : null;
 									if ( ! $b ) {
-										$weird[] = [ 'booking_id' => $bid, 'issue' => 'wc_get_booking_null' ];
+										$weird[] = [
+											'booking_id'   => $bid_id,
+											'original_type'=> gettype( $bid ),
+											'issue'        => 'wc_get_booking_null'
+										];
 										continue;
 									}
 
@@ -297,10 +330,10 @@ class Woo_BookingLedger {
 									}
 
 									$weird[] = [
-										'booking_id'          => $bid,
+										'booking_id'          => $bid_id,
 										'get_start'           => $gs,
 										'type'                => gettype( $gs ),
-										'_booking_start_meta' => get_post_meta( $bid, '_booking_start', true ),
+										'_booking_start_meta' => get_post_meta( $bid_id, '_booking_start', true ),
 									];
 								}
 
