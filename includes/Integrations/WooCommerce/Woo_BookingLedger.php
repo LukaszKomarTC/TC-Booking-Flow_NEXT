@@ -64,19 +64,6 @@ class Woo_BookingLedger {
 	 * Initialize hooks
 	 */
 	public static function init() : void {
-		// Hardening: ensure _booking_id exists for WooCommerce Bookings (PHP 8+ strict)
-		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'ensure_booking_id_exists' ], 1, 1 );
-
-		// Hardening: clear WC Bookings availability cache before checkout validation
-		// This prevents stale/corrupted cache data from causing "string - int" errors
-		add_action( 'woocommerce_checkout_process', [ __CLASS__, 'clear_booking_availability_cache' ], 1 );
-		add_action( 'woocommerce_store_api_checkout_update_order_from_request', [ __CLASS__, 'clear_booking_availability_cache' ], 1 );
-
-		// TCBF-14 FIX: Skip WC Bookings availability validation for TCBF cart items
-		// This bypasses the buggy get_blocks_availability() that crashes with string keys
-		add_filter( 'wc_bookings_check_booking_in_cart', [ __CLASS__, 'skip_booking_validation_for_tcbf' ], 10, 2 );
-		add_filter( 'woocommerce_booking_is_in_stock', [ __CLASS__, 'force_booking_in_stock_for_tcbf' ], 10, 2 );
-
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
 
@@ -90,14 +77,14 @@ class Woo_BookingLedger {
 		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'filter_cart_item_data' ], 25, 2 );
 
 		// Display participant badge after cart item name (priority 10 = shows first, like event products)
-		// Note: Only in cart and mini-cart, NOT in checkout
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
+		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_participant_badge' ], 10, 2 );
 
 		// Display notification badge after participant badge (priority 12)
-		// Note: Only in cart and mini-cart, NOT in checkout
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 		add_action( 'woocommerce_after_mini_cart_item_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
+		add_action( 'woocommerce_checkout_cart_item_product_name', [ __CLASS__, 'render_cart_notify_badge' ], 12, 2 );
 
 		// Display small EB badge after cart item name (priority 15 = shows after participant badge)
 		add_action( 'woocommerce_after_cart_item_name', [ __CLASS__, 'render_cart_eb_badge' ], 15, 2 );
@@ -117,136 +104,6 @@ class Woo_BookingLedger {
 		// AJAX endpoint for live ledger calculation (same logic as cart)
 		add_action( 'wp_ajax_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
 		add_action( 'wp_ajax_nopriv_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
-	}
-
-	/**
-	 * Ensure _booking_id exists in all booking cart items
-	 *
-	 * WooCommerce Bookings expects _booking_id to be set, even if 0.
-	 * PHP 8+ throws "Undefined array key" errors when it's missing.
-	 * This is a hardening layer to ensure the key always exists.
-	 *
-	 * @param \WC_Cart $cart WooCommerce cart object
-	 */
-	public static function ensure_booking_id_exists( $cart ) : void {
-		if ( ! $cart || ! is_a( $cart, 'WC_Cart' ) ) {
-			return;
-		}
-
-		foreach ( $cart->get_cart() as $cart_key => $item ) {
-			if ( empty( $item['booking'] ) || ! is_array( $item['booking'] ) ) {
-				continue;
-			}
-
-			// Use array_key_exists because 0 is a valid value
-			if ( ! array_key_exists( '_booking_id', $item['booking'] ) ) {
-				$cart->cart_contents[ $cart_key ]['booking']['_booking_id'] = 0;
-			}
-		}
-	}
-
-	/**
-	 * Clear WooCommerce Bookings availability cache before checkout validation
-	 *
-	 * WC Bookings caches availability data internally. When TCBF checks bike availability
-	 * during form population, this cache may get populated with data that later causes
-	 * "Unsupported operand types: string - int" errors during checkout validation.
-	 *
-	 * This method clears relevant caches and resets product objects to ensure
-	 * fresh availability data is used during checkout.
-	 */
-	public static function clear_booking_availability_cache() : void {
-		if ( ! WC() || ! WC()->cart ) {
-			return;
-		}
-
-		$cart = WC()->cart;
-
-		// Clear WC Bookings availability transients for cart products
-		foreach ( $cart->get_cart() as $item ) {
-			$product_id = $item['product_id'] ?? 0;
-			if ( $product_id <= 0 ) {
-				continue;
-			}
-
-			// Clear product-specific availability transients
-			delete_transient( 'wc_booking_availability_rules_' . $product_id );
-			delete_transient( 'book_dr_' . $product_id );
-
-			// Clear booking availability slots transient
-			$booking = $item['booking'] ?? [];
-			if ( ! empty( $booking['_start_date'] ) && ! empty( $booking['_end_date'] ) ) {
-				$start = (int) $booking['_start_date'];
-				$end = (int) $booking['_end_date'];
-				delete_transient( 'book_ts_' . md5( http_build_query( [ $product_id, $start, $end ] ) ) );
-			}
-
-			// Reset the product object cache to force fresh data
-			$cache_key = \WC_Cache_Helper::get_cache_prefix( 'products' ) . 'product_' . $product_id;
-			wp_cache_delete( $cache_key, 'products' );
-		}
-
-		// Clear global booking slots cache if exists
-		delete_transient( 'wc_bookings_global_availability_rules' );
-
-		Logger::log( 'booking.availability_cache.cleared', [
-			'cart_items' => count( $cart->get_cart() ),
-			'context'    => current_action(),
-		] );
-	}
-
-	/**
-	 * Skip WC Bookings cart validation for TCBF-managed bookings
-	 *
-	 * WC Bookings' get_blocks_availability() crashes with "string - int" error
-	 * when validating certain booking combinations. Since TCBF already validates
-	 * availability during form submission, we can safely skip the cart re-validation.
-	 *
-	 * @param bool  $check   Whether to check booking in cart
-	 * @param array $booking Booking data
-	 * @return bool
-	 */
-	public static function skip_booking_validation_for_tcbf( $check, $booking ) : bool {
-		// If this is a TCBF-managed booking, skip the validation
-		if ( is_array( $booking ) && ! empty( $booking['_event_id'] ) ) {
-			return false; // Skip validation
-		}
-		return $check;
-	}
-
-	/**
-	 * Force booking products to be "in stock" for TCBF-managed bookings
-	 *
-	 * This bypasses WC Bookings' is_bookable() check which calls get_blocks_availability()
-	 * and crashes with "string - int" error in certain configurations.
-	 *
-	 * @param bool        $in_stock Whether product is in stock
-	 * @param \WC_Product $product  The product
-	 * @return bool
-	 */
-	public static function force_booking_in_stock_for_tcbf( $in_stock, $product ) : bool {
-		// Check if this product is in cart as a TCBF booking
-		if ( ! WC() || ! WC()->cart ) {
-			return $in_stock;
-		}
-
-		$product_id = $product ? $product->get_id() : 0;
-		if ( $product_id <= 0 ) {
-			return $in_stock;
-		}
-
-		// Check cart for TCBF bookings with this product
-		foreach ( WC()->cart->get_cart() as $item ) {
-			$item_product_id = $item['product_id'] ?? 0;
-			$booking = $item['booking'] ?? [];
-
-			// If this product is in cart as a TCBF booking, force it in stock
-			if ( $item_product_id === $product_id && ! empty( $booking['_event_id'] ) ) {
-				return true;
-			}
-		}
-
-		return $in_stock;
 	}
 
 	/**
