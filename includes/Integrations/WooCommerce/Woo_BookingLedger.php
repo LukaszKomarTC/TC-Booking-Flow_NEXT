@@ -137,8 +137,36 @@ class Woo_BookingLedger {
 			static $activated = false;
 			if ( ! $activated ) {
 				$activated = true;
-				$logger->info( 'TCBF-14 postmortem probe activated (v5)', $context );
+				$logger->info( 'TCBF-14 postmortem probe activated (v6 - with pre-crash hook)', $context );
 			}
+
+			// PRE-CRASH PROBE: Hook into booking validation BEFORE get_blocks_availability crashes
+			add_filter( 'woocommerce_booking_is_bookable', function( $is_bookable, $booking_data, $product, $resource_id ) use ( $logger, $context ) {
+				// Log what WC Bookings is about to validate
+				$start = $booking_data['_start_date'] ?? null;
+				$end   = $booking_data['_end_date'] ?? null;
+
+				$probe_data = [
+					'product_id'     => $product ? $product->get_id() : 0,
+					'product_type'   => $product ? get_class( $product ) : 'null',
+					'resource_id'    => $resource_id,
+					'start'          => $start,
+					'start_type'     => gettype( $start ),
+					'end'            => $end,
+					'end_type'       => gettype( $end ),
+					'booking_keys'   => is_array( $booking_data ) ? array_keys( $booking_data ) : [],
+				];
+
+				// Check _booking_id - this might be the culprit
+				if ( isset( $booking_data['_booking_id'] ) ) {
+					$probe_data['_booking_id'] = $booking_data['_booking_id'];
+					$probe_data['_booking_id_type'] = gettype( $booking_data['_booking_id'] );
+				}
+
+				$logger->info( 'TCBF-14 PRE-VALIDATE', array_merge( $context, [ 'probe' => $probe_data ] ) );
+
+				return $is_bookable;
+			}, 1, 4 );
 
 			// Error handler to catch the TypeError
 			set_error_handler( function( $errno, $errstr, $errfile, $errline ) use ( $logger, $context ) {
