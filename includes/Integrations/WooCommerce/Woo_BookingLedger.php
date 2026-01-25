@@ -64,11 +64,11 @@ class Woo_BookingLedger {
 	 * Initialize hooks
 	 */
 	public static function init() : void {
-		// TCBF-14 FIX: Skip WC Bookings validation for TCBF-managed bookings.
-		// WC Bookings 3.x has a bug where get_blocks_availability() crashes with
-		// "Unsupported operand types: string - int" when processing in-cart bookings.
-		// TCBF already validates availability, so we can safely bypass this.
-		add_filter( 'woocommerce_booking_is_bookable', [ __CLASS__, 'bypass_validation_for_tcbf_bookings' ], 1, 4 );
+		// TCBF-14 DEBUG: Postmortem probe to catch exact source of string keys
+		// Enable by adding: define('TCBF_DEBUG_BLOCKS', true); to wp-config.php
+		if ( defined( 'TCBF_DEBUG_BLOCKS' ) && TCBF_DEBUG_BLOCKS ) {
+			self::init_postmortem_probe();
+		}
 
 		// Process cart items when added
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'process_cart_item_data' ], 25, 3 );
@@ -110,45 +110,6 @@ class Woo_BookingLedger {
 		// AJAX endpoint for live ledger calculation (same logic as cart)
 		add_action( 'wp_ajax_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
 		add_action( 'wp_ajax_nopriv_tcbf_calc_ledger', [ __CLASS__, 'ajax_calc_ledger' ] );
-	}
-
-	/**
-	 * Bypass WC Bookings validation for TCBF-managed bookings
-	 *
-	 * WC Bookings 3.x has a bug in get_blocks_availability() that causes
-	 * "Unsupported operand types: string - int" crash when processing in-cart
-	 * bookings. Since TCBF already validates availability before adding items
-	 * to cart, we can safely bypass WC Bookings' redundant validation.
-	 *
-	 * @param bool       $is_bookable  Whether the product is bookable
-	 * @param array      $booking_data Booking data from cart
-	 * @param \WC_Product $product     Product being validated
-	 * @param int        $resource_id  Resource ID (0 if no resource)
-	 * @return bool
-	 */
-	public static function bypass_validation_for_tcbf_bookings( $is_bookable, $booking_data, $product, $resource_id ) : bool {
-		// Check if this is a TCBF-managed booking by looking for our markers
-		if ( ! is_array( $booking_data ) ) {
-			return $is_bookable;
-		}
-
-		// TCBF bookings have _event_id marker
-		$is_tcbf_booking = isset( $booking_data['_event_id'] ) || isset( $booking_data['_tcbf_event_id'] );
-
-		if ( ! $is_tcbf_booking ) {
-			return $is_bookable;
-		}
-
-		// Log that we're bypassing (for debugging)
-		Logger::log( 'woo.booking_ledger.bypass_validation', [
-			'product_id'  => $product ? $product->get_id() : 0,
-			'resource_id' => $resource_id,
-			'event_id'    => $booking_data['_event_id'] ?? $booking_data['_tcbf_event_id'] ?? 0,
-			'reason'      => 'TCBF-14 workaround: skipping WC Bookings validation to avoid get_blocks_availability crash',
-		] );
-
-		// Return true to mark as bookable and skip WC Bookings validation
-		return true;
 	}
 
 	/**
