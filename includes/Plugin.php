@@ -720,6 +720,15 @@ final class Plugin {
 		// Without this, validate_booking_order() creates WC_Booking objects with empty
 		// start values, causing "Unsupported operand types: string - int" crashes.
 		$booking_configured = false;
+
+		// Log pre-configuration state
+		$this->log( 'cart.add.participation.pre_config', [
+			'product_id'   => $product_id_participation,
+			'_start_date'  => $cart_item_meta_part['booking']['_start_date'] ?? 'NOT_SET',
+			'_end_date'    => $cart_item_meta_part['booking']['_end_date'] ?? 'NOT_SET',
+			'has_cart_mgr' => class_exists( 'WC_Booking_Cart_Manager' ),
+		] );
+
 		if ( class_exists( 'WC_Booking_Cart_Manager' ) ) {
 			$cart_manager = new \WC_Booking_Cart_Manager();
 			if ( method_exists( $cart_manager, 'configure_cart_item_data' ) ) {
@@ -728,27 +737,46 @@ final class Plugin {
 						$cart_item_meta_part['booking'],
 						$product_part
 					);
-					$booking_configured = true;
-					$this->log( 'cart.add.participation.booking_configured', [
-						'product_id' => $product_id_participation,
-						'_booking_id' => $cart_item_meta_part['booking']['_booking_id'] ?? 'NOT_SET',
-						'_start_date' => $cart_item_meta_part['booking']['_start_date'] ?? 'NOT_SET',
-					] );
-				} catch ( \Exception $e ) {
+					$new_booking_id = $cart_item_meta_part['booking']['_booking_id'] ?? 0;
+					if ( $new_booking_id > 0 ) {
+						$booking_configured = true;
+						$this->log( 'cart.add.participation.booking_configured', [
+							'product_id'  => $product_id_participation,
+							'_booking_id' => $new_booking_id,
+							'_start_date' => $cart_item_meta_part['booking']['_start_date'] ?? 'NOT_SET',
+						] );
+					} else {
+						$this->log( 'cart.add.participation.booking_id_zero', [
+							'product_id' => $product_id_participation,
+							'note'       => 'configure_cart_item_data returned but _booking_id is 0 or missing',
+						], 'error' );
+					}
+				} catch ( \Throwable $e ) {
+					// Catch both Exception and Error (PHP 7+)
 					$this->log( 'cart.add.participation.booking_config_failed', [
-						'error' => $e->getMessage(),
+						'error'      => $e->getMessage(),
+						'error_type' => get_class( $e ),
 						'product_id' => $product_id_participation,
+						'trace'      => $e->getTraceAsString(),
 					], 'error' );
 				}
+			} else {
+				$this->log( 'cart.add.participation.no_method', [
+					'product_id' => $product_id_participation,
+					'note'       => 'configure_cart_item_data method not found',
+				], 'warning' );
 			}
+		} else {
+			$this->log( 'cart.add.participation.no_cart_manager', [
+				'product_id' => $product_id_participation,
+			], 'warning' );
 		}
 
 		// If booking configuration failed, log warning but continue
-		// (might still crash at checkout - this helps debug)
 		if ( ! $booking_configured ) {
 			$this->log( 'cart.add.participation.no_booking_config', [
 				'product_id' => $product_id_participation,
-				'reason' => 'WC_Booking_Cart_Manager not available or configure_cart_item_data failed',
+				'reason'     => 'In-cart booking was not created - checkout will likely fail',
 			], 'warning' );
 		}
 
@@ -901,6 +929,15 @@ final class Plugin {
 				$cart_item_meta_rental['booking'] = wc_bookings_get_posted_data($sim_post_rental, $product_rental);
 
 				// TCBF-14 FIX: Create proper in-cart booking (see participation comment above)
+				$rental_booking_configured = false;
+
+				$this->log( 'cart.add.rental.pre_config', [
+					'product_id'   => $product_id_bicycle,
+					'resource_id'  => $resource_id_bicycle,
+					'_start_date'  => $cart_item_meta_rental['booking']['_start_date'] ?? 'NOT_SET',
+					'_end_date'    => $cart_item_meta_rental['booking']['_end_date'] ?? 'NOT_SET',
+				] );
+
 				if ( class_exists( 'WC_Booking_Cart_Manager' ) ) {
 					$cart_manager = new \WC_Booking_Cart_Manager();
 					if ( method_exists( $cart_manager, 'configure_cart_item_data' ) ) {
@@ -909,13 +946,35 @@ final class Plugin {
 								$cart_item_meta_rental['booking'],
 								$product_rental
 							);
-						} catch ( \Exception $e ) {
+							$new_rental_booking_id = $cart_item_meta_rental['booking']['_booking_id'] ?? 0;
+							if ( $new_rental_booking_id > 0 ) {
+								$rental_booking_configured = true;
+								$this->log( 'cart.add.rental.booking_configured', [
+									'product_id'  => $product_id_bicycle,
+									'_booking_id' => $new_rental_booking_id,
+								] );
+							} else {
+								$this->log( 'cart.add.rental.booking_id_zero', [
+									'product_id' => $product_id_bicycle,
+									'note'       => 'configure_cart_item_data returned but _booking_id is 0',
+								], 'error' );
+							}
+						} catch ( \Throwable $e ) {
 							$this->log( 'cart.add.rental.booking_config_failed', [
-								'error' => $e->getMessage(),
+								'error'      => $e->getMessage(),
+								'error_type' => get_class( $e ),
 								'product_id' => $product_id_bicycle,
+								'trace'      => $e->getTraceAsString(),
 							], 'error' );
 						}
 					}
+				}
+
+				if ( ! $rental_booking_configured ) {
+					$this->log( 'cart.add.rental.no_booking_config', [
+						'product_id' => $product_id_bicycle,
+						'reason'     => 'In-cart booking was not created for rental',
+					], 'warning' );
 				}
 
 				$cart_item_meta_rental['booking'][self::BK_EVENT_ID]    = $event_id;
