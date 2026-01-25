@@ -117,8 +117,8 @@ class Woo_BookingLedger {
 	/**
 	 * Initialize blocks tripwire for debugging TCBF-14
 	 *
-	 * Hooks into WC Bookings filters to detect when string-keyed blocks arrays
-	 * are introduced. Logs a full backtrace to WooCommerce logs when detected.
+	 * Hooks into WC Bookings 3.x filters to detect when string-keyed blocks
+	 * arrays are introduced. Logs a full backtrace when detected.
 	 *
 	 * Enable by adding to wp-config.php:
 	 *   define('TCBF_DEBUG_BLOCKS', true);
@@ -136,58 +136,69 @@ class Woo_BookingLedger {
 			$logger = wc_get_logger();
 			$context = [ 'source' => 'tcbf-blocks-debug' ];
 
-			$check_blocks = function( $arr, $tag ) use ( $logger, $context ) {
+			// Log activation ONCE per request
+			static $activated = false;
+			if ( ! $activated ) {
+				$activated = true;
+				$logger->info( 'TCBF-14 blocks tripwire activated (v3 - WC Bookings 3.x filters)', $context );
+			}
+
+			// Check function for detecting poisoned array keys
+			$check = function( $arr, $tag ) use ( $logger, $context ) {
 				if ( ! is_array( $arr ) ) {
 					return $arr;
 				}
 
-				foreach ( array_keys( $arr ) as $key ) {
-					// Valid keys: integers or numeric strings (timestamps)
-					if ( is_int( $key ) || ( is_string( $key ) && ctype_digit( $key ) ) ) {
+				foreach ( array_keys( $arr ) as $k ) {
+					// Valid keys: int timestamps OR numeric-string timestamps
+					if ( is_int( $k ) || ( is_string( $k ) && ctype_digit( $k ) ) ) {
 						continue;
 					}
 
-					// Found a string key that's not a timestamp - log backtrace
-					$backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 30 );
-					$formatted_trace = array_map( function( $frame ) {
-						return [
-							'file' => $frame['file'] ?? '(unknown)',
-							'line' => $frame['line'] ?? 0,
-							'func' => ( $frame['class'] ?? '' ) . ( $frame['type'] ?? '' ) . ( $frame['function'] ?? '' ),
-						];
-					}, $backtrace );
+					// BAD KEY FOUND -> dump backtrace
+					$bt = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 30 );
 
-					$logger->error( 'TCBF-14 TRIPWIRE: String-keyed blocks array detected!', array_merge( $context, [
-						'filter_tag'   => $tag,
-						'bad_key'      => $key,
-						'keys_sample'  => array_slice( array_keys( $arr ), 0, 10 ),
-						'backtrace'    => $formatted_trace,
+					$logger->error( 'TCBF-14 BLOCKS KEY POISONED', array_merge( $context, [
+						'tag'       => $tag,
+						'bad_key'   => $k,
+						'keys_head' => array_slice( array_keys( $arr ), 0, 12 ),
+						'backtrace' => array_map( function( $f ) {
+							return [
+								'file' => $f['file'] ?? '',
+								'line' => $f['line'] ?? '',
+								'call' => ( $f['class'] ?? '' ) . ( $f['type'] ?? '' ) . ( $f['function'] ?? '' ),
+							];
+						}, $bt ),
 					] ) );
 
-					// Only log once per request
-					break;
+					break; // Only log once per array
 				}
 
 				return $arr;
 			};
 
-			// Hook into all potential WC Bookings block/slot filters
-			$filters = [
-				'wc_bookings_get_time_slots',
-				'woocommerce_bookings_get_time_slots',
-				'wc_bookings_get_blocks',
-				'woocommerce_bookings_get_blocks',
-				'wc_booking_get_blocks_in_range',
-				'woocommerce_booking_get_blocks_in_range',
-			];
+			// ✅ The key filter right before Bookings uses $blocks internally
+			add_filter( 'wc_bookings_product_get_available_blocks', function( $available_times, $product, $blocks, $intervals, $resource_id ) use ( $check ) {
+				// The poisoned array may be $blocks or $available_times
+				$check( $blocks, 'wc_bookings_product_get_available_blocks::$blocks' );
+				$check( $available_times, 'wc_bookings_product_get_available_blocks::$available_times' );
+				return $available_times;
+			}, 9999, 5 );
 
-			foreach ( $filters as $filter ) {
-				add_filter( $filter, function( $value ) use ( $check_blocks, $filter ) {
-					return $check_blocks( $value, $filter );
-				}, 9999 );
-			}
+			// ✅ If some code poisons booked day/month blocks
+			add_filter( 'woocommerce_bookings_booked_day_blocks', function( $booked_day_blocks, $product ) use ( $check ) {
+				return $check( $booked_day_blocks, 'woocommerce_bookings_booked_day_blocks' );
+			}, 9999, 2 );
 
-			$logger->info( 'TCBF-14 blocks tripwire activated', $context );
+			add_filter( 'woocommerce_bookings_booked_month_blocks', function( $booked_month_blocks, $product ) use ( $check ) {
+				return $check( $booked_month_blocks, 'woocommerce_bookings_booked_month_blocks' );
+			}, 9999, 2 );
+
+			// ✅ If someone poisons time slots arrays
+			add_filter( 'woocommerce_bookings_filter_time_slots', function( $available_slots, $product, $args ) use ( $check ) {
+				return $check( $available_slots, 'woocommerce_bookings_filter_time_slots' );
+			}, 9999, 3 );
+
 		}, 20 );
 	}
 
