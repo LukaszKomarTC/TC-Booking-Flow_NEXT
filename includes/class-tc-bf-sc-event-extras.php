@@ -396,16 +396,6 @@ final class Sc_Event_Extras {
                         // 3) If still potentially available, subtract booked qty (INCLUDING in-cart holds)
                         if ( $available_qty > 0 ) {
 
-                            // [TCBF INVESTIGATION] STEP 1 - Log availability loop inputs
-                            self::tcbf_invest_log('AV', 'prod_id=' . $prod_id
-                                . ' post_type=' . get_post_type($prod_id)
-                                . ' wc_type=' . (wc_get_product($prod_id) ? wc_get_product($prod_id)->get_type() : 'n/a')
-                            );
-                            self::tcbf_invest_log('AV', 'resource_id=' . (int) $resource->ID
-                                . ' post_type=' . get_post_type((int) $resource->ID)
-                            );
-                            self::tcbf_invest_log('AV', 'date_range=' . date('Y-m-d H:i', $start_ts) . ' to ' . date('Y-m-d H:i', $end_ts));
-
                             $booking_ids = self::get_booking_ids_in_range_cached(
                                 $start_ts,
                                 $end_ts,
@@ -1746,17 +1736,12 @@ JS;
         // Build cache key (includes product + resource for correct scoping)
         $cache_key = "{$start_ts}|{$end_ts}|{$product_id}|{$resource_id}|" . ( $include_in_cart ? '1' : '0' );
 
-        // [TCBF INVESTIGATION] Log wrapper entry
-        self::tcbf_invest_log('DS', 'ENTER cache_key=' . $cache_key);
-
         if ( isset( $cache[ $cache_key ] ) ) {
-            self::tcbf_invest_log('DS', 'CACHE_HIT returning ' . count($cache[ $cache_key ]) . ' ids');
             return $cache[ $cache_key ];
         }
 
         // Guard: WC_Data_Store must exist
         if ( ! class_exists( 'WC_Data_Store' ) ) {
-            self::tcbf_invest_log('DS', 'GUARD_FAIL: WC_Data_Store class not found');
             $cache[ $cache_key ] = [];
             return [];
         }
@@ -1764,15 +1749,9 @@ JS;
         try {
             $data_store = \WC_Data_Store::load( 'booking' );
 
-            // NOTE: Removed method_exists() guard - WC_Data_Store is a proxy that uses __call()
+            // NOTE: WC_Data_Store is a proxy that uses __call()
             // so method_exists() returns false even though the method works via proxy.
             // The try/catch handles any actual errors.
-
-            // Debug: log query params (gated by ?tcbf_debug_avail=1)
-            self::tcbf_invest_log('DS', sprintf(
-                'query: product=%d resource=%d range=%s→%s',
-                $product_id, $resource_id, date('Y-m-d', $start_ts), date('Y-m-d', $end_ts)
-            ));
 
             // New API: product_id as 3rd param, resource_ids array as 5th param
             $resource_ids_param = $resource_id > 0 ? array( $resource_id ) : array();
@@ -1794,9 +1773,6 @@ JS;
                 $booking_ids = $filtered_ids;
             }
 
-            // Debug: log result count (gated by ?tcbf_debug_avail=1)
-            self::tcbf_invest_log('DS', 'result: ' . count($booking_ids) . ' booking(s) for resource');
-
             // Ensure array return
             if ( ! is_array( $booking_ids ) ) {
                 $booking_ids = [];
@@ -1807,30 +1783,8 @@ JS;
 
         } catch ( \Exception $e ) {
             // Datastore load failed (Bookings not active, etc.)
-            self::tcbf_invest_log('DS', 'EXCEPTION: ' . $e->getMessage());
             $cache[ $cache_key ] = [];
             return [];
-        }
-    }
-
-    /**
-     * Availability debug logger (gated).
-     *
-     * Logs to TCBF admin logging window only when query param ?tcbf_debug_avail=1 is present.
-     * All lines prefixed with [TCBF-AVAIL] for easy filtering.
-     *
-     * @param string $tag     Short tag (e.g., DS, AV)
-     * @param string $message Log message
-     */
-    private static function tcbf_invest_log( string $tag, string $message ) : void {
-        // Gate: only log when query param is present
-        if ( ! isset( $_GET['tcbf_debug_avail'] ) || $_GET['tcbf_debug_avail'] !== '1' ) {
-            return;
-        }
-
-        // Use TCBF's existing logging system
-        if ( class_exists( '\\TC_BF\\Admin\\Settings' ) && method_exists( '\\TC_BF\\Admin\\Settings', 'append_log' ) ) {
-            \TC_BF\Admin\Settings::append_log( '[TCBF-AVAIL] [' . $tag . '] ' . $message );
         }
     }
 }
