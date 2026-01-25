@@ -715,6 +715,12 @@ final class Plugin {
 		$cart_item_meta_part = [];
 		$cart_item_meta_part['booking'] = wc_bookings_get_posted_data($sim_post_part, $product_part);
 
+		// TCBF-14 FIX: Set _booking_id = 0 to prevent WC Bookings 3.x crash.
+		// WC Bookings expects _booking_id to be set (normally done by configure_cart_item_data).
+		// Without it, WC_Booking is created with invalid ID, get_start() returns '' (empty string),
+		// which causes "Unsupported operand types: string - int" in get_blocks_availability().
+		$cart_item_meta_part['booking']['_booking_id'] = 0;
+
 		$cart_item_meta_part['booking'][self::BK_EVENT_ID]    = $event_id;
 		$cart_item_meta_part['booking'][self::BK_EVENT_TITLE] = $event_title;
 		$cart_item_meta_part['booking'][self::BK_ENTRY_ID]    = $entry_id;
@@ -862,6 +868,9 @@ final class Plugin {
 
 				$cart_item_meta_rental = [];
 				$cart_item_meta_rental['booking'] = wc_bookings_get_posted_data($sim_post_rental, $product_rental);
+
+				// TCBF-14 FIX: Set _booking_id = 0 (see participation comment above)
+				$cart_item_meta_rental['booking']['_booking_id'] = 0;
 
 				$cart_item_meta_rental['booking'][self::BK_EVENT_ID]    = $event_id;
 				$cart_item_meta_rental['booking'][self::BK_EVENT_TITLE] = $event_title;
