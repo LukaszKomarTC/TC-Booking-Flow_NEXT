@@ -381,6 +381,9 @@ final class Sc_Event_Extras {
                         $available_qty = $resource->has_qty() ? (int) $resource->get_qty() : (int) $_product->get_qty();
 
                         // 2) HARD GATE: apply Woo Bookings availability rules (global + product + resource)
+                        // TCBF-14 TEST: Temporarily disabled to test if this causes checkout crash
+                        // If checkout works with this disabled, we've found the culprit
+                        /*
                         if ( class_exists( 'WC_Product_Booking_Rule_Manager' ) ) {
                             $rules_ok = \WC_Product_Booking_Rule_Manager::check_range_availability_rules(
                                 $_product,
@@ -392,6 +395,7 @@ final class Sc_Event_Extras {
                                 $available_qty = 0;
                             }
                         }
+                        */
 
                         // 3) If still potentially available, subtract booked qty (INCLUDING in-cart holds)
                         if ( $available_qty > 0 ) {
