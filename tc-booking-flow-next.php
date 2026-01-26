@@ -2,14 +2,14 @@
 /**
  * Plugin Name: TC — Booking Flow NEXT (Refactored Architecture)
  * Description: Consolidates GF44 → Woo cart/order booking flow and Early Booking Discount snapshot. Supports optional split of participation vs rental and per-event EB scope toggles.
- * Version: 0.8.6
+ * Version: 0.8.7
  * Text Domain: tc-booking-flow-next
  * Author: Tossa Cycling (internal)
  */
 
 if ( ! defined('ABSPATH') ) exit;
 
-if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.8.6');
+if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.8.7');
 if ( ! defined('TC_BF_PATH') ) define('TC_BF_PATH', plugin_dir_path(__FILE__));
 if ( ! defined('TC_BF_URL') ) define('TC_BF_URL', plugin_dir_url(__FILE__));
 
@@ -32,8 +32,20 @@ add_action( 'rest_api_init', function() {
 	register_rest_route( 'tc-booking-flow/v1', '/refresh', array(
 		'methods'  => 'POST',
 		'callback' => 'tc_bf_force_refresh',
-		'permission_callback' => function() {
-			return current_user_can( 'update_plugins' );
+		'permission_callback' => function( $request ) {
+			// Allow authenticated admin users
+			if ( current_user_can( 'update_plugins' ) ) {
+				return true;
+			}
+			// Allow token-based authentication for external triggers (GitHub Actions)
+			$token = $request->get_header( 'X-Update-Token' );
+			if ( ! $token ) {
+				$token = $request->get_param( 'token' );
+			}
+			if ( $token && defined( 'TC_BF_UPDATE_TOKEN' ) && hash_equals( TC_BF_UPDATE_TOKEN, $token ) ) {
+				return true;
+			}
+			return false;
 		},
 	));
 });
