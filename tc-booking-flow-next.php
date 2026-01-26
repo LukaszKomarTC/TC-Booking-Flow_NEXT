@@ -16,15 +16,76 @@ if ( ! defined('TC_BF_URL') ) define('TC_BF_URL', plugin_dir_url(__FILE__));
 // i18n
 if ( ! defined('TC_BF_TEXTDOMAIN') ) define('TC_BF_TEXTDOMAIN', 'tc-booking-flow-next');
 
-// Initialize plugin update checker
+// Initialize plugin update checker (GitHub releases)
 require_once TC_BF_PATH . 'plugin-update-checker/plugin-update-checker.php';
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
 $tcBfUpdateChecker = PucFactory::buildUpdateChecker(
-	'https://staging.lukaszkomar.com/dev/tc-booking-flow-next/latest.json',
+	'https://github.com/LukaszKomarTC/TC-Booking-Flow_NEXT/',
 	__FILE__,
 	'tc-booking-flow-next'
 );
+$tcBfUpdateChecker->getVcsApi()->enableReleaseAssets();
+
+// REST API endpoint for remote update trigger
+add_action( 'rest_api_init', function() {
+	register_rest_route( 'tc-booking-flow/v1', '/refresh', array(
+		'methods'  => 'POST',
+		'callback' => 'tc_bf_force_refresh',
+		'permission_callback' => function() {
+			return current_user_can( 'update_plugins' );
+		},
+	));
+});
+
+/**
+ * Force refresh plugin update cache and optionally auto-update.
+ *
+ * @param WP_REST_Request $request
+ * @return array
+ */
+function tc_bf_force_refresh( $request ) {
+	global $wpdb;
+
+	// Clear all update caches
+	delete_site_transient('update_plugins');
+	wp_clean_plugins_cache();
+	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%puc%'");
+
+	// Force WordPress to check for updates
+	wp_update_plugins();
+
+	$result = [
+		'status'  => 'refreshed',
+		'version' => TC_BF_VERSION,
+		'time'    => current_time('mysql')
+	];
+
+	// Auto-update if requested
+	if ( $request->get_param('auto_update') ) {
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		$plugin_file = plugin_basename( TC_BF_PATH . 'tc-booking-flow-next.php' );
+		$skin = new WP_Ajax_Upgrader_Skin();
+		$upgrader = new Plugin_Upgrader( $skin );
+
+		$update_plugins = get_site_transient('update_plugins');
+
+		if ( isset( $update_plugins->response[ $plugin_file ] ) ) {
+			$upgrader->upgrade( $plugin_file );
+			$plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . $plugin_file );
+			$result['new_version'] = $plugin_data['Version'];
+			$result['updated'] = true;
+		} else {
+			$result['updated'] = false;
+			$result['message'] = 'No update available';
+		}
+	}
+
+	return $result;
+}
 
 require_once TC_BF_PATH . 'includes/admin/class-tc-bf-admin-product-meta.php';
 require_once TC_BF_PATH . 'includes/admin/class-tc-bf-admin-settings.php';
