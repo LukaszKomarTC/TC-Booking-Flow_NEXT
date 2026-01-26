@@ -614,6 +614,11 @@ class Woo_BookingLedger {
 			$cart_item_key = $temp;
 		}
 
+		// Skip on checkout page (simplified info - badges shown in cart only)
+		if ( is_checkout() && ! is_wc_endpoint_url() ) {
+			return;
+		}
+
 		// Only process booking items with our ledger
 		if ( empty( $cart_item[ self::BK_LEDGER_PROCESSED ] ) ) {
 			return;
@@ -668,6 +673,11 @@ class Woo_BookingLedger {
 			$temp          = $cart_item;
 			$cart_item     = $cart_item_key;
 			$cart_item_key = $temp;
+		}
+
+		// Skip on checkout page (simplified info - badges shown in cart only)
+		if ( is_checkout() && ! is_wc_endpoint_url() ) {
+			return;
 		}
 
 		// Only process booking items with our ledger
