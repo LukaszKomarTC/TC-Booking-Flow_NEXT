@@ -1405,6 +1405,16 @@ class Woo_OrderMeta {
 		// Render standalone items (non-booking products)
 		foreach ( $standalone as $record ) {
 			self::render_standalone_row( $order, $record );
+
+			// Add summary footer for standalone booking items with EB discount
+			if ( $record['eb_eligible'] && $record['eb_amount'] > 0 && $record['eb_base'] > 0 ) {
+				$qty = $record['item']->get_quantity();
+				$base_total = $record['eb_base'] * $qty;
+				$eb_total = $record['eb_amount'] * $qty;
+				$final_total = $base_total - $eb_total;
+
+				self::render_standalone_summary_footer( $base_total, $eb_total, $final_total );
+			}
 		}
 
 		echo '</div>';
@@ -1482,6 +1492,12 @@ class Woo_OrderMeta {
 			$eb_amount = $eb_base * ( $eb_pct / 100 );
 		}
 
+		// Get confirmation (notification) flag
+		$confirmation = self::get_item_meta_ci( $item, 'confirmation' );
+		if ( $confirmation === '' ) {
+			$confirmation = self::get_item_meta_ci( $item, '_confirmation' );
+		}
+
 		return [
 			'item_id'           => $item_id,
 			'item'              => $item,
@@ -1503,6 +1519,7 @@ class Woo_OrderMeta {
 			'eb_pct'            => $eb_pct,
 			'eb_amount'         => $eb_amount,
 			'eb_base'           => $eb_base,
+			'confirmation'      => $confirmation,
 		];
 	}
 
@@ -2225,6 +2242,38 @@ class Woo_OrderMeta {
 		}
 		echo '</div>';
 
+		// Check if viewer can see participant status badge (admin or partner-owner)
+		$show_participant_badge = self::can_viewer_see_participant_badge( $order );
+
+		// Participant badge (like parent rows)
+		if ( $record['participant'] !== '' ) {
+			echo '<div class="tcbf-participant-line">';
+			echo '<span class="tcbf-participant-badge">';
+			echo '<span class="tcbf-participant-icon">👤</span>';
+			echo '<span class="tcbf-participant-name">' . esc_html( $record['participant'] ) . '</span>';
+			echo '</span>';
+
+			// Status badge (checkmark/pending) for admin or partner-owner
+			if ( $show_participant_badge ) {
+				$status_icon = self::get_participant_status_badge( $order, $record );
+				if ( $status_icon !== '' ) {
+					echo $status_icon;
+				}
+			}
+
+			echo '</div>';
+		}
+
+		// Notification badge (if confirmation was requested)
+		if ( ! empty( $record['confirmation'] ) ) {
+			echo '<div class="tcbf-notification-line">';
+			echo '<span class="tcbf-notification-badge">';
+			echo '<span class="tcbf-notification-icon">✉️</span>';
+			echo '<span class="tcbf-notification-text">' . esc_html__( 'Email notification', TC_BF_TEXTDOMAIN ) . '</span>';
+			echo '</span>';
+			echo '</div>';
+		}
+
 		// EB badge (if applicable)
 		if ( $record['eb_eligible'] && $record['eb_amount'] > 0 ) {
 			echo '<div class="tcbf-eb-line">';
@@ -2277,6 +2326,32 @@ class Woo_OrderMeta {
 		echo '<div class="tcbf-order-price">' . wp_kses_post( $price_html ) . '</div>';
 
 		echo '</div>'; // .tcbf-order-row
+	}
+
+	/**
+	 * Render summary footer for standalone booking with EB discount.
+	 *
+	 * @param float $base_total Base price (before EB)
+	 * @param float $eb_total EB discount amount
+	 * @param float $final_total Final total after discount
+	 */
+	private static function render_standalone_summary_footer( float $base_total, float $eb_total, float $final_total ) : void {
+		?>
+		<div class="tcbf-standalone-summary">
+			<div class="tcbf-standalone-summary-line tcbf-summary-base">
+				<span class="tcbf-summary-label"><?php esc_html_e( 'Price before EB', TC_BF_TEXTDOMAIN ); ?></span>
+				<span class="tcbf-summary-value"><?php echo wp_kses_post( wc_price( $base_total ) ); ?></span>
+			</div>
+			<div class="tcbf-standalone-summary-line tcbf-summary-eb">
+				<span class="tcbf-summary-label"><?php esc_html_e( 'Early booking discount', TC_BF_TEXTDOMAIN ); ?></span>
+				<span class="tcbf-summary-value tcbf-summary-discount">-<?php echo wp_kses_post( wc_price( $eb_total ) ); ?></span>
+			</div>
+			<div class="tcbf-standalone-summary-line tcbf-summary-total">
+				<span class="tcbf-summary-label"><?php esc_html_e( 'Total', TC_BF_TEXTDOMAIN ); ?></span>
+				<span class="tcbf-summary-value"><?php echo wp_kses_post( wc_price( $final_total ) ); ?></span>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
@@ -2432,6 +2507,68 @@ class Woo_OrderMeta {
 			color: #dc2626;
 		}
 
+		/* Notification badge line */
+		.tcbf-notification-line {
+			margin-bottom: 8px;
+		}
+		.tcbf-notification-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+			color: #1e40af;
+			padding: 5px 10px;
+			border-radius: 4px;
+			font-size: 12px;
+			font-weight: 500;
+			border: 1px solid rgba(59, 130, 246, 0.2);
+		}
+		.tcbf-notification-icon {
+			font-size: 13px;
+		}
+		.tcbf-notification-text {
+			white-space: nowrap;
+		}
+
+		/* Standalone summary footer (Price, EB, Total) */
+		.tcbf-standalone-summary {
+			background: rgba(0, 0, 0, 0.02);
+			padding: 10px 14px;
+			margin: 8px 0 16px;
+			border-radius: 6px;
+		}
+		.tcbf-standalone-summary-line {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 3px 0;
+			font-size: 13px;
+		}
+		.tcbf-standalone-summary .tcbf-summary-label {
+			color: #6b7280;
+		}
+		.tcbf-standalone-summary .tcbf-summary-value {
+			font-weight: 600;
+			color: #374151;
+		}
+		.tcbf-standalone-summary .tcbf-summary-discount {
+			color: var(--tcbf-eb-purple, #7c3aed);
+		}
+		.tcbf-standalone-summary .tcbf-summary-total {
+			border-top: 1px solid rgba(0, 0, 0, 0.08);
+			margin-top: 4px;
+			padding-top: 6px;
+		}
+		.tcbf-standalone-summary .tcbf-summary-total .tcbf-summary-label {
+			font-weight: 600;
+			color: #374151;
+		}
+		.tcbf-standalone-summary .tcbf-summary-total .tcbf-summary-value {
+			font-weight: 700;
+			color: #111827;
+			font-size: 14px;
+		}
+
 		/* EB Badge line - matching cart style */
 		.tcbf-eb-line {
 			margin-bottom: 8px;
@@ -2529,13 +2666,14 @@ class Woo_OrderMeta {
 			color: #6b7280;
 		}
 
-		/* Standalone row (non-pack items) */
+		/* Standalone row (non-pack items) - clean like cart/checkout */
 		.tcbf-order-row--standalone {
-			background: rgba(255, 255, 255, 0.4);
-			border: 1px solid rgba(0, 0, 0, 0.06);
-			border-radius: 8px;
-			padding: 14px;
+			padding: 14px 0;
 			margin-bottom: 12px;
+			border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		}
+		.tcbf-order-row--standalone:last-child {
+			border-bottom: none;
 		}
 
 		/* Quantity badge */
