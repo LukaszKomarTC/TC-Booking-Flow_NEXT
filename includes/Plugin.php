@@ -179,6 +179,9 @@ final class Plugin {
 		// ---- EB: apply snapshot EB to eligible booking cart items
 		add_action('woocommerce_before_calculate_totals', [ $this, 'woo_apply_eb_snapshot_to_cart' ], 20, 1);
 
+		// ---- EB Teaser: show Early Booking discount tiers on product page (before add-to-cart form)
+		add_action('woocommerce_before_add_to_cart_form', [ Integrations\WooCommerce\Woo::class, 'render_eb_teaser' ], 15);
+
 		// ---- Cart display: show booking meta to the customer
 		add_filter('woocommerce_get_item_data', [ $this, 'woo_cart_item_data' ], 20, 2);
 
