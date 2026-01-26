@@ -9,6 +9,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: TCBF
     permissions:
       contents: write
 
@@ -70,3 +71,36 @@ jobs:
             tc-booking-flow-next.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger WordPress plugin update
+        if: steps.check.outputs.exists == 'false'
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_UPDATE_TOKEN: ${{ secrets.WP_UPDATE_TOKEN }}
+        run: |
+          if [ -z "$WP_SITE_URL" ] || [ -z "$WP_UPDATE_TOKEN" ]; then
+            echo "⚠️ WP_SITE_URL or WP_UPDATE_TOKEN not configured, skipping update trigger"
+            exit 0
+          fi
+
+          echo "Triggering plugin update on WordPress..."
+
+          # Call the refresh endpoint with auto_update enabled
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "X-Update-Token: $WP_UPDATE_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"auto_update": true}' \
+            "${WP_SITE_URL}/wp-json/tc-booking-flow/v1/refresh")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "Response code: $HTTP_CODE"
+          echo "Response body: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Plugin update triggered successfully"
+          else
+            echo "❌ Failed to trigger plugin update (HTTP $HTTP_CODE)"
+            exit 1
+          fi
