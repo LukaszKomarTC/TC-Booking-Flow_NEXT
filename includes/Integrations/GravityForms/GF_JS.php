@@ -1142,8 +1142,7 @@ JS;
 
 /* EB Teaser (shows EB rules before date selection) */
 .tcbf-eb-teaser {
-  background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
-  border-left: 4px solid #3d61aa;
+  background: linear-gradient(45deg, #3d61aa 0%, #b74d96 100%);
   padding: 16px 20px;
   margin: 0 0 16px 0;
   display: flex;
@@ -1153,13 +1152,13 @@ JS;
 }
 .tcbf-eb-teaser__icon { font-size: 28px; flex-shrink: 0; }
 .tcbf-eb-teaser__content { flex: 1; }
-.tcbf-eb-teaser__title { font-size: 16px; font-weight: 700; color: #1e3a5f; margin-bottom: 10px; }
+.tcbf-eb-teaser__title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 10px; }
 .tcbf-eb-teaser__rules { display: flex; flex-direction: column; gap: 6px; }
-.tcbf-eb-teaser__row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #334155; }
+.tcbf-eb-teaser__row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: rgba(255,255,255,0.9); }
 .tcbf-eb-teaser__days { }
-.tcbf-eb-teaser__arrow { color: #3d61aa; font-weight: bold; }
-.tcbf-eb-teaser__discount { color: #166534; font-weight: 500; }
-.tcbf-eb-teaser__discount strong { color: #15803d; }
+.tcbf-eb-teaser__arrow { color: #fff; font-weight: bold; }
+.tcbf-eb-teaser__discount { color: #a7f3d0; font-weight: 500; }
+.tcbf-eb-teaser__discount strong { color: #a7f3d0; }
 ";
 
 		// Enhanced EB Display

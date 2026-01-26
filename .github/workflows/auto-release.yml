@@ -1,0 +1,72 @@
+name: Auto Release on Version Change
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tc-booking-flow-next.php'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep -oP "Version:\s*\K[0-9]+\.[0-9]+\.[0-9]+" tc-booking-flow-next.php)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Check if release exists
+        id: check
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release v${{ steps.version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release v${{ steps.version.outputs.version }} does not exist"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build plugin ZIP
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          set -e
+          PLUGIN_SLUG="tc-booking-flow-next"
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_DIR="build"
+
+          echo "Building plugin zip for v$VERSION..."
+          mkdir -p "$BUILD_DIR/$PLUGIN_SLUG"
+
+          rsync -av \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "$BUILD_DIR" \
+            --exclude ".DS_Store" \
+            --exclude "*.json" \
+            --exclude "GF_EXPORT_*.json" \
+            ./ "$BUILD_DIR/$PLUGIN_SLUG/"
+
+          cd "$BUILD_DIR"
+          zip -r "../$PLUGIN_SLUG.zip" "$PLUGIN_SLUG"
+
+          echo "Created: $PLUGIN_SLUG.zip ($(ls -lh ../$PLUGIN_SLUG.zip | awk '{print $5}'))"
+
+      - name: Create release with ZIP asset
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --title "v${{ steps.version.outputs.version }}" \
+            tc-booking-flow-next.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
