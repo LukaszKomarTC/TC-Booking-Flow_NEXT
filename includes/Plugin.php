@@ -1302,14 +1302,17 @@ final class Plugin {
 			echo "  position: relative;\n";
 			echo "}\n";
 
-			echo "\n/* Parent item styling - clean look, no border */\n";
+			echo "\n/* Parent item styling - theme border via border-left */\n";
 			echo ".tcbf-pack-role-parent {\n";
 			echo "  background: rgba(224, 231, 255, 0.15) !important;\n";
+			echo "  border-left: 3px solid var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) !important;\n";
 			echo "}\n";
 
-			echo "\n/* Child item styling - clean look, no border */\n";
+			echo "\n/* Child item styling - softer border */\n";
 			echo ".tcbf-pack-role-child {\n";
 			echo "  background: rgba(243, 244, 246, 0.4) !important;\n";
+			echo "  border-left: 3px solid color-mix(in srgb, var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) 50%, transparent) !important;\n";
+			echo "  padding-left: 20px !important;\n";
 			echo "}\n";
 
 			echo "\n/* Scope-specific refinements */\n";
