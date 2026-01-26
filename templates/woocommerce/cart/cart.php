@@ -393,12 +393,7 @@ do_action( 'woocommerce_before_cart' ); ?>
 .woocommerce-cart-form__contents tbody > tr.tcbf-cart-row--parent:first-child td {
 	padding-top: 9px !important;
 }
-.tcbf-cart-row--parent {
-	border-left: 3px solid var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) !important;
-}
-.tcbf-cart-row--child {
-	border-left: 3px solid color-mix(in srgb, var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) 50%, transparent) !important;
-}
+/* No left border - clean table look like checkout */
 .tcbf-product-link {
 	color: var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00)));
 }

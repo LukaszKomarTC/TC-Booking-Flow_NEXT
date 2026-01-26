@@ -276,16 +276,7 @@ $tcbf_enabled = class_exists( '\TC_BF\Integrations\WooCommerce\Woo_OrderMeta' );
 .tcbf-checkout-table tbody.tcbf-pack-group + tbody.tcbf-pack-group > tr:first-child th {
 	padding-top: 12px;
 }
-.tcbf-checkout-row--parent {
-	border-left: 3px solid var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) !important;
-}
-.tcbf-checkout-row--child {
-	border-left: 3px solid color-mix(in srgb, var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00))) 50%, transparent) !important;
-}
-.tcbf-checkout-row--parent td,
-.tcbf-checkout-row--child td {
-	padding-left: 12px !important;
-}
+/* No left border - clean table look */
 .tcbf-checkout-link {
 	color: var(--tcbf-accent, var(--shopkeeper-accent, var(--theme-accent, #434c00)));
 }
