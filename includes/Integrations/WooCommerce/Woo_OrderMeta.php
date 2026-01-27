@@ -647,13 +647,12 @@ class Woo_OrderMeta {
 			color: var(--tcbf-discount-green, #15803d);
 			font-weight: 600;
 		}
-		.tcbf-discount-row th,
-		.tcbf-discount-row td {
+		.tcbf-discount-row {
 			background: var(--tcbf-discount-green-gradient, linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%));
-			padding: 12px !important;
 		}
 		.tcbf-discount-row th,
 		.tcbf-discount-row td {
+			padding: 12px !important;
 			color: var(--tcbf-discount-green, #15803d) !important;
 		}
 		.tcbf-discount-row th {
