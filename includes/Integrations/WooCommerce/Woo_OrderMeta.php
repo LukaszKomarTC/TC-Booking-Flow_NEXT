@@ -1402,8 +1402,10 @@ class Woo_OrderMeta {
 			self::render_group( $order, $group_items );
 		}
 
-		// Render standalone items (non-booking products)
+		// Render standalone items (non-booking products) - each wrapped in container for visual consistency
 		foreach ( $standalone as $record ) {
+			echo '<div class="tcbf-standalone-group">';
+
 			self::render_standalone_row( $order, $record );
 
 			// Add summary footer for standalone booking items with EB discount
@@ -1415,6 +1417,8 @@ class Woo_OrderMeta {
 
 				self::render_standalone_summary_footer( $base_total, $eb_total, $final_total );
 			}
+
+			echo '</div>';
 		}
 
 		echo '</div>';
@@ -2386,6 +2390,15 @@ class Woo_OrderMeta {
 			margin-bottom: 0;
 		}
 
+		/* Standalone group wrapper - same visual treatment as pack groups */
+		.tcbf-standalone-group {
+			background: rgba(255, 255, 255, 0.6);
+			margin-bottom: 18px;
+		}
+		.tcbf-standalone-group:last-child {
+			margin-bottom: 0;
+		}
+
 		/* Order row base */
 		.tcbf-order-row {
 			display: flex;
@@ -2666,10 +2679,9 @@ class Woo_OrderMeta {
 			color: #6b7280;
 		}
 
-		/* Standalone row (non-pack items) - clean like cart/checkout */
+		/* Standalone row (non-pack items) - matches parent row styling */
 		.tcbf-order-row--standalone {
-			padding: 14px 0;
-			margin-bottom: 12px;
+			padding: 10px 10px 10px 13px;  /* 13px left = 10px + 3px (border width compensation for alignment) */
 			border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 		}
 		.tcbf-order-row--standalone:last-child {
