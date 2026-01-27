@@ -2389,10 +2389,9 @@ class Woo_OrderMeta {
 		.tcbf-totals-table .tcbf-discount-row td,
 		.tcbf-discount-row th,
 		.tcbf-discount-row td {
-			background: #f0fdf4 !important;
-			background-color: #f0fdf4 !important;
+			background: var(--tcbf-discount-green-bg, #f0fdf4) !important;
 			padding: 12px !important;
-			color: #15803d !important;
+			color: var(--tcbf-discount-green, #15803d) !important;
 		}
 		.tcbf-discount-row th {
 			font-weight: 600;
