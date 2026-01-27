@@ -642,24 +642,6 @@ class Woo_OrderMeta {
 
 		?>
 		<style>
-		/* Discount row in totals - green styling (matches cart/checkout coupon row) */
-		.tcbf-discount-value {
-			color: var(--tcbf-discount-green, #15803d);
-			font-weight: 600;
-		}
-		.tcbf-discount-row th,
-		.tcbf-discount-row td {
-			background: var(--tcbf-discount-green-bg, #f0fdf4) !important;
-			padding: 12px !important;
-			color: var(--tcbf-discount-green, #15803d) !important;
-		}
-		.tcbf-discount-row th {
-			font-weight: 600;
-		}
-		.tcbf-discount-row td {
-			font-weight: 700;
-		}
-
 		/* Explainer block (EB + Commission) */
 		.tcbf-order-explainer {
 			margin-top: 20px;
@@ -2398,6 +2380,20 @@ class Woo_OrderMeta {
 		/* Theme color variable (inherits from theme or fallback) */
 		:root {
 			--tcbf-accent: var(--shopkeeper-accent, var(--theme-accent, var(--theme-primary-color, #434c00)));
+		}
+
+		/* Discount row in totals - green styling (matches cart/checkout coupon row) */
+		.tcbf-discount-row th,
+		.tcbf-discount-row td {
+			background: var(--tcbf-discount-green-bg, #f0fdf4) !important;
+			padding: 12px !important;
+			color: var(--tcbf-discount-green, #15803d) !important;
+		}
+		.tcbf-discount-row th {
+			font-weight: 600;
+		}
+		.tcbf-discount-row td {
+			font-weight: 700;
 		}
 
 		/* Order items container */
