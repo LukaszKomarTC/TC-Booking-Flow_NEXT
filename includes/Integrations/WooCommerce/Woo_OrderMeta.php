@@ -652,6 +652,7 @@ class Woo_OrderMeta {
 		}
 		.tcbf-discount-row th,
 		.tcbf-discount-row td {
+			background: inherit !important;
 			padding: 12px !important;
 			color: var(--tcbf-discount-green, #15803d) !important;
 		}
