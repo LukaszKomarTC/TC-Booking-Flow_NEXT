@@ -1459,6 +1459,10 @@ class Woo_OrderMeta {
 		if ( $participant === '' ) {
 			$participant = self::get_item_meta_ci( $item, 'participant' );
 		}
+		// Fallback: standalone WC Bookings use _tcbf_participant_name
+		if ( $participant === '' ) {
+			$participant = self::get_item_meta_ci( $item, '_tcbf_participant_name' );
+		}
 
 		$bicycle = self::get_item_meta_ci( $item, '_bicycle' );
 		if ( $bicycle === '' ) {
@@ -1485,11 +1489,27 @@ class Woo_OrderMeta {
 		// Get booking date
 		$booking_date = self::get_booking_date_from_item( $item_id );
 
-		// Get EB (Early Booking) meta
+		// Get EB (Early Booking) meta - check Event Form keys first
 		$eb_eligible = (int) self::get_item_meta_ci( $item, '_eb_eligible' );
 		$eb_pct      = (float) self::get_item_meta_ci( $item, '_eb_pct' );
 		$eb_amount   = (float) self::get_item_meta_ci( $item, '_eb_amount' );
 		$eb_base     = (float) self::get_item_meta_ci( $item, '_eb_base_price' );
+
+		// Fallback: standalone WC Bookings use _tcbf_ledger_* keys
+		if ( $eb_pct <= 0 ) {
+			$eb_pct = (float) self::get_item_meta_ci( $item, '_tcbf_ledger_eb_pct' );
+		}
+		if ( $eb_amount <= 0 ) {
+			$eb_amount = (float) self::get_item_meta_ci( $item, '_tcbf_ledger_eb_amount' );
+		}
+		if ( $eb_base <= 0 ) {
+			$eb_base = (float) self::get_item_meta_ci( $item, '_tcbf_ledger_base' );
+		}
+
+		// Infer eb_eligible if we have EB data from ledger
+		if ( ! $eb_eligible && ( $eb_pct > 0 || $eb_amount > 0 ) ) {
+			$eb_eligible = 1;
+		}
 
 		// Calculate EB amount if not stored but we have pct and base
 		if ( $eb_eligible && $eb_amount <= 0 && $eb_pct > 0 && $eb_base > 0 ) {
@@ -1500,6 +1520,13 @@ class Woo_OrderMeta {
 		$confirmation = self::get_item_meta_ci( $item, 'confirmation' );
 		if ( $confirmation === '' ) {
 			$confirmation = self::get_item_meta_ci( $item, '_confirmation' );
+		}
+		// Fallback: standalone WC Bookings use _tcbf_notify_participant
+		if ( $confirmation === '' ) {
+			$notify = self::get_item_meta_ci( $item, '_tcbf_notify_participant' );
+			if ( $notify === '1' ) {
+				$confirmation = '1';
+			}
 		}
 
 		return [
