@@ -2570,12 +2570,11 @@ class Woo_OrderMeta {
 			white-space: nowrap;
 		}
 
-		/* Standalone summary footer (Price, EB, Total) */
+		/* Standalone summary footer (Price, EB, Total) - aligned with pack footer */
 		.tcbf-standalone-summary {
 			background: rgba(0, 0, 0, 0.02);
-			padding: 10px 14px;
-			margin: 8px 0 16px;
-			border-radius: 6px;
+			padding: 12px 16px;
+			border-top: 1px solid var(--tcbf-divider-light, rgba(0, 0, 0, 0.06));
 		}
 		.tcbf-standalone-summary-line {
 			display: flex;
