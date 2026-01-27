@@ -2,14 +2,14 @@
 /**
  * Plugin Name: TC — Booking Flow NEXT (Refactored Architecture)
  * Description: Consolidates GF44 → Woo cart/order booking flow and Early Booking Discount snapshot. Supports optional split of participation vs rental and per-event EB scope toggles.
- * Version: 0.8.9
+ * Version: 0.8.10
  * Text Domain: tc-booking-flow-next
  * Author: Tossa Cycling (internal)
  */
 
 if ( ! defined('ABSPATH') ) exit;
 
-if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.8.9');
+if ( ! defined('TC_BF_VERSION') ) define('TC_BF_VERSION','0.8.10');
 if ( ! defined('TC_BF_PATH') ) define('TC_BF_PATH', plugin_dir_path(__FILE__));
 if ( ! defined('TC_BF_URL') ) define('TC_BF_URL', plugin_dir_url(__FILE__));
 
@@ -57,15 +57,25 @@ add_action( 'rest_api_init', function() {
  * @return array
  */
 function tc_bf_force_refresh( $request ) {
-	global $wpdb;
+	global $wpdb, $tcBfUpdateChecker;
 
-	// Clear all update caches
+	// Clear all update caches aggressively
 	delete_site_transient('update_plugins');
 	wp_clean_plugins_cache();
 	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%puc%'");
+	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%tc_bf%update%'");
+	$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_site_transient%update%'");
+
+	// Force PUC to check GitHub for new version NOW
+	if ( $tcBfUpdateChecker ) {
+		$tcBfUpdateChecker->checkForUpdates();
+	}
 
 	// Force WordPress to check for updates
 	wp_update_plugins();
+
+	// Clear object cache
+	wp_cache_flush();
 
 	$result = [
 		'status'  => 'refreshed',
@@ -78,21 +88,41 @@ function tc_bf_force_refresh( $request ) {
 		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
 
 		$plugin_file = plugin_basename( TC_BF_PATH . 'tc-booking-flow-next.php' );
 		$skin = new WP_Ajax_Upgrader_Skin();
 		$upgrader = new Plugin_Upgrader( $skin );
 
+		// Get fresh update info
 		$update_plugins = get_site_transient('update_plugins');
 
+		// Debug info
+		$result['plugin_file'] = $plugin_file;
+		$result['available_updates'] = array_keys( (array) ($update_plugins->response ?? []) );
+
 		if ( isset( $update_plugins->response[ $plugin_file ] ) ) {
-			$upgrader->upgrade( $plugin_file );
+			// Perform the upgrade
+			$upgrade_result = $upgrader->upgrade( $plugin_file );
+
+			$result['upgrade_attempted'] = true;
+			$result['upgrade_result'] = $upgrade_result;
+			$result['upgrade_errors'] = $skin->get_errors();
+
+			// Re-activate plugin if needed
+			if ( $upgrade_result && ! is_plugin_active( $plugin_file ) ) {
+				activate_plugin( $plugin_file );
+				$result['reactivated'] = true;
+			}
+
+			// Get new version after upgrade
 			$plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . $plugin_file );
 			$result['new_version'] = $plugin_data['Version'];
 			$result['updated'] = true;
 		} else {
+			$result['upgrade_attempted'] = false;
 			$result['updated'] = false;
-			$result['message'] = 'No update available';
+			$result['message'] = 'No update available or plugin already up to date';
 		}
 	}
 
