@@ -586,10 +586,40 @@ class Woo_OrderMeta {
 
 		$currency = $order->get_currency();
 
-		// === Gather data ===
+		// === Gather EB data ===
 		$eb_amount = (float) $order->get_meta( 'early_booking_discount_amount', true );
 		$eb_pct    = (float) $order->get_meta( 'early_booking_discount_pct', true );
-		$has_eb    = ( $eb_amount > 0 );
+
+		// Fallback: aggregate EB data from item-level meta (for orders created before v0.9.1)
+		if ( $eb_amount <= 0 ) {
+			foreach ( $order->get_items() as $item ) {
+				if ( ! $item instanceof \WC_Order_Item_Product ) {
+					continue;
+				}
+				$qty = max( 1, (int) $item->get_quantity() );
+
+				// Check Event Form meta
+				$item_amt = (float) $item->get_meta( '_eb_amount', true );
+				$item_pct = (float) $item->get_meta( '_eb_pct', true );
+
+				// Fallback to standalone WC Booking meta
+				if ( $item_amt <= 0 ) {
+					$item_amt = (float) $item->get_meta( '_tcbf_ledger_eb_amount', true );
+				}
+				if ( $item_pct <= 0 ) {
+					$item_pct = (float) $item->get_meta( '_tcbf_ledger_eb_pct', true );
+				}
+
+				if ( $item_amt > 0 ) {
+					$eb_amount += $item_amt * $qty;
+					if ( $eb_pct <= 0 && $item_pct > 0 ) {
+						$eb_pct = $item_pct;
+					}
+				}
+			}
+		}
+
+		$has_eb = ( $eb_amount > 0 );
 
 		// Commission visibility
 		$partner_id = (int) $order->get_meta( 'partner_id', true );
@@ -852,10 +882,40 @@ class Woo_OrderMeta {
 
 		$currency = $order->get_currency();
 
-		// === Gather data ===
+		// === Gather EB data ===
 		$eb_amount = (float) $order->get_meta( 'early_booking_discount_amount', true );
 		$eb_pct    = (float) $order->get_meta( 'early_booking_discount_pct', true );
-		$has_eb    = ( $eb_amount > 0 );
+
+		// Fallback: aggregate EB data from item-level meta (for orders created before v0.9.1)
+		if ( $eb_amount <= 0 ) {
+			foreach ( $order->get_items() as $item ) {
+				if ( ! $item instanceof \WC_Order_Item_Product ) {
+					continue;
+				}
+				$qty = max( 1, (int) $item->get_quantity() );
+
+				// Check Event Form meta
+				$item_amt = (float) $item->get_meta( '_eb_amount', true );
+				$item_pct = (float) $item->get_meta( '_eb_pct', true );
+
+				// Fallback to standalone WC Booking meta
+				if ( $item_amt <= 0 ) {
+					$item_amt = (float) $item->get_meta( '_tcbf_ledger_eb_amount', true );
+				}
+				if ( $item_pct <= 0 ) {
+					$item_pct = (float) $item->get_meta( '_tcbf_ledger_eb_pct', true );
+				}
+
+				if ( $item_amt > 0 ) {
+					$eb_amount += $item_amt * $qty;
+					if ( $eb_pct <= 0 && $item_pct > 0 ) {
+						$eb_pct = $item_pct;
+					}
+				}
+			}
+		}
+
+		$has_eb = ( $eb_amount > 0 );
 
 		// Commission visibility (admin emails only)
 		$partner_id = (int) $order->get_meta( 'partner_id', true );
