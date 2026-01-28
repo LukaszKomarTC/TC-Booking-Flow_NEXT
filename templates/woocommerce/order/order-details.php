@@ -15,7 +15,8 @@
  * @version 10.1.0
  *
  * TCBF Customization:
- * - Detects booking orders (items with _event_id or tc_group_id)
+ * - Detects booking orders (items with _event_id, tc_group_id, or _tcbf_ledger_base)
+ * - Supports both Event Form products and standalone WC Booking products
  * - Uses grouped parent/child renderer for booking orders
  * - Falls back to standard Woo loop for non-booking orders
  *
@@ -57,7 +58,8 @@ if ( $show_downloads ) {
 }
 
 /**
- * TCBF: Detect if this is a booking order (has _event_id or tc_group_id on any item).
+ * TCBF: Detect if this is a booking order.
+ * Checks for: _event_id, tc_group_id (Event Form products), or _tcbf_ledger_base (standalone WC Bookings).
  * If yes, use our grouped renderer. Otherwise, use standard Woo table.
  */
 $is_tcbf_booking_order = class_exists( '\\TC_BF\\Integrations\\WooCommerce\\Woo_OrderMeta' )

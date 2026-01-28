@@ -1254,15 +1254,28 @@ class Woo_OrderMeta {
 				continue;
 			}
 
-			// Check for _event_id (primary booking marker)
+			// Check for _event_id (primary booking marker - Event Form products)
 			$event_id = self::get_item_meta_ci( $item, '_event_id' );
 			if ( $event_id !== '' && (int) $event_id > 0 ) {
 				return true;
 			}
 
-			// Check for tc_group_id (pack grouping marker)
+			// Check for tc_group_id (pack grouping marker - Event Form products)
 			$group_id = self::get_item_meta_ci( $item, 'tc_group_id' );
 			if ( $group_id !== '' && (int) $group_id > 0 ) {
+				return true;
+			}
+
+			// Check for standalone WC Booking ledger markers (Booking Form products)
+			// These are set by Woo_BookingLedger for standalone bike rentals
+			$ledger_base = self::get_item_meta_ci( $item, '_tcbf_ledger_base' );
+			if ( $ledger_base !== '' && (float) $ledger_base > 0 ) {
+				return true;
+			}
+
+			// Also check for participant name from standalone bookings
+			$participant = self::get_item_meta_ci( $item, '_tcbf_participant_name' );
+			if ( $participant !== '' ) {
 				return true;
 			}
 		}
