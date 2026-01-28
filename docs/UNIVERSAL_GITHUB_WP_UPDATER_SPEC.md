@@ -2,9 +2,10 @@
 
 ## Complete Architecture Analysis & Universal Plugin Specification
 
-**Document Version:** 1.0.0
+**Document Version:** 1.1.0
 **Based on:** TC-Booking-Flow_NEXT v0.9.2 analysis
 **Date:** 2026-01-28
+**Repository:** github.com/LukaszKomarTC/github-wp-updater (pending)
 
 ---
 
@@ -13,7 +14,14 @@
 1. [Repository Loop Architecture Summary](#1-repository-loop-architecture-summary)
 2. [Detailed Component Analysis](#2-detailed-component-analysis)
 3. [Universal Plugin Specification](#3-universal-plugin-specification)
+   - 3.0 [Plugin Connection Model](#30-plugin-connection-model-how-users-connect-plugins-to-github)
+   - 3.1 [Core Features (MVP)](#31-core-features-mvp)
+   - 3.2 [Security Requirements](#32-security-requirements)
+   - 3.3 [Packaging/Update Strategy](#33-packagingupdate-strategy)
+   - 3.4 [Verification Strategy](#34-verification-strategy-phase-3)
 4. [Implementation Schedule](#4-implementation-schedule)
+5. [Appendix A: GitHub Workflow Template](#appendix-a-github-workflow-template-mvp)
+6. [Appendix B: REST API Reference](#appendix-b-rest-api-reference-mvp)
 
 ---
 
@@ -438,6 +446,343 @@ if ( $request->get_param('auto_update') ) {
 ---
 
 ## 3. UNIVERSAL PLUGIN SPECIFICATION
+
+### 3.0 Plugin Connection Model (How Users Connect Plugins to GitHub)
+
+This section explains how the Universal GitHub WP Updater allows users to connect ANY WordPress plugin to ANY GitHub repository for automated updates.
+
+#### 3.0.1 Two Supported Use Cases
+
+| Use Case | Description | Example |
+|----------|-------------|---------|
+| **A) Plugin Developer** | You own the plugin, want auto-updates from your GitHub repo | TC-Booking-Flow pattern |
+| **B) Site Administrator** | You install 3rd-party plugins from GitHub, want updates | Managing plugins you don't own |
+
+#### 3.0.2 Connection Approach: Central Manager Plugin
+
+The Universal Updater acts as a **central manager** that handles GitHub connections for ANY installed plugin:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    GITHUB WP UPDATER (Manager Plugin)                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Manages updates for:                                                       │
+│                                                                             │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐          │
+│  │ Plugin A         │  │ Plugin B         │  │ Plugin C         │          │
+│  │ (3rd party)      │  │ (your own)       │  │ (forked)         │          │
+│  │                  │  │                  │  │                  │          │
+│  │ ↔ github.com/    │  │ ↔ github.com/    │  │ ↔ github.com/    │          │
+│  │   user/plugin-a  │  │   you/plugin-b   │  │   you/plugin-c   │          │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Benefits:**
+- Works with ANY plugin (no modification needed to target plugins)
+- Centralized control (one place to manage all GitHub connections)
+- Flexible authentication (supports public + private repos)
+- CI/CD ready (REST API for automated triggers)
+
+#### 3.0.3 Admin UI: Connect a Plugin to GitHub
+
+**Step-by-step connection wizard:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Settings > GitHub Updater > Add Plugin Connection                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Step 1: Select WordPress Plugin                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ [▾] Select installed plugin...                                      │    │
+│  │     ├─ Advanced Custom Fields (acf/acf.php)                         │    │
+│  │     ├─ My Custom Plugin (my-plugin/my-plugin.php)                   │    │
+│  │     ├─ WooCommerce Addon (wc-addon/wc-addon.php)                    │    │
+│  │     └─ TC Booking Flow (tc-booking-flow-next/tc-booking-flow.php)   │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  Selected: my-plugin/my-plugin.php                                          │
+│  Current Version: 1.2.3                                                     │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                                                             │
+│  Step 2: Enter GitHub Repository                                            │
+│                                                                             │
+│  Repository URL:                                                            │
+│  [https://github.com/mycompany/my-plugin____________________]              │
+│                                                                             │
+│  Or paste in format: owner/repo                                             │
+│  [mycompany/my-plugin_______________________________________]              │
+│                                                                             │
+│  [🔍 Detect from plugin header]  ← Reads "Plugin URI" or "GitHub URI"      │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                                                             │
+│  Step 3: Authentication (for private repos)                                 │
+│                                                                             │
+│  ○ Public repository (no authentication needed)                             │
+│  ● Private repository                                                       │
+│      Token: [ghp_xxxxxxxxxxxxxxxxxxxx______________________]               │
+│                                                                             │
+│  [Test Connection]                                                          │
+│                                                                             │
+│  ✓ Connected! Latest release: v1.3.0 (newer than installed 1.2.3)          │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                                                             │
+│  Step 4: Update Settings                                                    │
+│                                                                             │
+│  Release Channel: [● Stable ○ Pre-release ○ Branch: main]                  │
+│  Auto-update:     [☑ Enable automatic updates]                             │
+│                                                                             │
+│  [Cancel]                                      [Save Connection]            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.0.4 Connected Plugins Dashboard
+
+**Main admin screen showing all managed plugins:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Settings > GitHub Updater > Connected Plugins                    [+ Add]   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Plugin                 │ GitHub Repo          │ Version   │ Status  │    │
+│  ├─────────────────────────────────────────────────────────────────────┤    │
+│  │ My Custom Plugin       │ mycompany/my-plugin  │ 1.2.3     │ ✓ Up to │    │
+│  │ my-plugin/my-plugin.php│                      │           │   date  │    │
+│  │                        │                      │           │ [Edit]  │    │
+│  ├─────────────────────────────────────────────────────────────────────┤    │
+│  │ TC Booking Flow        │ LukaszKomarTC/       │ 0.9.2 →   │ ⬆ Update│    │
+│  │ tc-booking-flow/       │ TC-Booking-Flow_NEXT │ 0.9.3     │ available│   │
+│  │ tc-booking-flow.php    │                      │           │ [Update]│    │
+│  ├─────────────────────────────────────────────────────────────────────┤    │
+│  │ ACF Pro (Fork)         │ mycompany/acf-fork   │ 6.2.0     │ ✓ Up to │    │
+│  │ acf/acf.php            │ 🔒 Private           │           │   date  │    │
+│  │                        │                      │           │ [Edit]  │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  [Check All Now]  [Bulk Actions ▾]                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.0.5 Auto-Detection Methods
+
+To simplify setup, the plugin supports multiple detection methods:
+
+**Method 1: Plugin Header Detection**
+
+If a plugin includes GitHub info in its header, auto-detect is possible:
+
+```php
+<?php
+/**
+ * Plugin Name: My Awesome Plugin
+ * Plugin URI: https://github.com/user/my-awesome-plugin
+ * GitHub Plugin URI: user/my-awesome-plugin
+ * Version: 1.0.0
+ */
+```
+
+Detection logic:
+```php
+$plugin_data = get_plugin_data( $plugin_file );
+$github_uri = $plugin_data['GitHub Plugin URI'] ?? null;
+// or parse from Plugin URI if it's a github.com URL
+if ( ! $github_uri && strpos( $plugin_data['PluginURI'], 'github.com' ) !== false ) {
+    $github_uri = parse_github_url( $plugin_data['PluginURI'] );
+}
+```
+
+**Method 2: Manual Entry**
+
+User pastes the GitHub URL or `owner/repo` format directly.
+
+**Method 3: GitHub Search (Future)**
+
+Search for the plugin name on GitHub:
+```
+GET https://api.github.com/search/repositories?q=my-plugin+language:php
+```
+
+#### 3.0.6 Plugin-to-Repository Mapping Data Model
+
+```php
+// Stored in wp_options: 'ghwp_plugin_connections'
+[
+    'my-plugin/my-plugin.php' => [
+        'github_owner'    => 'mycompany',
+        'github_repo'     => 'my-plugin',
+        'github_url'      => 'https://github.com/mycompany/my-plugin',
+        'auth_type'       => 'pat',  // 'none', 'pat', 'github_app'
+        'auth_token'      => 'encrypted:xxxxx',
+        'release_channel' => 'stable',  // 'stable', 'prerelease', 'branch:main'
+        'auto_update'     => true,
+        'connected_at'    => '2026-01-28 12:00:00',
+        'connected_by'    => 1,  // user ID
+        'last_check'      => '2026-01-28 14:00:00',
+        'last_version'    => '1.3.0',
+    ],
+    'another-plugin/another.php' => [
+        // ... another connection
+    ]
+]
+```
+
+#### 3.0.7 How Update Detection Works
+
+The manager plugin **intercepts WordPress's update system**:
+
+```php
+// Hook into WordPress update check
+add_filter( 'site_transient_update_plugins', 'ghwp_inject_updates' );
+
+function ghwp_inject_updates( $transient ) {
+    $connections = get_option( 'ghwp_plugin_connections', [] );
+
+    foreach ( $connections as $plugin_file => $config ) {
+        // Get installed version
+        $plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . $plugin_file );
+        $installed_version = $plugin_data['Version'];
+
+        // Check GitHub for this plugin
+        $github_release = ghwp_check_github_release( $config );
+
+        if ( $github_release && version_compare( $github_release['version'], $installed_version, '>' ) ) {
+            // Inject update into WordPress's update list
+            $transient->response[ $plugin_file ] = (object) [
+                'slug'        => dirname( $plugin_file ),
+                'plugin'      => $plugin_file,
+                'new_version' => $github_release['version'],
+                'package'     => $github_release['download_url'],
+                'url'         => $config['github_url'],
+                'icons'       => [],
+                'banners'     => [],
+                'tested'      => '6.4',
+                'requires'    => '5.0',
+                'requires_php'=> '7.4',
+            ];
+        }
+    }
+
+    return $transient;
+}
+```
+
+#### 3.0.8 Connection Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     PLUGIN ↔ GITHUB CONNECTION FLOW                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┐                                          ┌──────────────────┐
+│  WordPress   │                                          │     GitHub       │
+│    Admin     │                                          │   Repository     │
+└──────┬───────┘                                          └────────┬─────────┘
+       │                                                           │
+       │  1. Admin selects plugin from dropdown                    │
+       │     (lists all installed plugins)                         │
+       │                                                           │
+       │  2. Admin enters GitHub repo URL                          │
+       │     OR clicks "Auto-detect from header"                   │
+       │                                                           │
+       │  3. [Test Connection] ────────────────────────────────────┤
+       │                       GET /repos/:owner/:repo             │
+       │                       GET /repos/:owner/:repo/releases    │
+       │     ◄─────────────────────────────────────────────────────┤
+       │     Returns: repo info, latest release, version           │
+       │                                                           │
+       │  4. Admin saves connection                                │
+       │     → Stored in wp_options                                │
+       │                                                           │
+       │  ═══════════════════════════════════════════════════════  │
+       │                    UPDATE CHECK FLOW                       │
+       │  ═══════════════════════════════════════════════════════  │
+       │                                                           │
+       │  5. WP Cron triggers update check                         │
+       │     OR Admin visits Dashboard > Updates                   │
+       │     OR CI/CD calls REST endpoint                          │
+       │                                                           │
+       │  6. Manager plugin intercepts ────────────────────────────┤
+       │     site_transient_update_plugins                         │
+       │                       GET /repos/:owner/:repo/releases    │
+       │     ◄─────────────────────────────────────────────────────┤
+       │     Returns: latest release with download URL             │
+       │                                                           │
+       │  7. If new version available:                             │
+       │     → Inject into WP update transient                     │
+       │     → Shows in Dashboard > Updates                        │
+       │                                                           │
+       │  8. User clicks "Update" OR auto-update triggers          │
+       │     ──────────────────────────────────────────────────────┤
+       │                       Download release ZIP                │
+       │     ◄─────────────────────────────────────────────────────┤
+       │                                                           │
+       │  9. WordPress Upgrader installs                           │
+       │     → Extract, replace files, activate                    │
+       │                                                           │
+       └───────────────────────────────────────────────────────────┘
+```
+
+#### 3.0.9 CI/CD Integration: Targeting Specific Plugins
+
+When CI/CD triggers an update, it specifies WHICH plugin was updated:
+
+**REST Endpoint Design:**
+```
+POST /wp-json/ghwp/v1/refresh
+
+Headers:
+  X-Update-Token: <token>
+  Content-Type: application/json
+
+Body (Option A - by plugin file):
+{
+  "plugin": "my-plugin/my-plugin.php",
+  "auto_update": true
+}
+
+Body (Option B - by GitHub repo):
+{
+  "repo": "mycompany/my-plugin",
+  "auto_update": true,
+  "version": "1.3.0"
+}
+
+Body (Option C - refresh all):
+{
+  "auto_update": false
+}
+```
+
+**GitHub Workflow Integration:**
+```yaml
+# In your plugin's repo: .github/workflows/release.yml
+
+- name: Trigger WordPress update
+  run: |
+    curl -X POST \
+      -H "X-Update-Token: ${{ secrets.WP_UPDATE_TOKEN }}" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "repo": "${{ github.repository }}",
+        "auto_update": true,
+        "version": "${{ steps.version.outputs.version }}"
+      }' \
+      "${{ secrets.WP_SITE_URL }}/wp-json/ghwp/v1/refresh"
+```
+
+The manager plugin matches the `repo` parameter to find the corresponding WordPress plugin in its connections table.
+
+---
 
 ### 3.1 Core Features (MVP)
 
