@@ -259,34 +259,58 @@ class Woo_OrderMeta {
 
 		foreach ( $order->get_items() as $item ) {
 
+			$qty = max(1, (int) $item->get_quantity());
+
+			// Check for Event Form products (have _event_id)
 			$event_id = (int) $item->get_meta('_event_id', true);
-			if ( $event_id <= 0 ) continue;
+			if ( $event_id > 0 ) {
+				$start_event_id = $start_event_id ?: $event_id;
 
-			$start_event_id = $start_event_id ?: $event_id;
+				// base snapshot from Event Form meta
+				$base = $item->get_meta('_eb_base_price', true);
+				$line_base = ($base !== '') ? ((float)$base * $qty) : (float) $item->get_subtotal();
 
-			// base snapshot
-			$base = $item->get_meta('_eb_base_price', true);
-			$qty  = max(1, (int) $item->get_quantity());
+				$subtotal_original += $line_base;
 
-			$line_base = ($base !== '') ? ((float)$base * $qty) : (float) $item->get_subtotal();
+				$eligible = (int) $item->get_meta('_eb_eligible', true);
+				$pct = (float) $item->get_meta('_eb_pct', true);
+				$amt = (float) $item->get_meta('_eb_amount', true);
 
-			$subtotal_original += $line_base;
-
-			$eligible = (int) $item->get_meta('_eb_eligible', true);
-			$pct = (float) $item->get_meta('_eb_pct', true);
-			$amt = (float) $item->get_meta('_eb_amount', true);
-
-			if ( $eligible && $base !== '' ) {
-				if ( $amt > 0 ) {
-					$eb_amount_total += min($line_base, $amt * $qty);
-				} elseif ( $pct > 0 ) {
-					$eb_amount_total += $line_base - ($line_base * (1 - ($pct/100)));
+				if ( $eligible && $base !== '' ) {
+					if ( $amt > 0 ) {
+						$eb_amount_total += min($line_base, $amt * $qty);
+					} elseif ( $pct > 0 ) {
+						$eb_amount_total += $line_base - ($line_base * (1 - ($pct/100)));
+					}
+					if ( $eb_pct_seen === null ) $eb_pct_seen = $pct;
+					$days = $item->get_meta('_eb_days_before', true);
+					if ( $days !== '' && $eb_days_seen === null ) $eb_days_seen = (int) $days;
+					$ts = $item->get_meta('_eb_event_start_ts', true);
+					if ( $ts !== '' && ! $start_ts ) $start_ts = (int) $ts;
 				}
-				if ( $eb_pct_seen === null ) $eb_pct_seen = $pct;
-				$days = $item->get_meta('_eb_days_before', true);
-				if ( $days !== '' && $eb_days_seen === null ) $eb_days_seen = (int) $days;
-				$ts = $item->get_meta('_eb_event_start_ts', true);
-				if ( $ts !== '' && ! $start_ts ) $start_ts = (int) $ts;
+				continue;
+			}
+
+			// Check for standalone WC Booking products (have _tcbf_ledger_base)
+			$ledger_base = $item->get_meta('_tcbf_ledger_base', true);
+			if ( $ledger_base !== '' && (float) $ledger_base > 0 ) {
+				$base = (float) $ledger_base;
+				$line_base = $base * $qty;
+
+				$subtotal_original += $line_base;
+
+				// Get EB data from ledger meta
+				$pct = (float) $item->get_meta('_tcbf_ledger_eb_pct', true);
+				$amt = (float) $item->get_meta('_tcbf_ledger_eb_amount', true);
+
+				if ( $amt > 0 || $pct > 0 ) {
+					if ( $amt > 0 ) {
+						$eb_amount_total += min($line_base, $amt * $qty);
+					} elseif ( $pct > 0 ) {
+						$eb_amount_total += $line_base - ($line_base * (1 - ($pct/100)));
+					}
+					if ( $eb_pct_seen === null && $pct > 0 ) $eb_pct_seen = $pct;
+				}
 			}
 		}
 
